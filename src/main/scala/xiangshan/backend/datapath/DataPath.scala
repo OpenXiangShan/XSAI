@@ -944,6 +944,7 @@ class DataPathIO()(implicit p: Parameters, params: BackendParams) extends XSBund
 
   val diffVlRat  = if (params.basicDebugEn) Some(Input(Vec(1, UInt(log2Up(VlPhyRegs).W)))) else None
   val diffVl     = if (params.basicDebugEn) Some(Output(UInt(VlData().dataWidth.W))) else None
+  val diffMtx    = if (params.basicDebugEn) Some(Output(UInt(MtxData().dataWidth.W))) else None
 
   val topDownInfo = new TopDownInfo
 }
