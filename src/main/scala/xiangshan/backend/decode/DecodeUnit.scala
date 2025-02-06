@@ -922,6 +922,8 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   // init v0Wen vlWen
   decodedInst.v0Wen := false.B
   decodedInst.vlWen := false.B
+  // init mtilexWen
+  decodedInst.mtilexWen := false.B
 
   val isCsr = inst.OPCODE5Bit === OPCODE5Bit.SYSTEM && inst.FUNCT3(1, 0) =/= 0.U
   val isCsrr = isCsr && inst.FUNCT3 === BitPat("b?1?") && inst.RS1 === 0.U

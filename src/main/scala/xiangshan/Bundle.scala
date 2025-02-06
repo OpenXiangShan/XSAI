@@ -354,6 +354,7 @@ class ResetPregStateReq(implicit p: Parameters) extends XSBundle {
   val isVec = Bool()
   val isV0 = Bool()
   val isVl = Bool()
+  val isMtilex = Bool()
   val preg = UInt(PhyRegIdxWidth.W)
 }
 
@@ -430,6 +431,7 @@ class RabCommitInfo(implicit p: Parameters) extends XSBundle {
   val vecWen = Bool()
   val v0Wen = Bool()
   val vlWen = Bool()
+  val mtilexWen = Bool()
   val isMove = Bool()
 }
 

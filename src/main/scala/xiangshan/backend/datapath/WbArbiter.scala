@@ -94,6 +94,8 @@ class WbDataPathIO()(implicit p: Parameters, params: BackendParams) extends XSBu
 
   val fromVfExu: MixedVec[MixedVec[DecoupledIO[ExuOutput]]] = Flipped(params.vfSchdParams.get.genExuOutputDecoupledBundle)
 
+  val fromMfExu: MixedVec[MixedVec[DecoupledIO[ExuOutput]]] = Flipped(params.mfSchdParams.get.genExuOutputDecoupledBundle)
+
   val fromMemExu: MixedVec[MixedVec[DecoupledIO[ExuOutput]]] = Flipped(params.memSchdParams.get.genExuOutputDecoupledBundle)
 
   val fromCSR = Input(new Bundle {
@@ -114,6 +116,9 @@ class WbDataPathIO()(implicit p: Parameters, params: BackendParams) extends XSBu
 
   val toVlPreg = Flipped(MixedVec(Vec(params.numPregWb(VlData()),
     new RfWritePortWithConfig(params.vlPregParams.dataCfg, params.vlPregParams.addrWidth))))
+  
+  val toMtilexPreg = Flipped(MixedVec(Vec(params.numPregWb(MtilexData()),
+    new RfWritePortWithConfig(params.mtilexPregParams.dataCfg, params.mtilexPregParams.addrWidth))))
 
   val toCtrlBlock = new Bundle {
     val writeback: MixedVec[ValidIO[ExuOutput]] = params.genWrite2CtrlBundles
@@ -124,7 +129,7 @@ class WbDataPath(params: BackendParams)(implicit p: Parameters) extends XSModule
   val io = IO(new WbDataPathIO()(p, params))
 
   // split
-  val fromExuPre = collection.mutable.Seq() ++ (io.fromIntExu ++ io.fromFpExu ++ io.fromVfExu ++ io.fromMemExu).flatten
+  val fromExuPre = collection.mutable.Seq() ++ (io.fromIntExu ++ io.fromFpExu ++ io.fromVfExu ++ io.fromMfExu ++ io.fromMemExu).flatten
   val fromExuVld: Seq[DecoupledIO[ExuOutput]] = fromExuPre.filter(_.bits.params.hasVLoadFu).toSeq
   val vldMgu: Seq[VldMergeUnit] = fromExuVld.map(x => Module(new VldMergeUnit(x.bits.params)))
   vldMgu.zip(fromExuVld).foreach{ case (mgu, exu) =>
@@ -173,23 +178,29 @@ class WbDataPath(params: BackendParams)(implicit p: Parameters) extends XSModule
   val vlArbiterInputsWireY = vlArbiterInputsWire.filter(_.bits.params.writeVlRf)
   val vlArbiterInputsWireN = vlArbiterInputsWire.filterNot(_.bits.params.writeVlRf)
 
+  val mtilexArbiterInputsWire = Wire(chiselTypeOf(fromExu))
+  val mtilexArbiterInputsWireY = mtilexArbiterInputsWire.filter(_.bits.params.writeMtilexRf)
+  val mtilexArbiterInputsWireN = mtilexArbiterInputsWire.filterNot(_.bits.params.writeMtilexRf)
+
   def acceptCond(exuOutput: ExuOutput): (Seq[Bool], Bool) = {
     val intWen = exuOutput.intWen.getOrElse(false.B)
     val fpwen  = exuOutput.fpWen.getOrElse(false.B)
     val vecWen = exuOutput.vecWen.getOrElse(false.B)
     val v0Wen  = exuOutput.v0Wen.getOrElse(false.B)
     val vlWen  = exuOutput.vlWen.getOrElse(false.B)
-    (Seq(intWen, fpwen, vecWen, v0Wen, vlWen), !intWen && !fpwen && !vecWen && !v0Wen && !vlWen)
+    val mtilexWen = exuOutput.mtilexWen.getOrElse(false.B)
+    (Seq(intWen, fpwen, vecWen, v0Wen, vlWen, mtilexWen), !intWen && !fpwen && !vecWen && !v0Wen && !vlWen && !mtilexWen)
   }
 
-  intArbiterInputsWire.zip(fpArbiterInputsWire).zip(vfArbiterInputsWire).zip(v0ArbiterInputsWire).zip(vlArbiterInputsWire).zip(fromExu).foreach {
-    case (((((intArbiterInput, fpArbiterInput), vfArbiterInput), v0ArbiterInput), vlArbiterInput), exuOut) =>
+  intArbiterInputsWire.zip(fpArbiterInputsWire).zip(vfArbiterInputsWire).zip(v0ArbiterInputsWire).zip(vlArbiterInputsWire).zip(mtilexArbiterInputsWire).zip(fromExu).foreach {
+    case ((((((intArbiterInput, fpArbiterInput), vfArbiterInput), v0ArbiterInput), vlArbiterInput), mtilexArbiterInput), exuOut) =>
       val writeCond = acceptCond(exuOut.bits)
       val intWrite = Wire(Bool())
       val fpWrite = Wire(Bool())
       val vfWrite = Wire(Bool())
       val v0Write = Wire(Bool())
       val vlWrite = Wire(Bool())
+      val mtilexWrite = Wire(Bool())
       val notWrite = Wire(Bool())
 
       intWrite := exuOut.valid && writeCond._1(0)
@@ -197,6 +208,7 @@ class WbDataPath(params: BackendParams)(implicit p: Parameters) extends XSModule
       vfWrite := exuOut.valid && writeCond._1(2)
       v0Write := exuOut.valid && writeCond._1(3)
       vlWrite := exuOut.valid && writeCond._1(4)
+      mtilexWrite := exuOut.valid && writeCond._1(5)
       notWrite := writeCond._2
 
       intArbiterInput.valid := intWrite
@@ -209,6 +221,8 @@ class WbDataPath(params: BackendParams)(implicit p: Parameters) extends XSModule
       v0ArbiterInput.bits := exuOut.bits
       vlArbiterInput.valid := vlWrite
       vlArbiterInput.bits := exuOut.bits
+      mtilexArbiterInput.valid := mtilexWrite
+      mtilexArbiterInput.bits := exuOut.bits
 
       if (exuOut.bits.params.writeIntRf && exuOut.bits.params.isVfExeUnit) {
         intWrite := RegNext(exuOut.valid && writeCond._1(0))
@@ -240,6 +254,9 @@ class WbDataPath(params: BackendParams)(implicit p: Parameters) extends XSModule
         when (vlWrite) {
           assert(vlArbiterInput.ready, s"exu ${exuOut.bits.params.exuIdx} failed to write vl regfile\n")
         }
+        when (mtilexWrite) {
+          assert(mtilexArbiterInput.ready, s"exu ${exuOut.bits.params.exuIdx} failed to write mtilex regfile\n")
+        }
       }
       // the ports not writting back pregs are always ready
       // the ports set highest priority are always ready
@@ -252,36 +269,49 @@ class WbDataPath(params: BackendParams)(implicit p: Parameters) extends XSModule
   vfArbiterInputsWireN.foreach(_.ready := false.B)
   v0ArbiterInputsWireN.foreach(_.ready := false.B)
   vlArbiterInputsWireN.foreach(_.ready := false.B)
+  mtilexArbiterInputsWireN.foreach(_.ready := false.B)
 
   println(s"[WbDataPath] write int preg: " +
     s"IntExu(${io.fromIntExu.flatten.count(_.bits.params.writeIntRf)}) " +
     s"FpExu(${io.fromFpExu.flatten.count(_.bits.params.writeIntRf)}) " +
     s"VfExu(${io.fromVfExu.flatten.count(_.bits.params.writeIntRf)}) " +
+    s"MfExu(${io.fromMfExu.flatten.count(_.bits.params.writeIntRf)}) " +
     s"MemExu(${io.fromMemExu.flatten.count(_.bits.params.writeIntRf)})"
   )
   println(s"[WbDataPath] write fp preg: " +
     s"IntExu(${io.fromIntExu.flatten.count(_.bits.params.writeFpRf)}) " +
     s"FpExu(${io.fromFpExu.flatten.count(_.bits.params.writeFpRf)}) " +
     s"VfExu(${io.fromVfExu.flatten.count(_.bits.params.writeFpRf)}) " +
+    s"MfExu(${io.fromMfExu.flatten.count(_.bits.params.writeFpRf)}) " +
     s"MemExu(${io.fromMemExu.flatten.count(_.bits.params.writeFpRf)})"
   )
   println(s"[WbDataPath] write vf preg: " +
     s"IntExu(${io.fromIntExu.flatten.count(_.bits.params.writeVfRf)}) " +
     s"FpExu(${io.fromFpExu.flatten.count(_.bits.params.writeVfRf)}) " +
     s"VfExu(${io.fromVfExu.flatten.count(_.bits.params.writeVfRf)}) " +
+    s"MfExu(${io.fromMfExu.flatten.count(_.bits.params.writeVfRf)}) " +
     s"MemExu(${io.fromMemExu.flatten.count(_.bits.params.writeVfRf)})"
   )
   println(s"[WbDataPath] write v0 preg: " +
     s"IntExu(${io.fromIntExu.flatten.count(_.bits.params.writeV0Rf)}) " +
     s"FpExu(${io.fromFpExu.flatten.count(_.bits.params.writeV0Rf)}) " +
     s"VfExu(${io.fromVfExu.flatten.count(_.bits.params.writeV0Rf)}) " +
+    s"MfExu(${io.fromMfExu.flatten.count(_.bits.params.writeV0Rf)}) " +
     s"MemExu(${io.fromMemExu.flatten.count(_.bits.params.writeV0Rf)})"
   )
   println(s"[WbDataPath] write vl preg: " +
     s"IntExu(${io.fromIntExu.flatten.count(_.bits.params.writeVlRf)}) " +
     s"FpExu(${io.fromFpExu.flatten.count(_.bits.params.writeVlRf)}) " +
     s"VfExu(${io.fromVfExu.flatten.count(_.bits.params.writeVlRf)}) " +
+    s"MfExu(${io.fromMfExu.flatten.count(_.bits.params.writeVlRf)}) " +
     s"MemExu(${io.fromMemExu.flatten.count(_.bits.params.writeVlRf)})"
+  )
+  println(s"[WbDataPath] write mtilex preg: " +
+    s"IntExu(${io.fromIntExu.flatten.count(_.bits.params.writeMtilexRf)}) " +
+    s"FpExu(${io.fromFpExu.flatten.count(_.bits.params.writeMtilexRf)}) " +
+    s"VfExu(${io.fromVfExu.flatten.count(_.bits.params.writeMtilexRf)}) " +
+    s"MfExu(${io.fromMfExu.flatten.count(_.bits.params.writeMtilexRf)}) " +
+    s"MemExu(${io.fromMemExu.flatten.count(_.bits.params.writeMtilexRf)})"
   )
 
   // wb arbiter
@@ -290,11 +320,13 @@ class WbDataPath(params: BackendParams)(implicit p: Parameters) extends XSModule
   private val vfWbArbiter = Module(new RealWBCollideChecker(params.getVfWbArbiterParams))
   private val v0WbArbiter = Module(new RealWBCollideChecker(params.getV0WbArbiterParams))
   private val vlWbArbiter = Module(new RealWBCollideChecker(params.getVlWbArbiterParams))
+  private val mtilexWbArbiter = Module(new RealWBCollideChecker(params.getMtilexWbArbiterParams))
   println(s"[WbDataPath] int preg write back port num: ${intWbArbiter.io.out.size}, active port: ${intWbArbiter.io.inGroup.keys.toSeq.sorted}")
   println(s"[WbDataPath] fp preg write back port num: ${fpWbArbiter.io.out.size}, active port: ${fpWbArbiter.io.inGroup.keys.toSeq.sorted}")
   println(s"[WbDataPath] vf preg write back port num: ${vfWbArbiter.io.out.size}, active port: ${vfWbArbiter.io.inGroup.keys.toSeq.sorted}")
   println(s"[WbDataPath] v0 preg write back port num: ${v0WbArbiter.io.out.size}, active port: ${v0WbArbiter.io.inGroup.keys.toSeq.sorted}")
   println(s"[WbDataPath] vl preg write back port num: ${vlWbArbiter.io.out.size}, active port: ${vlWbArbiter.io.inGroup.keys.toSeq.sorted}")
+  println(s"[WbDataPath] mtilex preg write back port num: ${mtilexWbArbiter.io.out.size}, active port: ${mtilexWbArbiter.io.inGroup.keys.toSeq.sorted}")
 
   // module assign
   intWbArbiter.io.flush <> io.flush
@@ -342,6 +374,15 @@ class WbDataPath(params: BackendParams)(implicit p: Parameters) extends XSModule
   }
   private val vlWbArbiterOut = vlWbArbiter.io.out
 
+  mtilexWbArbiter.io.flush <> io.flush
+  require(mtilexWbArbiter.io.in.size == mtilexArbiterInputsWireY.size, s"mtilexWbArbiter input size: ${mtilexWbArbiter.io.in.size}, all mtilex wb size: ${mtilexArbiterInputsWireY.size}")
+  mtilexWbArbiter.io.in.zip(mtilexArbiterInputsWireY).foreach { case (arbiterIn, in) =>
+    arbiterIn.valid := in.valid && (in.bits.mtilexWen.getOrElse(false.B))
+    in.ready := arbiterIn.ready
+    arbiterIn.bits.fromExuOutput(in.bits, "mtilex")
+  }
+  private val mtilexWbArbiterOut = mtilexWbArbiter.io.out
+
   // WB -> CtrlBlock
   private val intExuInputs = io.fromIntExu.flatten.toSeq
   private val intExuWBs = WireInit(MixedVecInit(intExuInputs))
@@ -349,6 +390,8 @@ class WbDataPath(params: BackendParams)(implicit p: Parameters) extends XSModule
   private val fpExuWBs = WireInit(MixedVecInit(fpExuInputs))
   private val vfExuInputs = io.fromVfExu.flatten.toSeq
   private val vfExuWBs = WireInit(MixedVecInit(vfExuInputs))
+  private val mfExuInputs = io.fromMfExu.flatten.toSeq
+  private val mfExuWBs = WireInit(MixedVecInit(mfExuInputs))
   private val memExuInputs = io.fromMemExu.flatten.toSeq
   private val memExuWBs = WireInit(MixedVecInit(memExuInputs))
 
@@ -356,6 +399,7 @@ class WbDataPath(params: BackendParams)(implicit p: Parameters) extends XSModule
   (intExuWBs zip intExuInputs).foreach { case (wb, input) => wb.valid := input.fire }
   (fpExuWBs zip fpExuInputs).foreach { case (wb, input) => wb.valid := input.fire }
   (vfExuWBs zip vfExuInputs).foreach { case (wb, input) => wb.valid := input.fire }
+  (mfExuWBs zip mfExuInputs).foreach { case (wb, input) => wb.valid := input.fire }
   (memExuWBs zip memExuInputs).foreach { case (wb, input) => wb.valid := input.fire }
 
   // io assign
@@ -364,14 +408,16 @@ class WbDataPath(params: BackendParams)(implicit p: Parameters) extends XSModule
   private val toVfPreg: MixedVec[RfWritePortWithConfig] = MixedVecInit(vfWbArbiterOut.map(x => x.bits.asVfRfWriteBundle(x.fire)).toSeq)
   private val toV0Preg: MixedVec[RfWritePortWithConfig] = MixedVecInit(v0WbArbiterOut.map(x => x.bits.asV0RfWriteBundle(x.fire)).toSeq)
   private val toVlPreg: MixedVec[RfWritePortWithConfig] = MixedVecInit(vlWbArbiterOut.map(x => x.bits.asVlRfWriteBundle(x.fire)).toSeq)
+  private val toMtilexPreg: MixedVec[RfWritePortWithConfig] = MixedVecInit(mtilexWbArbiterOut.map(x => x.bits.asMtilexRfWriteBundle(x.fire)).toSeq)
 
-  private val wb2Ctrl = intExuWBs ++ fpExuWBs ++ vfExuWBs ++ memExuWBs
+  private val wb2Ctrl = intExuWBs ++ fpExuWBs ++ vfExuWBs ++ mfExuWBs ++ memExuWBs
 
   io.toIntPreg := toIntPreg
   io.toFpPreg := toFpPreg
   io.toVfPreg := toVfPreg
   io.toV0Preg := toV0Preg
   io.toVlPreg := toVlPreg
+  io.toMtilexPreg := toMtilexPreg
   io.toCtrlBlock.writeback.zip(wb2Ctrl).foreach { case (sink, source) =>
     sink.valid := source.valid
     sink.bits := source.bits
@@ -385,6 +431,7 @@ class WbDataPath(params: BackendParams)(implicit p: Parameters) extends XSModule
     dontTouch(vfArbiterInputsWire)
     dontTouch(v0ArbiterInputsWire)
     dontTouch(vlArbiterInputsWire)
+    dontTouch(mtilexArbiterInputsWire)
   }
 }
 
