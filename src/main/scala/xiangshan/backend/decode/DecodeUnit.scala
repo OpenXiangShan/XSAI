@@ -913,8 +913,8 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   // init v0Wen vlWen
   decodedInst.v0Wen := false.B
   decodedInst.vlWen := false.B
-  // init mtilexWen
-  decodedInst.mtilexWen := false.B
+  // init mxWen
+  decodedInst.mxWen := false.B
 
   val isCsr = inst.OPCODE5Bit === OPCODE5Bit.SYSTEM && inst.FUNCT3(1, 0) =/= 0.U
   val isCsrr = isCsr && inst.FUNCT3 === BitPat("b?1?") && inst.RS1 === 0.U
@@ -1208,7 +1208,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     decodedInst.blockBackward := false.B
     decodedInst.exceptionVec(illegalInstr) := io.fromCSR.illegalInst.vsIsOff
   }.elsewhen (isCsrrMtilem) {
-    decodedInst.srcType(0) := SrcType.mtilex
+    decodedInst.srcType(0) := SrcType.mx
     decodedInst.srcType(1) := SrcType.no
     decodedInst.srcType(2) := SrcType.no
     decodedInst.srcType(3) := SrcType.no
@@ -1218,7 +1218,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     decodedInst.blockBackward := false.B
     decodedInst.exceptionVec(illegalInstr) := io.fromCSR.illegalInst.msIsOff
   }.elsewhen (isCsrrMtilen) {
-    decodedInst.srcType(0) := SrcType.mtilex
+    decodedInst.srcType(0) := SrcType.mx
     decodedInst.srcType(1) := SrcType.no
     decodedInst.srcType(2) := SrcType.no
     decodedInst.srcType(3) := SrcType.no
@@ -1228,7 +1228,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     decodedInst.blockBackward := false.B
     decodedInst.exceptionVec(illegalInstr) := io.fromCSR.illegalInst.msIsOff
   }.elsewhen (isCsrrMtilek) {
-    decodedInst.srcType(0) := SrcType.mtilex
+    decodedInst.srcType(0) := SrcType.mx
     decodedInst.srcType(1) := SrcType.no
     decodedInst.srcType(2) := SrcType.no
     decodedInst.srcType(3) := SrcType.no
