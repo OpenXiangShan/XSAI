@@ -447,6 +447,7 @@ class AtomicsUnit(implicit p: Parameters) extends XSModule
   io.feedbackSlow.bits.robIdx  := RegEnable(io.in.bits.uop.robIdx, io.in.valid)
   io.feedbackSlow.bits.sqIdx   := RegEnable(io.in.bits.uop.sqIdx, io.in.valid)
   io.feedbackSlow.bits.lqIdx   := RegEnable(io.in.bits.uop.lqIdx, io.in.valid)
+  io.feedbackSlow.bits.mlsqIdx := RegEnable(io.in.bits.uop.mlsqIdx, io.in.valid)
   io.feedbackSlow.bits.flushState := DontCare
   io.feedbackSlow.bits.sourceType := DontCare
   io.feedbackSlow.bits.dataInvalidSqIdx := DontCare
