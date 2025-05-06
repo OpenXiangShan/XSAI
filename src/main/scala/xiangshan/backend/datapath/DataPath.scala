@@ -340,7 +340,6 @@ class DataPathImp(override val wrapper: DataPath)(implicit p: Parameters, params
   mxDiffReadData.foreach(_ := mxDiffRead
     .get._2
     .slice(0, 3)
-    .map(_(2, 0))
   )
 
   io.diffVl.foreach(_ := vlDiffReadData.get)
