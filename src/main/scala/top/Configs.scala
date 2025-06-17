@@ -36,6 +36,7 @@ import device.EnableJtag
 import huancun._
 import coupledL2._
 import coupledL2.prefetch._
+import hbl2demo.{AMEConfigKey, AMEParams}
 
 class BaseConfig(n: Int) extends Config((site, here, up) => {
   case XLen => 64
@@ -257,6 +258,12 @@ class MinimalMatrixConfig(n: Int) extends Config(
         dfilterSize = 48,
       ),
     ))
+    case AMEConfigKey => AMEParams(
+      numTrRegs = 2,
+      numAccRegs = 1,
+      dataWidth = 32,
+      matrixSize = 16
+    )
   })
 )
 
