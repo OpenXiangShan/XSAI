@@ -25,7 +25,7 @@ import xiangshan.backend.datapath.RdConfig._
 import xiangshan.backend.datapath.WbConfig._
 import xiangshan.backend.exu.ExeUnitParams
 import xiangshan.backend.fu.FuConfig._
-import xiangshan.backend.issue.{IntScheduler, IssueBlockParams, MemScheduler, SchdBlockParams, SchedulerType, VfScheduler, FpScheduler}
+import xiangshan.backend.issue.{IntScheduler, IssueBlockParams, MemScheduler, SchdBlockParams, SchedulerType, VfScheduler, MfScheduler, FpScheduler}
 import xiangshan.backend.regfile._
 import xiangshan.backend.BackendParams
 import xiangshan.backend.trace._
@@ -47,6 +47,8 @@ import xiangshan.backend.datapath.WakeUpConfig
 import xiangshan.mem.prefetch.{PrefetcherParams, SMSParams}
 
 import scala.math.{max, min, pow}
+import xiangshan.backend.fu.wrapper.MSetMtilexRiWi
+import xiangshan.backend.fu.wrapper.MSetMtilexRiWmf
 
 case object XSTileKey extends Field[Seq[XSCoreParameters]]
 
@@ -205,6 +207,11 @@ case class XSCoreParameters
     numWrite = None,
   ),
   vlPreg: VlPregParams = VlPregParams(
+    numEntries = 32,
+    numRead = None,
+    numWrite = None,
+  ),
+  mfPreg: MfPregParams = MfPregParams(
     numEntries = 32,
     numRead = None,
     numWrite = None,
@@ -408,6 +415,7 @@ case class XSCoreParameters
       ), numEntries = IssueQueueSize, numEnq = 2, numComp = IssueQueueCompEntrySize),
       IssueBlockParams(Seq(
         ExeUnitParams("ALU2", Seq(AluCfg), Seq(IntWB(port = 2, 0)), Seq(Seq(IntRD(4, 0)), Seq(IntRD(5, 0))), true, 2),
+        // ExeUnitParams("BJU2", Seq(BrhCfg, JmpCfg, I2fCfg, VSetRiWiCfg, VSetRiWvfCfg, I2vCfg, MSetMtilexRiWiCfg, MSetMtilexRiWmfCfg), Seq(IntWB(port = 4, 0), VfWB(2, 0), V0WB(port = 2, 0), VlWB(port = intSchdVlWbPort, 0), FpWB(port = 2, 1)), Seq(Seq(IntRD(2, 1)), Seq(IntRD(3, 1)))),
         ExeUnitParams("BJU2", Seq(BrhCfg, JmpCfg, I2fCfg, VSetRiWiCfg, VSetRiWvfCfg, I2vCfg), Seq(IntWB(port = 4, 0), VfWB(2, 0), V0WB(port = 2, 0), VlWB(port = intSchdVlWbPort, 0), FpWB(port = 2, 1)), Seq(Seq(IntRD(2, 1)), Seq(IntRD(3, 1)))),
       ), numEntries = IssueQueueSize, numEnq = 2, numComp = IssueQueueCompEntrySize),
       IssueBlockParams(Seq(
@@ -465,6 +473,21 @@ case class XSCoreParameters
       rfDataWidth = vfPreg.dataCfg.dataWidth,
     )
   }
+
+  // val matrixSchdParams = {
+  //   implicit val schdType: SchedulerType = MfScheduler()
+  //   SchdBlockParams(Seq(
+  //     IssueBlockParams(Seq(
+  //       ExeUnitParams("MFEX0", Seq(MSetMtilexRmfWmfCfg), Seq(IntWB(port = 0, 0)), Seq(Seq(IntRD(0, 0)), Seq(IntRD(1, 0))), true,2),
+  //     ), numEntries = 16, numEnq = 2, numComp = 12),
+  //   ),
+  //     numPregs = mfPreg.numEntries,
+  //     numDeqOutside = 0,
+  //     schdType = schdType,
+  //     rfDataWidth = vfPreg.dataCfg.dataWidth,
+  //     numUopIn = dpParams.VecDqDeqWidth,
+  //   )
+  // }
 
   val memSchdParams = {
     implicit val schdType: SchedulerType = MemScheduler()
@@ -767,6 +790,7 @@ trait HasXSParameter {
   def RobSize = coreParams.RobSize
   def RabSize = coreParams.RabSize
   def VTypeBufferSize = coreParams.VTypeBufferSize
+  def MTypeBufferSize = coreParams.MTypeBufferSize
   def IntRegCacheSize = coreParams.IntRegCacheSize
   def MemRegCacheSize = coreParams.MemRegCacheSize
   def RegCacheSize = coreParams.RegCacheSize
