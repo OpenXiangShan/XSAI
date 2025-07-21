@@ -306,6 +306,7 @@ init:
 	git submodule update --init $(GIT_FORCE_FLAG)
 	cd rocket-chip && git submodule update --init $(GIT_FORCE_FLAG) cde hardfloat
 	cd openLLC && git submodule update --init $(GIT_FORCE_FLAG) openNCB
+	cd AME && git submodule update --init FP8fpu
 
 # Initialize necessary submodules (force)
 #   This ensure that all submodules files are checked out to the correct commit. Good for CI.
