@@ -244,9 +244,10 @@ class XSTile()(implicit p: Parameters) extends LazyModule
     // FIXME: Just for debug. Remove me when AME is ready.
     val mreleaseValid = RegInit(false.B)
     val mreleaseBuffer = RegInit(0.U.asTypeOf(new AmuReleaseIO))
-    when (core.module.io.amuCtrl(0).valid && core.module.io.amuCtrl(0).bits.isRelease()) {
+    val coreRelease = core.module.io.amuCtrl.map(x => x.valid && x.bits.isRelease()).reduce(_ || _)
+    when (coreRelease) {
       mreleaseValid := true.B
-      mreleaseBuffer := core.module.io.amuCtrl(0).bits.asTypeOf(mreleaseBuffer)
+      mreleaseBuffer.tokenRd := core.module.io.amuCtrl.map(x => Mux(x.valid, x.bits.data.asUInt, 0.U)).reduce(_ | _)
     }.otherwise {
       mreleaseValid := false.B
     }

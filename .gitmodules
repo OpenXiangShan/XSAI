@@ -33,7 +33,7 @@
 	url = https://github.com/Wonicon/HBL2-AMU-Demo
 [submodule "AME"]
 	path = AME
-	url = https://github.com/Wonicon/AME.git
+	url = https://github.com/OpenXiangShan/RhyMAX.git
 [submodule "HBL2-Demo"]
 	path = HBL2-Demo
 	url = https://github.com/Wonicon/HBL2-Demo.git
