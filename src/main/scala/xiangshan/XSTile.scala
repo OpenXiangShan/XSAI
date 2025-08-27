@@ -240,25 +240,7 @@ class XSTile()(implicit p: Parameters) extends LazyModule
 
     val l2_matrix_d = l2top.module.io.matrixDataOut512L2
     ame.module.io.matrix_data_in.zip(l2_matrix_d).foreach { case (sink, src) => sink <> src }
-
-    // FIXME: Just for debug. Remove me when AME is ready.
-    val mreleaseValid = RegInit(false.B)
-    val mreleaseBuffer = RegInit(0.U.asTypeOf(new AmuReleaseIO))
-    val coreRelease = core.module.io.amuCtrl.map(x => x.valid && x.bits.isRelease()).reduce(_ || _)
-    when (coreRelease) {
-      mreleaseValid := true.B
-      mreleaseBuffer.tokenRd := core.module.io.amuCtrl.map(x => Mux(x.valid, x.bits.data.asUInt, 0.U)).reduce(_ | _)
-    }.otherwise {
-      mreleaseValid := false.B
-    }
-    val mreleaseValidOut = RegNextN(mreleaseValid, 100, Some(false.B))
-    val mreleaseBufferOut = RegNextN(mreleaseBuffer, 100)
-    core.module.io.amuRelease.valid := mreleaseValidOut
-    core.module.io.amuRelease.bits := mreleaseBufferOut
-
-    // FIXME: Implement release in AME, and then connect me!
-    // core.module.io.amuRelease <> DontCare
-    // core.module.io.amuRelease.valid := false.B
+    core.module.io.amuRelease <> ame.module.io.amuRelease
 
     // ChiselDB for uop
     val ameDB = ChiselDB.createTable("ame", ame.module.io, basicDB = true)
