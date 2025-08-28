@@ -334,7 +334,7 @@ object FuConfig {
     ),
     piped = true,
     writeIntRf = true,
-    immType = Set(SelImm.IMM_I, SelImm.IMM_U, SelImm.IMM_LUI32),
+    immType = Set(SelImm.IMM_I, SelImm.IMM_U, SelImm.IMM_LUI32, SelImm.IMM_CSRCONST),
   )
 
   val MulCfg: FuConfig = FuConfig (
@@ -500,7 +500,7 @@ object FuConfig {
     writeIntRf = true,
     writeMType = true,
     latency = CertainLatency(0),
-    immType = Set(SelImm.IMM_MSET, SelImm.IMM_MSETFIELD),
+    immType = Set(SelImm.IMM_MSET),
   )
 
   val MsetMtypeRiWmfCfg: FuConfig = FuConfig(
@@ -515,7 +515,7 @@ object FuConfig {
     writeIntRf = true,
     writeMType = true,
     latency = CertainLatency(0),
-    immType = Set(SelImm.IMM_MSET, SelImm.IMM_MSETFIELD),
+    immType = Set(SelImm.IMM_MSET),
   )
 
   val MmaCfg: FuConfig = FuConfig (

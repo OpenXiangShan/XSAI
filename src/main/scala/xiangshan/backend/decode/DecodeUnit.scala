@@ -748,13 +748,12 @@ case class Imm_MSETVAL() extends Imm(5){
   }
 }
 
-// Used in msetsew, msetint, munsetint, msetfp, mubsetfp, msetba
-case class Imm_MSETFIELD() extends Imm(5){
-  // TODO: check if this is correct
+// Used in csrr
+case class Imm_CSRCONST() extends Imm(20){
   override def do_toImm32(minBits: UInt): UInt = ZeroExt(minBits, 32)
 
   override def minBitsFromInstr(instr: UInt): UInt = {
-    instr(19, 15)
+    instr(31, 12)
   }
 }
 
@@ -782,11 +781,11 @@ object ImmUnion {
   val VRORVI = Imm_VRORVI()
   val MSET = Imm_MSET()
   val MSETVAL = Imm_MSETVAL()
-  val MSETFIELD = Imm_MSETFIELD()
+  val CSRCONST = Imm_CSRCONST()
   val MATRIXREG = Imm_MATRIXREG()
 
   // do not add special type lui32 to this, keep ImmUnion max len being 20.
-  val imms = Seq(I, S, B, U, J, Z, B6, OPIVIS, OPIVIU, VSETVLI, VSETIVLI, VRORVI, MSET, MSETVAL, MSETFIELD, MATRIXREG)
+  val imms = Seq(I, S, B, U, J, Z, B6, OPIVIS, OPIVIU, VSETVLI, VSETIVLI, VRORVI, MSET, MSETVAL, CSRCONST, MATRIXREG)
   val maxLen = imms.maxBy(_.len).len
   val immSelMap = Seq(
     SelImm.IMM_I,
@@ -803,7 +802,7 @@ object ImmUnion {
     SelImm.IMM_VRORVI,
     SelImm.IMM_MSET,
     SelImm.IMM_MSETVAL,
-    SelImm.IMM_MSETFIELD,
+    SelImm.IMM_CSRCONST,
     SelImm.IMM_MATRIXREG
   ).zip(imms)
   println(s"ImmUnion max len: $maxLen")
@@ -1267,7 +1266,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     decodedInst.srcType(2) := SrcType.no
     decodedInst.srcType(3) := SrcType.no
     decodedInst.srcType(4) := SrcType.no
-    decodedInst.selImm := SelImm.IMM_I
+    decodedInst.selImm := SelImm.IMM_CSRCONST
     decodedInst.waitForward := false.B
     decodedInst.blockBackward := false.B
     decodedInst.canRobCompress := true.B
