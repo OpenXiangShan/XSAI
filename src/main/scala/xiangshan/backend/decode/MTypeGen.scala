@@ -31,10 +31,6 @@ class MTypeGen(implicit p: Parameters) extends XSModule{
   private val firstMsetOH: Vec[Bool] = VecInit(PriorityEncoderOH(isMsettypeVec))
   private val firstMsetInstField: XSInstBitFields = PriorityMux(firstMsetOH, instFieldVec)
 
-  private val isMsetmtilexi = (firstMsetInstField.OPCODE === "b1110111".U) && 
-    (firstMsetInstField.ALL(31, 25) === "b0000011".U) && 
-    (firstMsetInstField.ALL(14) === "b1".U)
-
   private val mtypeArch = RegInit(MType.initMtype())
   private val mtypeSpec = RegInit(MType.initMtype())
 
