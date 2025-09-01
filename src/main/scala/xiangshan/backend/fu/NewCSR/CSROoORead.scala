@@ -29,6 +29,7 @@ object CSROoORead {
     CSRs.mtopei,
     CSRs.stopei,
     CSRs.vstopei,
+    CSRs.mtype,
   )
   val blockBackwardInOrderCsrReadList = List(
     CSRs.mireg,
