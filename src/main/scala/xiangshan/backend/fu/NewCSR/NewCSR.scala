@@ -54,6 +54,7 @@ object CSRConfig {
   final val MLEN = 0x20000
   final val RLEN = 0x00800
   final val AMUL = 4
+  final val MTOK = 8
 
   final val MlWidth = 8
 
@@ -198,6 +199,7 @@ class NewCSR(implicit val p: Parameters) extends Module
         val mlenb = UInt(XLEN.W)
         val mrlenb = UInt(XLEN.W)
         val mamul = UInt(XLEN.W)
+        val mtok = UInt(XLEN.W)
         val mcsr = UInt(XLEN.W)
         val off = Bool()
       }
@@ -1191,6 +1193,7 @@ class NewCSR(implicit val p: Parameters) extends Module
   io.status.matrixState.mlenb := mlenb.rdata.asUInt
   io.status.matrixState.mrlenb := mrlenb.rdata.asUInt
   io.status.matrixState.mamul := mamul.rdata.asUInt
+  io.status.matrixState.mtok := mtok.rdata.asUInt
   io.status.matrixState.mcsr := mcsr.rdata.asUInt
   io.status.matrixState.off := mstatus.regOut.MS === ContextStatus.Off
   io.status.interrupt := intrMod.io.out.interruptVec.valid
@@ -1676,6 +1679,7 @@ class NewCSR(implicit val p: Parameters) extends Module
     diffMatrixCSRState.mlenb := mlenb.rdata.asUInt
     diffMatrixCSRState.mrlenb := mrlenb.rdata.asUInt
     diffMatrixCSRState.mamul := mamul.rdata.asUInt
+    diffMatrixCSRState.mtok := mtok.rdata.asUInt
     diffMatrixCSRState.mstart := mstart.rdata.asUInt
     diffMatrixCSRState.mcsr := mcsr.rdata.asUInt
 
