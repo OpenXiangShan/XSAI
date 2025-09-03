@@ -1193,6 +1193,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   val isCsrrMlenb  = isCsrr && inst.CSRIDX === CSRs.mlenb.U
   val isCsrrMrlenb = isCsrr && inst.CSRIDX === CSRs.mrlenb.U
   val isCsrrMamul  = isCsrr && inst.CSRIDX === CSRs.mamul.U
+  val isCsrrMtok   = isCsrr && inst.CSRIDX === CSRs.mtok.U
   val isCsrrMtilem = isCsrr && inst.CSRIDX === CSRs.mtilem.U
   val isCsrrMtilen = isCsrr && inst.CSRIDX === CSRs.mtilen.U
   val isCsrrMtilek = isCsrr && inst.CSRIDX === CSRs.mtilek.U
@@ -1259,7 +1260,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     decodedInst.blockBackward := false.B
     decodedInst.canRobCompress := true.B
     decodedInst.exceptionVec(illegalInstr) := io.fromCSR.illegalInst.vsIsOff
-  }.elsewhen (isCsrrMlenb || isCsrrMrlenb || isCsrrMamul) {
+  }.elsewhen (isCsrrMlenb || isCsrrMrlenb || isCsrrMamul || isCsrrMtok) {
     // convert to addi instruction
     decodedInst.srcType(0) := SrcType.reg
     decodedInst.srcType(1) := SrcType.imm
@@ -1289,7 +1290,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     // keep condition
     (!FuType.FuTypeOrR(decodedInst.fuType, FuType.vldu, FuType.vstu) && 
       !isCsrrVl && !isCsrrVlenb && !isCsrrMlenb && !isCsrrMrlenb && !isCsrrMamul &&
-      !isCsrrMtilem && !isCsrrMtilen && !isCsrrMtilek) -> decodedInst.fuType,
+      !isCsrrMtok && !isCsrrMtilem && !isCsrrMtilen && !isCsrrMtilek) -> decodedInst.fuType,
     (isCsrrVl) -> FuType.vsetfwf.U,
     (isCsrrVlenb) -> FuType.alu.U,
     (isCsrrMtilem) -> FuType.msetmtilexfwf.U,
@@ -1298,6 +1299,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     (isCsrrMlenb) -> FuType.alu.U,
     (isCsrrMrlenb) -> FuType.alu.U,
     (isCsrrMamul) -> FuType.alu.U,
+    (isCsrrMtok) -> FuType.alu.U,
 
     // change vlsu to vseglsu when NF =/= 0.U
     ( FuType.FuTypeOrR(decodedInst.fuType, FuType.vldu, FuType.vstu) && inst.NF === 0.U || (inst.NF =/= 0.U && (inst.MOP === "b00".U && inst.SUMOP === "b01000".U))) -> decodedInst.fuType,
@@ -1314,6 +1316,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     isCsrrMlenb  -> (MLEN / 8).U,
     isCsrrMrlenb -> (RLEN / 8).U,
     isCsrrMamul  -> AMUL.U,
+    isCsrrMtok   -> MTOK.U,
   ))
 
   io.deq.decodedInst.fuOpType := MuxCase(decodedInst.fuOpType, Seq(
@@ -1325,6 +1328,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     isCsrrMlenb -> ALUOpType.add,
     isCsrrMrlenb -> ALUOpType.add,
     isCsrrMamul -> ALUOpType.add,
+    isCsrrMtok -> ALUOpType.add,
     isFLI       -> Cat(1.U, inst.FMT, inst.RS1),
     (isPreW || isPreR || isPreI) -> Mux1H(Seq(
       isPreW -> LSUOpType.prefetch_w,

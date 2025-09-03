@@ -67,6 +67,7 @@ case class XSCoreParameters
   MLEN: Int = 0x20000, // 64 * 256 * 8
   RLEN: Int = 0x00800, // 256 * 8
   AMUL: Int = 4,       // 32 / 8
+  MTOK: Int = 8,       // 8 or 16 or 32
   MTILEXLEN: Int = 9,  // Log(256) + 1
   HasMExtension: Boolean = true,
   HasCExtension: Boolean = true,
@@ -654,6 +655,7 @@ trait HasXSParameter {
   def MLEN = coreParams.MLEN
   def RLEN = coreParams.RLEN
   def AMUL = coreParams.AMUL
+  def MTOK = coreParams.MTOK
 
   def DEV_FIXED_MTYPE = false
 

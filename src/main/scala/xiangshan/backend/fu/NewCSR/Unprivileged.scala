@@ -199,6 +199,11 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
   }))
     .setAddr(CSRs.mamul)
 
+  val mtok = Module(new CSRModule("Mtok", new CSRBundle {
+    val MTOK = MtokField(63, 0).withReset(MtokField.init)
+  }))
+    .setAddr(CSRs.mtok)
+
   val cycle = Module(new CSRModule("cycle", new CSRBundle {
     val cycle = RO(63, 0)
   }) with HasMHPMSink with HasDebugStopBundle {
@@ -280,6 +285,7 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
     CSRs.mlenb  -> (mlenb.w           -> mlenb.rdata),
     CSRs.mrlenb -> (mrlenb.w          -> mrlenb.rdata),
     CSRs.mamul  -> (mamul.w           -> mamul.rdata),
+    CSRs.mtok   -> (mtok.w            -> mtok.rdata),
     CSRs.mcsr   -> (mcsr.w            -> mcsr.rdata),
     CSRs.mstart -> (mstart.w          -> mstart.rdata),
     CSRs.cycle  -> (cycle.w           -> cycle.rdata),
@@ -301,6 +307,7 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
     mlenb,
     mrlenb,
     mamul,
+    mtok,
     mcsr,
     mstart,
     cycle,
@@ -326,6 +333,7 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
     CSRs.mlenb   -> mlenb.rdata.asUInt,
     CSRs.mrlenb  -> mrlenb.rdata.asUInt,
     CSRs.mamul   -> mamul.rdata.asUInt,
+    CSRs.mtok    -> mtok.rdata.asUInt,
     CSRs.mcsr    -> mcsr.rdata.asUInt,
     CSRs.mstart  -> mstart.rdata.asUInt,
     CSRs.cycle   -> cycle.rdata,
@@ -387,6 +395,10 @@ object MrlenbField extends CSREnum with ROApply {
 
 object MamulField extends CSREnum with ROApply {
   val init = Value(AMUL.U)
+}
+
+object MtokField extends CSREnum with ROApply {
+  val init = Value(MTOK.U)
 }
 
 trait HasMHPMSink { self: CSRModule[_] =>
