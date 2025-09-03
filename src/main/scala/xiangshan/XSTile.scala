@@ -33,7 +33,6 @@ import coupledL2.tl2chi.PortIO
 import xiangshan.backend.trace.TraceCoreInterface
 import xiangshan.backend.fu.matrix._
 import xiangshan.backend.fu.matrix.Bundles._
-import hbl2demo.AMU
 import AME.AME
 import utility.RegNextN
 import hbl2demo.AMEModule
