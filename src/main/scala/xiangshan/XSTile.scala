@@ -35,7 +35,7 @@ import xiangshan.backend.fu.matrix._
 import xiangshan.backend.fu.matrix.Bundles._
 import AME.AME
 import utility.RegNextN
-import hbl2demo.AMEModule
+import amewrapper.AMEModule
 
 class XSTile()(implicit p: Parameters) extends LazyModule
   with HasXSParameter

@@ -36,7 +36,7 @@ import device.EnableJtag
 import huancun._
 import coupledL2._
 import coupledL2.prefetch._
-import hbl2demo.{AMEConfigKey, AMEParams}
+import amewrapper.{AMEConfigKey, AMEParams}
 
 class BaseConfig(n: Int) extends Config((site, here, up) => {
   case XLen => 64
