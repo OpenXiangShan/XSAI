@@ -39,7 +39,7 @@ class AMEIO(implicit p: Parameters) extends Bundle {
   val writeAll = new RegFileAllWrite_IO
   val readAll = new RegFileAllRead_IO
   val sigDone = Output(Bool())
-  val matrix_data_in = Vec(8, Flipped(DecoupledIO(new MatrixDataBundle())))  
+  val matrix_data_in = Vec(8, Flipped(DecoupledIO(new MatrixDataBundle())))
   // val matrix_data_in = Vec(8, DecoupledIO(new MatrixDataBundle()))  // For M channel responses
   val amuRelease = Decoupled(new AmuRelease_IO)
 }
@@ -47,7 +47,7 @@ class AMEIO(implicit p: Parameters) extends Bundle {
 // AME Implementation
 class AMEImp(outer: AMEModule)(implicit p: Parameters) extends LazyModuleImp(outer) {
   val io = IO(new AMEIO)
-  
+
   // Get TileLink interfaces for all 8 matrix nodes
   val (tls, edges) = outer.matrix_nodes.map(_.out.head).unzip
 
@@ -109,7 +109,7 @@ class AMEImp(outer: AMEModule)(implicit p: Parameters) extends LazyModuleImp(out
         toAddress = mlu_read_io(i).addr,
         lgSize = 6.U // 64 bytes = 2^6
       )
-      
+
       tl.a.valid := legal
       tl.a.bits := get_bits
       tl.a.bits.user(MatrixKey):= 1.U  // Mark as Matrix request

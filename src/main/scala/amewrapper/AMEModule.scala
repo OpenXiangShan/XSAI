@@ -33,4 +33,4 @@ object AMEModule {
     val ame = LazyModule(new AMEModule())
     ame
   }
-} 
+}

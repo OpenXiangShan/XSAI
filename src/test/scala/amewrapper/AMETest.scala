@@ -55,8 +55,8 @@
 //     dut.io.readAll.act.poke(false.B)
 //   }
 
-//   def AMEStart(dut: AMEImp, mtilem: Int, mtilen: Int, mtilek: Int, 
-//                ms1: Int, ms2: Int, md: Int, rs1: Int, rs2: Int, 
+//   def AMEStart(dut: AMEImp, mtilem: Int, mtilen: Int, mtilek: Int,
+//                ms1: Int, ms2: Int, md: Int, rs1: Int, rs2: Int,
 //                valid: Bool, is_mmacc: Bool, is_mlbe8: Bool): Unit = {
 //     dut.io.Uop_io.mtileConfig_io.mtilem.poke(mtilem.U)
 //     dut.io.Uop_io.mtileConfig_io.mtilen.poke(mtilen.U)
@@ -82,7 +82,7 @@
 //   val delayFactor = 0.5
 
 //   val ame = LazyModule(new AMEModule())//TODO: IO not fully initialized
-  
+
 //   lazy val module = new LazyModuleImp(this) {
 //     val timer = WireDefault(0.U(64.W))
 //     val logEnable = WireDefault(false.B)
@@ -96,7 +96,7 @@
 //     ame.module.io.Uop_io := DontCare
 //     ame.module.io.writeAll := DontCare
 //     ame.module.io.readAll := DontCare
-//     // ame.module.io.matrix_data_in := 
+//     // ame.module.io.matrix_data_in :=
 //     ame.module.io.sigDone := DontCare
 //   }
 // }
@@ -220,9 +220,9 @@
 //   val top = DisableMonitors(p => LazyModule(new TestTop_AME()(p)))(config)
 
 //   (new ChiselStage).execute(
-//     args, 
-//     ChiselGeneratorAnnotation(() => top.module) +: 
+//     args,
+//     ChiselGeneratorAnnotation(() => top.module) +:
 //         TestTopAMEFirtoolOptions()
 //       )
 
-// } 
+// }
