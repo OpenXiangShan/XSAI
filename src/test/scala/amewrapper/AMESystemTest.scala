@@ -65,7 +65,7 @@ override lazy val desiredName: String = "SimTop"
       )
     )
   )
-  
+
   // System parameters
   val l2_banks = 8
   val l3_banks = 4
@@ -268,12 +268,12 @@ class AMESystemTest extends AnyFreeSpec with Matchers {
 
       // Test matrix load operation
       AMEModuleTestHelper.AMEStart(ameModule, 32, 32, 64, 0, 0, 0, 0x1000, 64, true.B, false.B, true.B)
-      
+
       // Wait for ready
       while(!ameModule.io.Uop_io.ShakeHands_io.ready.peek().litToBoolean) {
         dut.clock.step(1)
       }
-      
+
       // Wait for completion
       while(!ameModule.io.sigDone.peek().litToBoolean) {
         dut.clock.step(1)
@@ -281,7 +281,7 @@ class AMESystemTest extends AnyFreeSpec with Matchers {
 
       // Test matrix computation
       AMEModuleTestHelper.AMEStart(ameModule, 32, 32, 64, 0, 1, 4, 0, 0, true.B, true.B, false.B)
-      
+
       // Wait for completion
       while(!ameModule.io.sigDone.peek().litToBoolean) {
         dut.clock.step(1)
@@ -318,4 +318,4 @@ object TestTop_AME_System extends App {
     ChiselGeneratorAnnotation(() => top.module) +:
     TestTopAMEFirtoolOptions()
   )
-} 
+}

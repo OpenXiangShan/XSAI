@@ -55,8 +55,8 @@ object AMEModuleTestHelper {
     dut.io.readAll.act.poke(false.B)
   }
 
-  def AMEStart(dut: AMEImp, mtilem: Int, mtilen: Int, mtilek: Int, 
-               ms1: Int, ms2: Int, md: Int, rs1: Int, rs2: Int, 
+  def AMEStart(dut: AMEImp, mtilem: Int, mtilen: Int, mtilek: Int,
+               ms1: Int, ms2: Int, md: Int, rs1: Int, rs2: Int,
                valid: Bool, is_mmacc: Bool, is_mlbe8: Bool): Unit = {
     dut.io.Uop_io.mtileConfig_io.mtilem.poke(mtilem.U)
     dut.io.Uop_io.mtileConfig_io.mtilen.poke(mtilen.U)

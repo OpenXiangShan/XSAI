@@ -27,7 +27,7 @@ class BarrelShiftTestModule extends Module {
 
   // Apply barrel shift using imported functions
   val shifted = BarrelShift(io.in, io.shiftAmount)
-  
+
   // Connect output
   for (i <- 0 until 8) {
     io.out(i) := shifted(i)
@@ -146,7 +146,7 @@ class BarrelShiftTest extends AnyFreeSpec with Matchers {
     simulate(new BarrelShiftTestModule) { dut =>
       // Test data: 8 different values
       val testInput = Seq(1, 2, 3, 4, 5, 6, 7, 8)
-      
+
       // Set input values
       for (i <- 0 until 8) {
         dut.io.in(i).poke(testInput(i).U)
@@ -156,24 +156,24 @@ class BarrelShiftTest extends AnyFreeSpec with Matchers {
       for (shiftAmount <- 0 until 8) {
         // Set shift amount
         dut.io.shiftAmount.poke(shiftAmount.U)
-        
+
         // Step one cycle to propagate values
         dut.clock.step(1)
-        
+
         // Read output values
         val output = (0 until 8).map(i => dut.io.out(i).peek().litValue.toInt)
-        
+
         // Calculate expected result
         val expected = BarrelShiftTestHelper.expectedBarrelShift(testInput, shiftAmount)
-        
+
         // Print results for debugging
         BarrelShiftTestHelper.printShiftResult(shiftAmount, testInput, output)
-        
+
         // Verify results
         for (i <- 0 until 8) {
           output(i) mustBe expected(i)
         }
-        
+
         println(s"Shift amount $shiftAmount: PASS")
         println()
       }
@@ -184,7 +184,7 @@ class BarrelShiftTest extends AnyFreeSpec with Matchers {
     simulate(new BarrelShiftTestModule) { dut =>
       // Test with different input values
       val testInput = Seq(0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22)
-      
+
       // Set input values
       for (i <- 0 until 8) {
         dut.io.in(i).poke(testInput(i).U)
@@ -192,23 +192,23 @@ class BarrelShiftTest extends AnyFreeSpec with Matchers {
 
       // Test specific shift amounts
       val testShifts = Seq(0, 1, 4, 7)
-      
+
       for (shiftAmount <- testShifts) {
         dut.io.shiftAmount.poke(shiftAmount.U)
         dut.clock.step(1)
-        
+
         val output = (0 until 8).map(i => dut.io.out(i).peek().litValue.toInt)
         val expected = BarrelShiftTestHelper.expectedBarrelShift(testInput, shiftAmount)
-        
+
         println(s"Distinct data test - Shift amount: $shiftAmount")
         println(s"Input:  [${testInput.map(x => f"0x$x%02X").mkString(", ")}]")
         println(s"Output: [${output.map(x => f"0x$x%02X").mkString(", ")}]")
         println(s"Expected: [${expected.map(x => f"0x$x%02X").mkString(", ")}]")
-        
+
         for (i <- 0 until 8) {
           output(i) mustBe expected(i)
         }
-        
+
         println(s"Distinct data shift amount $shiftAmount: PASS")
         println("-" * 50)
       }
