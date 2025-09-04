@@ -21,7 +21,7 @@
 	url = https://github.com/OpenXiangShan/YunSuan.git
 [submodule "coupledL2"]
 	path = coupledL2
-	url = https://github.com/Wonicon/Demo-HBL2
+	url = https://github.com/OpenXiangShan/HBL2.git
 [submodule "openLLC"]
 	path = openLLC
 	url = https://github.com/OpenXiangShan/OpenLLC.git
