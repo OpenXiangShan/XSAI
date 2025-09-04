@@ -55,8 +55,8 @@ object AMETestHelper {
     dut.io.readAll.act.poke(false.B)
   }
 
-  def AMEStart(dut: AME, mtilem: Int, mtilen: Int, mtilek: Int, 
-               ms1: Int, ms2: Int, md: Int, rs1: Int, rs2: Int, 
+  def AMEStart(dut: AME, mtilem: Int, mtilen: Int, mtilek: Int,
+               ms1: Int, ms2: Int, md: Int, rs1: Int, rs2: Int,
                valid: Bool, is_mmacc: Bool, is_mlbe8: Bool): Unit = {
     dut.io.Uop_io.mtileConfig_io.mtilem.poke(mtilem.U)
     dut.io.Uop_io.mtileConfig_io.mtilen.poke(mtilen.U)
@@ -173,7 +173,7 @@ println(s"ins 3 excuting")
 
 
 
-      
+
 
       AMETestHelper.AMEStop(dut)  //停止，无效指令，valid = false
 
@@ -183,7 +183,7 @@ println(s"ins 3 excuting")
       // AMETestHelper.readTestDataFromAll(AMETestData.C, 7, dut) //验证结果是否正确
 
 
- 
+
 
 
     }
