@@ -76,7 +76,7 @@ object AMEModuleTestHelper {
   }
 }
 
-private[hbl2demo] object TestTopAMEFirtoolOptions {
+private[amewrapper] object TestTopAMEFirtoolOptions {
   def apply() = Seq(
     FirtoolOption("--disable-annotation-unknown"),
     FirtoolOption("--repl-seq-mem"),
