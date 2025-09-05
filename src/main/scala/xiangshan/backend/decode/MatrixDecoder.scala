@@ -498,11 +498,11 @@ object MatrixDecoder extends DecodeConstants {
     MMAU_H_MM -> MMUL(MmulOpType.MMAU_H),
     MMAU_W_MM -> MMUL(MmulOpType.MMAU_W),
     MMAU_DW_MM -> MMUL(MmulOpType.MMAU_DW),
-    // MWMAU_MM -> MMUL(MmulOpType.placeholder),
-    // MWMAU_H_MM -> MMUL(MmulOpType.placeholder),
-    // MWMAU_W_MM -> MMUL(MmulOpType.placeholder),
-    // MQMAU_MM -> MMUL(MmulOpType.placeholder),
-    // MQMAU_B_MM -> MMUL(MmulOpType.placeholder),
+    MWMAU_MM -> MMUL(MmulOpType.MWMAU),
+    MWMAU_H_MM -> MMUL(MmulOpType.MWMAU_H),
+    MWMAU_W_MM -> MMUL(MmulOpType.MWMAU_W),
+    MQMAU_MM -> MMUL(MmulOpType.MQMAU),
+    MQMAU_B_MM -> MMUL(MmulOpType.MQMAU_B),
     // MOMAU_MM -> MMUL(MmulOpType.placeholder),
     // MOMAU_HB_MM -> MMUL(MmulOpType.placeholder),
 
@@ -544,18 +544,18 @@ object MatrixDecoder extends DecodeConstants {
     // MSOMA_HB_MM -> MMUL(MmulOpType.placeholder),
 
     // Float point matrix multiplication and add, md = md + ms1 * ms2.
-    MFMA_MM     -> MMUL(MmulOpType.hfmaFpxToFpx), // fpx -> fpx
-    MFMA_HF_MM  -> MMUL(MmulOpType.hfmaFp16ToFp16), // fp16 -> fp16
-    MFMA_F_MM   -> MMUL(MmulOpType.hfmaFp32ToFp32), // fp32 -> fp32
+    MFMA_MM     -> MMUL(MmulOpType.MFMA), // fpx -> fpx
+    MFMA_HF_MM  -> MMUL(MmulOpType.MFMA_HF), // fp16 -> fp16
+    MFMA_F_MM   -> MMUL(MmulOpType.MFMA_F), // fp32 -> fp32
     // MFMA_D_MM   -> MMUL(MmulOpType.placeholder), // fp64 -> fp64
 
-    MFWMA_MM    -> MMUL(MmulOpType.hfmaFpxToFp2x), // fpx -> fp2x
-    MFWMA_CF_MM -> MMUL(MmulOpType.hfmaFp8ToFp16), // fp8 -> fp16
-    MFWMA_HF_MM -> MMUL(MmulOpType.hfmaFp16ToFp32), // fp16 -> fp32
+    MFWMA_MM    -> MMUL(MmulOpType.MFWMA), // fpx -> fp2x
+    MFWMA_CF_MM -> MMUL(MmulOpType.MFWMA_CF), // fp8 -> fp16
+    MFWMA_HF_MM -> MMUL(MmulOpType.MFWMA_HF), // fp16 -> fp32
     // MFWMA_F_MM  -> MMUL(MmulOpType.placeholder), // fp32 -> fp64
 
-    MFQMA_MM    -> MMUL(MmulOpType.hfmaFp8ToFp32), // fpx -> fp4x
-    MFQMA_CF_MM -> MMUL(MmulOpType.hfmaFp8ToFp32), // fp8 -> fp32
+    MFQMA_MM    -> MMUL(MmulOpType.MFQMA), // fpx -> fp4x
+    MFQMA_CF_MM -> MMUL(MmulOpType.MFQMA_CF), // fp8 -> fp32
   )
 
   val msparsemul: Array[(BitPat, XSDecodeBase)] = Array(
