@@ -722,17 +722,38 @@ package object xiangshan {
     // MMAU.DW: int,unsigned,int64,nowiden(1W),nosaturate
     def MMAU_DW = "b0_0_011_00_0".U
 
-    def hfmaFp8ToFp8   = "b10_000_00_0".U
-    def hfmaFp8ToFp16  = "b10_000_01_0".U
-    def hfmaFp8ToFp32  = "b10_000_10_0".U
+    // MWMAU.MM: int,unsigned,msew,widen(2W),nosaturate
+    def MWMAU   = "b0_0_100_01_0".U
+    // MWMAU.H: int,unsigned,int16,widen(2W),nosaturate
+    def MWMAU_H = "b0_0_001_01_0".U
+    // MWMAU.W: int,unsigned,int32,widen(2W),nosaturate
+    def MWMAU_W = "b0_0_010_01_0".U
 
-    def hfmaFp16ToFp16 = "b10_001_00_0".U
-    def hfmaFp16ToFp32 = "b10_001_01_0".U
+    // MQMAU.MM: int,unsigned,msew,quad widen(4W),nosaturate
+    def MQMAU   = "b0_0_100_10_0".U
+    // MQMAU.B: int,unsigned,int8,quad widen(4W),nosaturate
+    def MQMAU_B = "b0_0_001_10_0".U
 
-    def hfmaFp32ToFp32 = "b10_010_00_0".U
+    // MFMA.MM: float,unsigned,msew,nowiden(1W)
+    def MFMA    = "b10_100_00_0".U
+    // MFMA.CF: float,unsigned,fp8,nowiden(1W)
+    def MFMA_CF = "b10_000_00_0".U
+    // MFMA.HF: float,unsigned,fp16,nowiden(1W)
+    def MFMA_HF = "b10_001_00_0".U
+    // MFMA.F: float,unsigned,fp32,nowiden(1W)
+    def MFMA_F  = "b10_010_00_0".U
 
-    def hfmaFpxToFpx   = "b10_100_00_0".U
-    def hfmaFpxToFp2x  = "b10_100_01_0".U
+    // MFWMA.MM: float,unsigned,msew,nowiden(1W)
+    def MFWMA    = "b10_100_01_0".U
+    // MFWMA.CF: float,unsigned,fp8,nowiden(1W)
+    def MFWMA_CF = "b10_000_01_0".U
+    // MFWMA.HF: float,unsigned,fp16,nowiden(1W)
+    def MFWMA_HF = "b10_001_01_0".U
+
+    // MFQMA.MM: float,unsigned,msew,quad widen(4W)
+    def MFQMA    = "b10_100_10_0".U
+    // MFQMA.CF: float,unsigned,fp8,quad widen(4W)
+    def MFQMA_CF = "b10_000_10_0".U
 
     def getFromType (func: UInt): UInt = func(5, 3)
     def getToType   (func: UInt): UInt = {
