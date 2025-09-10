@@ -3,19 +3,24 @@ package xiangshan.backend.rob
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.BundleLiterals._
+import difftest._
 import org.chipsalliance.cde.config.Parameters
 import utility._
+import utils.DebugMem
 import xiangshan._
 import xiangshan.backend.BackendParams
+import xiangshan.backend.Bundles.DynInst
 import xiangshan.backend.fu.matrix.Bundles._
 
 class AmuCtrlBufferIO()(implicit val p: Parameters, val params: BackendParams) extends Bundle with HasXSParameter {
   // rob enq
-  class EnqBundle extends Bundle {
+  class EnqBundle()(implicit val p: Parameters) extends Bundle with HasXSParameter {
     val valid = Bool()  // Req valid and canEnqueue
     val reqValid = Bool()  // Req valid
     val allocPtr = new RobPtr
     val needAMU = Bool()
+    val pc = Option.when(env.EnableDifftest && HasMatrixExtension)(UInt(VAddrBits.W))
+    val pcTransType = Option.when(env.EnableDifftest && HasMatrixExtension)(new AddrTransType)
   }
   val enq = Input(Vec(RenameWidth, new EnqBundle))
   val canEnqueue = Output(Bool())
@@ -42,6 +47,9 @@ class AmuCtrlBufferIO()(implicit val p: Parameters, val params: BackendParams) e
 
   // To Amu
   val toAMU = Vec(CommitWidth, DecoupledIO(new AmuCtrlIO))
+
+  // If we enable difftest, there will be hartid
+  val hartId = Option.when(env.EnableDifftest && HasMatrixExtension)(Input(UInt(hartIdLen.W)))
 }
 
 
@@ -101,6 +109,11 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
       io.enq(i).reqValid := robImp.io.enq.req(i).valid
       io.enq(i).allocPtr := robImp.allocatePtrVec(i)
       io.enq(i).needAMU := robImp.io.enq.req(i).bits.needAmuCtrl
+
+      if (env.EnableDifftest && HasMatrixExtension) {
+        io.enq(i).pc.get := robImp.io.enq.req(i).bits.pc
+        io.enq(i).pcTransType.get := robImp.io.debugInstrAddrTransType
+      }
     }
     io.wb := robImp.io.writeback
     io.deqCommit.zip(robImp.deqPtrVec).zip(robImp.io.commits.commitValid) foreach { case ((deq, ptr), valid) =>
@@ -112,9 +125,16 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
     io.redirect.begin := robImp.redirectBegin
     io.redirect.end := robImp.redirectEnd
     robImp.io.amuCtrl <> io.toAMU
+    if (env.EnableDifftest && HasMatrixExtension) {
+      io.hartId.get := robImp.io.hartId
+    }
   }
 
   val amuCtrlEntries = RegInit(VecInit.fill(RobSize)(AmuCtrlEntry.zero))
+
+  // Difftest
+  val dt_pc = Option.when(env.EnableDifftest && HasMatrixExtension)(DebugMem(RobSize, UInt(VAddrBits.W)))
+  val dt_pcTransType = Option.when(env.EnableDifftest && HasMatrixExtension)(Mem(RobSize, new AddrTransType))
 
   // Calculate number of valid entries and new entries to be enqueued
   val numValidEntries = PopCount(amuCtrlEntries.map(_.valid))
@@ -144,6 +164,19 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
       entry := AmuCtrlEntry.zero
       entry.valid := true.B
       entry.needAMU := needOH.asUInt.orR
+      if (env.EnableDifftest && HasMatrixExtension) {
+        val pcData = Mux1H(
+          io.enq.zip(indexMatch).map { case (enq, imatch) => imatch && enq.valid },
+          io.enq.map(_.pc.get)
+        )
+        val pcTransTypeData = Mux1H(
+          io.enq.zip(indexMatch).map { case (enq, imatch) => imatch && enq.valid },
+          io.enq.map(_.pcTransType.get)
+        )
+        
+        dt_pc.get(i) := pcData
+        dt_pcTransType.get(i) := pcTransTypeData
+      }
     }
   }
 
@@ -200,6 +233,46 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
     when (amuCtrl.fire) {
       assert(!deqEntry.canDeq, s"AMUCtrlBuffer: deqEntry[$i] is already set to canDeq")
       deqEntry.canDeq := true.B
+    }
+    // Difftest
+    if (env.EnableDifftest && HasMatrixExtension) {
+      val difftestPC = dt_pc.get((deqPtr + i.U).value)
+      val difftestAmuCtrl = DifftestModule(new DiffAmuCtrlEvent, delay = 3, dontCare = true)
+      difftestAmuCtrl.valid  := amuCtrl.fire
+      difftestAmuCtrl.op     := amuCtrl.bits.op
+      val pcTransType = dt_pcTransType.get((deqPtr + i.U).value)
+      difftestAmuCtrl.pc     := Mux(pcTransType.shouldBeSext, SignExt(difftestPC, XLEN), difftestPC)
+      difftestAmuCtrl.coreid := io.hartId.get
+      difftestAmuCtrl.index  := i.U
+      val mmaio = amuCtrl.bits.data.asTypeOf(new AmuMmaIO)
+      val mlsio = amuCtrl.bits.data.asTypeOf(new AmuLsuIO)
+      val mreleaseio = amuCtrl.bits.data.asTypeOf(new AmuReleaseIO)
+      when (amuCtrl.bits.isMma()) {
+        difftestAmuCtrl.md     := mmaio.md
+        difftestAmuCtrl.sat    := mmaio.sat
+        difftestAmuCtrl.isfp   := mmaio.isfp
+        difftestAmuCtrl.ms1    := mmaio.ms1
+        difftestAmuCtrl.ms2    := mmaio.ms2
+        difftestAmuCtrl.mtilem := mmaio.mtilem
+        difftestAmuCtrl.mtilen := mmaio.mtilen
+        difftestAmuCtrl.mtilek := mmaio.mtilek
+        difftestAmuCtrl.types  := mmaio.types
+        difftestAmuCtrl.typed  := mmaio.typed
+      }
+      when (amuCtrl.bits.isMls()) {
+        difftestAmuCtrl.ms        := mlsio.ms
+        difftestAmuCtrl.ls        := mlsio.ls
+        difftestAmuCtrl.transpose := mlsio.transpose
+        difftestAmuCtrl.isacc     := mlsio.isacc
+        difftestAmuCtrl.base      := mlsio.baseAddr
+        difftestAmuCtrl.stride    := mlsio.stride
+        difftestAmuCtrl.row       := mlsio.row
+        difftestAmuCtrl.column    := mlsio.column
+        difftestAmuCtrl.widths    := mlsio.widths
+      }
+      when (amuCtrl.bits.isRelease()) {
+        difftestAmuCtrl.tokenRd := mreleaseio.tokenRd
+      }
     }
   }
 
