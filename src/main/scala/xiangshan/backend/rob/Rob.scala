@@ -1660,6 +1660,21 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
         difftestLoadEvent.isLoad   := FuType.isLoad(uop.fuType)
         difftestLoadEvent.isVLoad  := isVLoad
       }
+      if (env.EnableDifftest && HasMatrixExtension) {
+        // Check token regs
+        val difftestTokenEvent = DifftestModule(new DiffTokenEvent, delay = 3)
+        val isTokenEvent = instr.isMsync && FuType.isFence(uop.fuType) // We don't check mrelease here.
+        difftestTokenEvent.valid := io.commits.commitValid(i) && io.commits.isCommit && isTokenEvent
+        difftestTokenEvent.coreid := io.hartId
+        difftestTokenEvent.index := i.U
+        when (uop.fuOpType === FenceOpType.msyncregreset) {
+          difftestTokenEvent.op := 0.U
+        } .otherwise { // uop.fuOpType === FenceOpType.macquire
+          difftestTokenEvent.op := 1.U
+        }
+        difftestTokenEvent.tokenRd := uop.imm(10, 6)
+        difftestTokenEvent.pc := uop.pc
+      }
     }
   }
 
