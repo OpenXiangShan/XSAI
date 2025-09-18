@@ -262,6 +262,17 @@ object AME extends $file.AME.common.AMEModule with HasChisel {
   }
 }
 
+object CUTE extends ScalaModule with HasChisel {
+
+  override def millSourcePath = pwd / "CUTE"
+
+  def rocketModule: ScalaModule = rocketchip
+
+  def utilityModule: ScalaModule = utility
+
+  override def moduleDeps = super.moduleDeps ++ Seq(rocketModule, utilityModule)
+}
+
 // extends this trait to use XiangShan in other projects
 trait XiangShanModule extends ScalaModule {
 
@@ -289,6 +300,8 @@ trait XiangShanModule extends ScalaModule {
 
   def ameModule: ScalaModule
 
+  def cuteModule: ScalaModule
+
   override def moduleDeps = super.moduleDeps ++ Seq(
     rocketModule,
     difftestModule,
@@ -302,7 +315,8 @@ trait XiangShanModule extends ScalaModule {
     macrosModule,
     chiselIOPMPModule,
     ameModule,
-    hbl2demoModule
+    hbl2demoModule,
+    cuteModule
   )
 
   val resourcesPATH = pwd.toString() + "/src/main/resources"
@@ -338,6 +352,8 @@ object xiangshan extends XiangShanModule with HasChisel with ScalafmtModule {
   def chiselIOPMPModule = chiselIOPMP
 
   def ameModule = AME
+
+  def cuteModule = CUTE
 
   // properties may be changed by user. Use `Task.Input` here.
   def forkArgsTask = Task.Input {
