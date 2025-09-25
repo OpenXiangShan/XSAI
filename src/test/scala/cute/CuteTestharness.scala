@@ -6,6 +6,7 @@ import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import org.chipsalliance.cde.config._
+import xiangshan.backend.fu.matrix.Bundles._
 
 /**
   * CuteTestharness conducts MLA, MLB, MLC, MMA, MSC, and MacroIssue through
@@ -20,10 +21,9 @@ object StateMachineDefaults {
   def applyDefaults(top: XSCuteTopImpl): Unit = {
     // ConfigStateMachine default assignments
     top.reset := false.B
-    top.io.ctrl2top.config.valid := false.B
-    top.io.ctrl2top.config.bits.cfgData1 := 0.U
-    top.io.ctrl2top.config.bits.cfgData2 := 0.U
-    top.io.ctrl2top.config.bits.func := 0.U
+    top.io.ctrl2top.amuCtrl.valid := false.B
+    top.io.ctrl2top.amuCtrl.bits.data := 0.U
+    top.io.ctrl2top.amuCtrl.bits.op := 0.U
     
     // MMUMonitorStateMachine default assignments
     top.tl.foreach { tl =>
@@ -42,8 +42,8 @@ object StateMachineDefaults {
 class ConfigStateMachine(top: XSCuteTopImpl)(implicit p: Parameters) extends CuteConsts {
   // State definitions
   object ConfigState extends ChiselEnum {
-    val sIdle, sReset, sInit, sConfigATensor, sConfigBTensor, sConfigCTensor, 
-        sConfigDTensor, sConfigMNK, sConfigMatMul, sIssueMarco, sConfigDone = Value
+    val sIdle, sReset, sInit, sLoadATensor, sLoadBTensor, sLoadCTensor, 
+        sComputeMMA, sStoreDTensor, sConfigDone = Value
   }
   
   // State registers
@@ -104,104 +104,115 @@ class ConfigStateMachine(top: XSCuteTopImpl)(implicit p: Parameters) extends Cut
         wait_cycles := wait_cycles + 1.U
         when(wait_cycles >= max_wait_cycles) {
           wait_cycles := 0.U
-          state := ConfigState.sConfigATensor
+          state := ConfigState.sLoadATensor
           printf("ConfigSM: Initialization completed at cycle %d\n", cycle_cnt)
         }
       }
       
-      is(ConfigState.sConfigATensor) {
-        printf("ConfigSM: Configuring A Tensor at cycle %d\n", cycle_cnt)
-        top.io.ctrl2top.config.valid := true.B
-        top.io.ctrl2top.config.bits.cfgData1 := ATensor_Base_Addr
-        top.io.ctrl2top.config.bits.cfgData2 := ATensor_M_Stride
-        top.io.ctrl2top.config.bits.func := CUTE_ATENSOR_CONFIG_FUNCTOPS.U
+      is(ConfigState.sLoadATensor) {
+        printf("ConfigSM: Load A Tensor at cycle %d\n", cycle_cnt)
+        top.io.ctrl2top.amuCtrl.valid := true.B
+        val mls = WireInit(0.U.asTypeOf(new AmuLsuIO))
+        mls.baseAddr := ATensor_Base_Addr
+        mls.stride   := ATensor_M_Stride
+        mls.row      := M
+        mls.column   := K
+        mls.widths   := MSew.e8
+        mls.ls       := false.B
+        mls.isTile   := true.B
+        mls.isA      := true.B
+        top.io.ctrl2top.amuCtrl.bits.data := mls.asUInt
+        top.io.ctrl2top.amuCtrl.bits.op := AmuCtrlIO.mlsOp()
         wait_cycles := wait_cycles + 1.U
         when(wait_cycles >= 2.U) {
           wait_cycles := 0.U
-          state := ConfigState.sConfigBTensor
+          state := ConfigState.sLoadBTensor
         }
       }
       
-      is(ConfigState.sConfigBTensor) {
-        printf("ConfigSM: Configuring B Tensor at cycle %d\n", cycle_cnt)
-        top.io.ctrl2top.config.valid := true.B
-        top.io.ctrl2top.config.bits.cfgData1 := BTensor_Base_Addr
-        top.io.ctrl2top.config.bits.cfgData2 := BTensor_M_Stride
-        top.io.ctrl2top.config.bits.func := CUTE_BTENSOR_CONFIG_FUNCTOPS.U
+      is(ConfigState.sLoadBTensor) {
+        printf("ConfigSM: Load B Tensor at cycle %d\n", cycle_cnt)
+        top.io.ctrl2top.amuCtrl.valid := true.B
+        val mls = WireInit(0.U.asTypeOf(new AmuLsuIO))
+        mls.baseAddr := BTensor_Base_Addr
+        mls.stride   := BTensor_M_Stride
+        mls.row      := N
+        mls.column   := K
+        mls.widths   := MSew.e8
+        mls.ls       := false.B
+        mls.isTile   := true.B
+        mls.isB      := true.B
+        top.io.ctrl2top.amuCtrl.bits.data := mls.asUInt
+        top.io.ctrl2top.amuCtrl.bits.op := AmuCtrlIO.mlsOp()
         wait_cycles := wait_cycles + 1.U
         when(wait_cycles >= 2.U) {
           wait_cycles := 0.U
-          state := ConfigState.sConfigCTensor
+          state := ConfigState.sLoadCTensor
         }
       }
       
-      is(ConfigState.sConfigCTensor) {
-        printf("ConfigSM: Configuring C Tensor at cycle %d\n", cycle_cnt)
-        top.io.ctrl2top.config.valid := true.B
-        top.io.ctrl2top.config.bits.cfgData1 := CTensor_Base_Addr
-        top.io.ctrl2top.config.bits.cfgData2 := CTensor_M_Stride
-        top.io.ctrl2top.config.bits.func := CUTE_CTENSOR_CONFIG_FUNCTOPS.U
+      is(ConfigState.sLoadCTensor) {
+        printf("ConfigSM: Load C Tensor at cycle %d\n", cycle_cnt)
+        top.io.ctrl2top.amuCtrl.valid := true.B
+        val mls = WireInit(0.U.asTypeOf(new AmuLsuIO))
+        mls.baseAddr := CTensor_Base_Addr
+        mls.stride   := CTensor_M_Stride
+        mls.row      := M
+        mls.column   := N
+        mls.widths   := MSew.e32
+        mls.ls       := false.B
+        mls.isacc    := true.B
+        mls.isC      := true.B
+        top.io.ctrl2top.amuCtrl.bits.data := mls.asUInt
+        top.io.ctrl2top.amuCtrl.bits.op := AmuCtrlIO.mlsOp()
         wait_cycles := wait_cycles + 1.U
         when(wait_cycles >= 2.U) {
           wait_cycles := 0.U
-          state := ConfigState.sConfigDTensor
+          state := ConfigState.sComputeMMA
         }
       }
       
-      is(ConfigState.sConfigDTensor) {
-        printf("ConfigSM: Configuring D Tensor at cycle %d\n", cycle_cnt)
-        top.io.ctrl2top.config.valid := true.B
-        top.io.ctrl2top.config.bits.cfgData1 := DTensor_Base_Addr
-        top.io.ctrl2top.config.bits.cfgData2 := DTensor_M_Stride
-        top.io.ctrl2top.config.bits.func := CUTE_DTENSOR_CONFIG_FUNCTOPS.U
+      is(ConfigState.sComputeMMA) {
+        printf("ConfigSM: Compute MMA at cycle %d\n", cycle_cnt)
+        top.io.ctrl2top.amuCtrl.valid := true.B
+        val mma = WireInit(0.U.asTypeOf(new AmuMmaIO))
+        mma.md := 0.U
+        mma.sat := false.B
+        mma.ms1 := 0.U
+        mma.ms2 := 0.U
+        mma.mtilem := M
+        mma.mtilen := N
+        mma.mtilek := K
+        mma.types := MSew.e8
+        mma.typed := MSew.e32
+        mma.isfp := false.B
+        top.io.ctrl2top.amuCtrl.bits.data := mma.asUInt
+        top.io.ctrl2top.amuCtrl.bits.op := AmuCtrlIO.mmaOp()
         wait_cycles := wait_cycles + 1.U
         when(wait_cycles >= 2.U) {
           wait_cycles := 0.U
-          state := ConfigState.sConfigMNK
+          state := ConfigState.sStoreDTensor
         }
       }
       
-      is(ConfigState.sConfigMNK) {
-        printf("ConfigSM: Configuring MNK parameters at cycle %d\n", cycle_cnt)
-        val mnkData1 = (M & 0xFFFFF.U) | ((N & 0xFFFFF.U) << 20) | ((K & 0xFFFFF.U) << 40)
-        top.io.ctrl2top.config.valid := true.B
-        top.io.ctrl2top.config.bits.cfgData1 := mnkData1
-        top.io.ctrl2top.config.bits.cfgData2 := 0.U // kernel_stride = 0 for matmul
-        top.io.ctrl2top.config.bits.func := CUTE_MNK_KERNALSTRIDE_CONFIG_FUNCTOPS.U
-        wait_cycles := wait_cycles + 1.U
-        when(wait_cycles >= 2.U) {
-          wait_cycles := 0.U
-          state := ConfigState.sConfigMatMul
-        }
-      }
-      
-      is(ConfigState.sConfigMatMul) {
-        printf("ConfigSM: Configuring matrix multiplication parameters at cycle %d\n", cycle_cnt)
-        val cfgData1 = element_type | (bias_type << 8) | (transpose_result << 16) | 
-                       (1.U << 24) | (1.U << 32) | (16384.U << 48) // conv_stride=1, conv_oh_max=1, conv_ow_max=16384
-        val cfgData2 = 1.U | (0.U << 4) | (64.U << 19) | (0.U << 34) | (matmul_m_index << 49)
-        top.io.ctrl2top.config.valid := true.B
-        top.io.ctrl2top.config.bits.cfgData1 := cfgData1
-        top.io.ctrl2top.config.bits.cfgData2 := cfgData2
-        top.io.ctrl2top.config.bits.func := CUTE_CONV_CONFIG_FUNCTOPS.U
-        wait_cycles := wait_cycles + 1.U
-        when(wait_cycles >= 2.U) {
-          wait_cycles := 0.U
-          state := ConfigState.sIssueMarco
-        }
-      }
-      
-      is(ConfigState.sIssueMarco) {
-        printf("ConfigSM: Issuing Marco instruction at cycle %d\n", cycle_cnt)
-        top.io.ctrl2top.config.valid := true.B
-        top.io.ctrl2top.config.bits.cfgData1 := 0.U
-        top.io.ctrl2top.config.bits.cfgData2 := 0.U
-        top.io.ctrl2top.config.bits.func := CUTE_ISSUE_MARCO_INST.U
+      is(ConfigState.sStoreDTensor) {
+        printf("ConfigSM: Store D Tensor at cycle %d\n", cycle_cnt)
+        val mls = WireInit(0.U.asTypeOf(new AmuLsuIO))
+        mls.baseAddr := DTensor_Base_Addr
+        mls.stride   := DTensor_M_Stride
+        mls.row      := M
+        mls.column   := N
+        mls.widths   := MSew.e32
+        mls.ls       := true.B
+        mls.isacc    := true.B
+        mls.isC      := true.B
+        top.io.ctrl2top.amuCtrl.valid := true.B
+        top.io.ctrl2top.amuCtrl.bits.data := mls.asUInt
+        top.io.ctrl2top.amuCtrl.bits.op := AmuCtrlIO.mlsOp()
         wait_cycles := wait_cycles + 1.U
         when(wait_cycles >= 2.U) {
           wait_cycles := 0.U
           state := ConfigState.sConfigDone
-          printf("ConfigSM: Configuration completed at cycle %d\n", cycle_cnt)
         }
       }
       
