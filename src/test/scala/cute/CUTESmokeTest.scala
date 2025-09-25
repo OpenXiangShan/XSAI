@@ -11,7 +11,9 @@ import scala.util.Random
 import freechips.rocketchip.util.UIntToAugmentedUInt
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
-
+import xiangshan.XSCoreParamsKey
+import system.SoCParamsKey
+import system.SoCParameters
 
 /**
  * XSCuteTop smoke test.
@@ -27,6 +29,8 @@ class CUTESmokeTest extends AnyFreeSpec with Matchers with CuteConsts {
         Debug = CuteDebugParams.AllDebugOn
     )
     case MonitorsEnabled => false
+    case XSCoreParamsKey => xiangshan.XSCoreParameters()
+    case SoCParamsKey => SoCParameters()
     case x: Any => throw new Exception(s"Unhandled key: ${x} in config")
   })
 
