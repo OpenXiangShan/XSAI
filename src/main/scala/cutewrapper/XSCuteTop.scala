@@ -20,22 +20,55 @@ class XSCuteTopImpl(wrapper: XSCuteTop) extends LazyModuleImp(wrapper) {
   wrapper.cute_tl.module.io.mmu <> cute.io.mmu2llc
   io.mmu2llc := DontCare
   val tl = wrapper.node.makeIOs()(ValName("tl"))
+  val edgeIn = wrapper.node.edges.in(0)
+}
+
+// Add a LazyModule with TLAdapterNode between TLWidthWidget and cute_tl.node
+
+class CuteDebugAdapter(label: String)(implicit p: Parameters) extends LazyModule {
+  val node = TLAdapterNode() // identity adapter
+  lazy val module = new LazyModuleImp(this) {
+    (node.in zip node.out).foreach { case ((in, edgeIn), (out, edgeOut)) =>
+      out <> in
+      // Print TL-A channel info when fired
+      when (in.a.fire) {
+        printf(cf"[CuteDebugAdapter:$label] TL-A fired: opcode=0x${in.a.bits.opcode}%x param=0x${in.a.bits.param}%x size=0x${in.a.bits.size}%x source=0x${in.a.bits.source}%x address=0x${in.a.bits.address}%x mask=0x${in.a.bits.mask}%x data=0x${in.a.bits.data}%x\n")
+      }
+      when (in.d.fire) {
+          printf(cf"[CuteDebugAdapter:$label] TL-D fired: opcode=0x${in.d.bits.opcode}%x param=0x${in.d.bits.param}%x size=0x${in.d.bits.size}%x source=0x${in.d.bits.source}%x sink=0x${in.d.bits.sink}%x denied=${in.d.bits.denied} corrupt=${in.d.bits.corrupt} data=0x${in.d.bits.data}%x\n")
+      }
+    }
+  }
+}
+
+object CuteDebugAdapter {
+  def apply(label: String)(implicit p: Parameters): TLAdapterNode = {
+    val adapter = LazyModule(new CuteDebugAdapter(label))
+    adapter.node
+  }
 }
 
 class XSCuteTop(implicit p: Parameters) extends LazyModule {
+  val beatBytes = 32
+  val transferBytes = 64
   val cute_tl = LazyModule(new Cute2TL)
   val node = TLManagerNode(Seq(TLSlavePortParameters.v1(
     managers = Seq(TLSlaveParameters.v1(
       address = Seq(AddressSet(0, 0xffffffffL)),
-      supportsGet = TransferSizes(1, 64),
-      supportsPutPartial = TransferSizes(1, 64),
-      supportsPutFull = TransferSizes(1, 64)
+      supportsGet = TransferSizes(1, transferBytes),
+      supportsPutPartial = TransferSizes(1, transferBytes),
+      supportsPutFull = TransferSizes(1, transferBytes),
+      fifoId = Some(0)
     )),
-    beatBytes = 64))
+    beatBytes = beatBytes))
   )
 
-  node := TLWidthWidget(64) := cute_tl.node
-
+  if (beatBytes == 64) {
+    node := CuteDebugAdapter("near_cute") := cute_tl.node
+  }
+  else {
+    node := CuteDebugAdapter("near_manager") := TLFragmenter(32, 64) := TLWidthWidget(64) := CuteDebugAdapter("near_cute") := cute_tl.node
+  }
   lazy val module = new XSCuteTopImpl(this)
 }
 

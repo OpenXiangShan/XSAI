@@ -42,11 +42,11 @@ class CUTESmokeTest extends AnyFreeSpec with Matchers with CuteConsts {
         dut.reset.poke(true.B)
         dut.clock.step(50)
         dut.reset.poke(false.B)
-        // while (!dut.io.success.peek().litToBoolean) {
-        //   dut.clock.step(1)
-        // }
+        while (!dut.io.success.peek().litToBoolean) {
+          dut.clock.step(1)
+        }
         // 5000 cycles is enough to reach MMA finish point.
-        dut.clock.step(5000)
+        // dut.clock.step(10000)
       }
     }
   }
