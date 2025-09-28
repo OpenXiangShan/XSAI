@@ -1,6 +1,7 @@
-# XiangShan
+# XSAI
 
 XiangShan (香山) is an open-source high-performance RISC-V processor project.
+XSAI (ξ) is an AI processor based on XiangShan.
 
 中文说明[在此](readme.zh-cn.md)。
 
@@ -50,9 +51,9 @@ The second stable micro-architecture of XiangShan is called Nanhu (南湖) and i
 
 The current version of XiangShan, also known as Kunminghu (昆明湖), is still under development on the master branch.
 
-The micro-architecture overview of Kunminghu (昆明湖) is shown below.
+The micro-architecture overview of XSAI based on Kunminghu (昆明湖) is shown below.
 
-![xs-arch-kunminghu](images/xs-arch-kunminghu.svg)
+![xsai-arch-kunminghu](images/xsai-arch-kunminghu.svg)
 
 
 
@@ -117,7 +118,7 @@ make idea
 Example:
 
 ```bash
-make emu CONFIG=MinimalConfig EMU_THREADS=2 -j10
+make emu CONFIG=MinimalMatrixConfig EMU_THREADS=2 -j10
 ./build/emu -b 0 -e 0 -i ./ready-to-run/coremark-2-iteration.bin --diff ./ready-to-run/riscv64-nemu-interpreter-so
 ```
 

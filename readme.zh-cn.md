@@ -1,6 +1,7 @@
-# 香山
+# XSAI
 
 香山（XiangShan）是一款开源的高性能 RISC-V 处理器。
+XSAI 是一款基于香山的 AI 处理器。
 
 English Readme is [here](README.md).
 
@@ -49,8 +50,8 @@ Weibo/微博：[香山开源处理器](https://weibo.com/u/7706264932)
 
 香山的第三代微架构（昆明湖）正在 master 分支上不断开发中。
 
-昆明湖微架构概览：
-![xs-arch-kunminghu](images/xs-arch-kunminghu.svg)
+基于昆明湖的 XSAI 微架构概览：
+![xsai-arch-kunminghu](images/xsai-arch-kunminghu.svg)
 
 ## 目录概览
 
@@ -111,7 +112,7 @@ make idea
 运行示例：
 
 ```bash
-make emu CONFIG=MinimalConfig EMU_THREADS=2 -j10
+make emu CONFIG=MinimalMatrixConfig EMU_THREADS=2 -j10
 ./build/emu -b 0 -e 0 -i ./ready-to-run/coremark-2-iteration.bin --diff ./ready-to-run/riscv64-nemu-interpreter-so
 ```
 
