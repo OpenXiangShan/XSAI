@@ -72,6 +72,29 @@ class XSCuteTop(implicit p: Parameters) extends LazyModule {
   lazy val module = new XSCuteTopImpl(this)
 }
 
+class XSCuteImp(wrapper: XSCute) extends LazyModuleImp(wrapper) {
+    (wrapper.node.in zip wrapper.node.out).foreach { case ((in, edgeIn), (out, edgeOut)) =>
+      out <> in
+    }
+
+    val io = IO(new CUTETopIO)
+    val cute = Module(new CUTEV2Top)
+    io <> cute.io
+    wrapper.cute_tl.module.io.mmu <> cute.io.mmu2llc
+    io.mmu2llc := DontCare
+}
+
+class XSCute(implicit p: Parameters) extends LazyModule {
+  val beatBytes = 32
+  val transferBytes = 64
+  val cute_tl = LazyModule(new Cute2TL)
+  val node = TLAdapterNode()
+
+  node := CuteDebugAdapter("near_cute") := cute_tl.node
+
+  lazy val module = new XSCuteImp(this)
+}
+
 
 trait CuteConsts {
   // Constant definitions (corresponding to definitions in cuteMarcoinstHelper.h)
