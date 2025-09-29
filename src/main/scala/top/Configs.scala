@@ -261,13 +261,14 @@ class MinimalMatrixConfig(n: Int) extends Config(
         dfilterSize = 48,
       ),
     ))
+    case MatAccKey => MatAcc.CUTE
     case AMEConfigKey => AMEParams(
       numTrRegs = 2,
       numAccRegs = 1,
       dataWidth = 32,
       matrixSize = 16
     )
-    case CuteParamsKey => CuteParams.baseParams
+    case CuteParamsKey => CuteParams.CUTE_8Tops_128SCP
   })
 )
 
