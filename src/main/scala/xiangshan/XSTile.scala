@@ -16,7 +16,7 @@
 
 package xiangshan
 
-import org.chipsalliance.cde.config.{Config, Parameters}
+import org.chipsalliance.cde.config.{Config, Field, Parameters}
 import chisel3._
 import chisel3.util.{Valid, ValidIO, log2Up, Arbiter}
 import freechips.rocketchip.diplomacy._
@@ -33,9 +33,15 @@ import coupledL2.tl2chi.PortIO
 import xiangshan.backend.trace.TraceCoreInterface
 import xiangshan.backend.fu.matrix._
 import xiangshan.backend.fu.matrix.Bundles._
-import AME.AME
-import utility.RegNextN
 import amewrapper.AMEModule
+import cute.XSCute
+
+object MatAcc extends Enumeration {
+  type MatAcc = Value
+  val AME, CUTE = Value
+}
+
+case object MatAccKey extends Field[MatAcc.Value](MatAcc.AME)
 
 class XSTile()(implicit p: Parameters) extends LazyModule
   with HasXSParameter
@@ -44,7 +50,16 @@ class XSTile()(implicit p: Parameters) extends LazyModule
   override def shouldBeInlined: Boolean = false
   val core = LazyModule(new XSCore())
   val l2top = LazyModule(new L2Top())
-  val ame = LazyModule(new AMEModule())
+
+  val ameOpt = p(MatAccKey) match {
+    case MatAcc.AME => Some(LazyModule(new AMEModule()))
+    case MatAcc.CUTE => None
+  }
+
+  val cuteOpt = p(MatAccKey) match {
+    case MatAcc.AME => None
+    case MatAcc.CUTE => Some(LazyModule(new XSCute()))
+  }
 
   val enableL2 = coreParams.L2CacheParamsOpt.isDefined
   // =========== Public Ports ============
@@ -72,9 +87,13 @@ class XSTile()(implicit p: Parameters) extends LazyModule
       memBlock.l1d_to_l2_buffer.node := memBlock.dcache.clientNode
   }
 
-  ame.matrix_nodes.zipWithIndex.foreach { case (node, i) =>
+  ameOpt.foreach(_.matrix_nodes.zipWithIndex.foreach { case (node, i) =>
     l2top.inner.misc_l2_pmu :=* TLLogger("AmeReq" + i.toString) :=* node
-  }
+  })
+
+  cuteOpt.foreach(
+    l2top.inner.misc_l2_pmu := TLWidthWidget(64) := _.node
+  )
 
   l2top.inner.misc_l2_pmu := l2top.inner.l1i_logger := memBlock.frontendBridge.icache_node
   if (!coreParams.softPTW) {
@@ -223,28 +242,38 @@ class XSTile()(implicit p: Parameters) extends LazyModule
 
     /** AMU related wiring */
     val amuCtrlArbiter = Module(new Arbiter(new AmuCtrlIO, CommitWidth))
-    val ameTranslator = Module(new AmeTranslator)
-    require(ameTranslator.io.uop.Operands_io.rs1.getWidth == 48, "rs1 width should be 48")
-
-    ame.module.io <> DontCare
     amuCtrlArbiter.io.in <> core.module.io.amuCtrl
     dontTouch(amuCtrlArbiter.io.in)
-    ameTranslator.io.amuCtrl <> amuCtrlArbiter.io.out
 
-    ame.module.io.Uop_io.ShakeHands_io <> ameTranslator.io.uop.ShakeHands_io
-    ame.module.io.Uop_io.Operands_io <> ameTranslator.io.uop.Operands_io
-    ame.module.io.Uop_io.InsType_io <> ameTranslator.io.uop.InsType_io
-    ame.module.io.Uop_io.mtileConfig_io <> ameTranslator.io.uop.mtileConfig_io
-    ameTranslator.io.mlu_l2 <> DontCare
+    ameOpt.foreach { case ame =>
+      val ameTranslator = Module(new AmeTranslator)
+      require(ameTranslator.io.uop.Operands_io.rs1.getWidth == 48, "rs1 width should be 48")
+      ame.module.io <> DontCare
+      ameTranslator.io.amuCtrl <> amuCtrlArbiter.io.out
 
-    val l2_matrix_d = l2top.module.io.matrixDataOut512L2
-    ame.module.io.matrix_data_in.zip(l2_matrix_d).foreach { case (sink, src) => sink <> src }
-    core.module.io.amuRelease <> ame.module.io.amuRelease
+      ame.module.io.Uop_io.ShakeHands_io <> ameTranslator.io.uop.ShakeHands_io
+      ame.module.io.Uop_io.Operands_io <> ameTranslator.io.uop.Operands_io
+      ame.module.io.Uop_io.InsType_io <> ameTranslator.io.uop.InsType_io
+      ame.module.io.Uop_io.mtileConfig_io <> ameTranslator.io.uop.mtileConfig_io
+      ameTranslator.io.mlu_l2 <> DontCare
 
-    // ChiselDB for uop
-    val ameDB = ChiselDB.createTable("ame", ame.module.io, basicDB = true)
-    val ameLogEn = ame.module.io.Uop_io.ShakeHands_io.valid || ame.module.io.matrix_data_in.map(_.valid).reduce(_ || _)
-    ameDB.log(ame.module.io, ameLogEn, "ame io", clock, reset)
+      val l2_matrix_d = l2top.module.io.matrixDataOut512L2
+      ame.module.io.matrix_data_in.zip(l2_matrix_d).foreach { case (sink, src) => sink <> src }
+      core.module.io.amuRelease <> ame.module.io.amuRelease
+
+      // ChiselDB for uop
+      val ameDB = ChiselDB.createTable("ame", ame.module.io, basicDB = true)
+      val ameLogEn = ame.module.io.Uop_io.ShakeHands_io.valid || ame.module.io.matrix_data_in.map(_.valid).reduce(_ || _)
+      ameDB.log(ame.module.io, ameLogEn, "ame io", clock, reset)
+    }
+
+    cuteOpt.foreach { case cute =>
+      l2top.module.io.matrixDataOut512L2 := DontCare
+      cute.module.io := DontCare
+      cute.module.io.ctrl2top.amuCtrl <> amuCtrlArbiter.io.out
+      core.module.io.amuRelease.bits := cute.module.io.ctrl2top.mrelease.bits
+      core.module.io.amuRelease.valid := cute.module.io.ctrl2top.mrelease.valid
+    }
   }
 
   lazy val module = new XSTileImp(this)
