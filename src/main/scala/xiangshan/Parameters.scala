@@ -64,7 +64,7 @@ case class XSCoreParameters
   HSXLEN: Int = 64,
   HasBitmapCheck: Boolean = true,
   HasBitmapCheckDefault: Boolean = false,
-  MLEN: Int = 0x20000, // 64 * 256 * 8
+  MLEN: Int = 256 * 256 * 8,  // Expect TMMAX 256 TNMAX 256 TKMAX 256 with e8
   RLEN: Int = 0x00800, // 256 * 8
   AMUL: Int = 4,       // 32 / 8
   MTOK: Int = 8,       // 8 or 16 or 32
