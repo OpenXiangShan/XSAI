@@ -18,6 +18,7 @@ import xiangshan.cache.wpu.ReplayCarry
 import xiangshan.ExceptionNO._
 import xiangshan.MldstOpType
 import xiangshan.mem.Bundles.{LsPipelineBundle, MlsqWriteBundle, MlsPipelineBundle}
+import xiangshan.backend.fu.matrix.Bundles.MSew
 
 class MlsToMlsqReplayIO(implicit p: Parameters) extends XSBundle
   with HasDCacheParameters
@@ -497,9 +498,9 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   amuCtrl.ls := MldstOpType.isStore(s3_in.uop.fuOpType)
   amuCtrl.ms := s3_in.uop.imm(3, 0)
   amuCtrl.widths    := Mux1H(Seq(
-    MldstOpType.isFp8(s3_in.uop.fuOpType)  -> 3.U,
-    MldstOpType.isFp16(s3_in.uop.fuOpType) -> 4.U,
-    MldstOpType.isFp32(s3_in.uop.fuOpType) -> 5.U,
+    MldstOpType.isFp8(s3_in.uop.fuOpType)  -> MSew.e8,
+    MldstOpType.isFp16(s3_in.uop.fuOpType) -> MSew.e16,
+    MldstOpType.isFp32(s3_in.uop.fuOpType) -> MSew.e32,
   ))
   amuCtrl.baseAddr  := s3_in.paddr
   amuCtrl.stride    := s3_in.stride
