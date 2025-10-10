@@ -261,7 +261,9 @@ object CUTE extends ScalaModule with HasChisel {
 
   def utilityModule: ScalaModule = utility
 
-  override def moduleDeps = super.moduleDeps ++ Seq(rocketModule, utilityModule)
+  def coupledL2Module: ScalaModule = coupledL2
+
+  override def moduleDeps = super.moduleDeps ++ Seq(rocketModule, utilityModule, coupledL2Module)
 }
 
 // extends this trait to use XiangShan in other projects

@@ -270,9 +270,15 @@ class XSTile()(implicit p: Parameters) extends LazyModule
     cuteOpt.foreach { case cute =>
       l2top.module.io.matrixDataOut512L2 := DontCare
       cute.module.io := DontCare
-      cute.module.io.ctrl2top.amuCtrl <> amuCtrlArbiter.io.out
-      core.module.io.amuRelease.bits := cute.module.io.ctrl2top.mrelease.bits
-      core.module.io.amuRelease.valid := cute.module.io.ctrl2top.mrelease.valid
+      cute.module.io.cute.ctrl2top.amuCtrl <> amuCtrlArbiter.io.out
+      core.module.io.amuRelease.bits := cute.module.io.cute.ctrl2top.mrelease.bits
+      core.module.io.amuRelease.valid := cute.module.io.cute.ctrl2top.mrelease.valid
+
+      val matrix_data_in = cute.module.io.matrix_data_in
+      val matrix_data_out = l2top.module.io.matrixDataOut512L2
+      val matrix_data_arb = Module(new Arbiter(matrix_data_out(0).bits.cloneType, matrix_data_out.length))
+      matrix_data_arb.io.in <> matrix_data_out
+      matrix_data_in <> matrix_data_arb.io.out
     }
   }
 
