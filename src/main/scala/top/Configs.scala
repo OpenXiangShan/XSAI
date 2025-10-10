@@ -37,7 +37,7 @@ import huancun._
 import coupledL2._
 import coupledL2.prefetch._
 import amewrapper.{AMEConfigKey, AMEParams}
-import cute.{CuteParamsKey, CuteParams}
+import cute.{CuteParamsKey, CuteParams, CuteDebugParams}
 
 class BaseConfig(n: Int) extends Config((site, here, up) => {
   case XLen => 64
@@ -268,7 +268,9 @@ class MinimalMatrixConfig(n: Int) extends Config(
       dataWidth = 32,
       matrixSize = 16
     )
-    case CuteParamsKey => CuteParams.CUTE_8Tops_128SCP
+    case CuteParamsKey => CuteParams.CUTE_8Tops_128SCP.copy(
+        Debug = CuteDebugParams.AllDebugOn
+    )
   })
 )
 

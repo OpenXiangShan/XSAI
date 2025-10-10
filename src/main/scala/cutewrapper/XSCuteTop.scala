@@ -6,6 +6,7 @@ import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import org.chipsalliance.cde.config._
+import coupledL2.MatrixDataBundle
 
 
 /**
@@ -14,9 +15,16 @@ import org.chipsalliance.cde.config._
  */
 
 class XSCuteTopImpl(wrapper: XSCuteTop) extends LazyModuleImp(wrapper) {
-  val io = IO(new CUTETopIO)
   val cute = Module(new CUTEV2Top)
-  io <> cute.io
+  val io = IO(new CUTETopIO {
+    val matrix_data_in = wrapper.cute_tl.module.io.matrix_data_in.cloneType
+  })
+  io.ctrl2top <> cute.io.ctrl2top
+  io.mrelease <> cute.io.mrelease
+  io.instfifo_head_id <> cute.io.instfifo_head_id
+  io.instfifo_tail_id <> cute.io.instfifo_tail_id
+  io.instfifo_release <> cute.io.instfifo_release
+  wrapper.cute_tl.module.io.matrix_data_in <> io.matrix_data_in
   wrapper.cute_tl.module.io.mmu <> cute.io.mmu2llc
   io.mmu2llc := DontCare
   val tl = wrapper.node.makeIOs()(ValName("tl"))
@@ -72,21 +80,32 @@ class XSCuteTop(implicit p: Parameters) extends LazyModule {
   lazy val module = new XSCuteTopImpl(this)
 }
 
+class XSCuteIO(implicit p: Parameters) extends Bundle {
+  val cute = new CUTETopIO
+  val matrix_data_in = Flipped(Decoupled(new MatrixDataBundle()))
+}
+
 class XSCuteImp(wrapper: XSCute) extends LazyModuleImp(wrapper) {
     (wrapper.node.in zip wrapper.node.out).foreach { case ((in, edgeIn), (out, edgeOut)) =>
       out <> in
     }
 
-    val io = IO(new CUTETopIO)
+    val io = IO(new XSCuteIO())
     val cute = Module(new CUTEV2Top)
-    io <> cute.io
+    io.cute <> cute.io
+    io.cute.mmu2llc := DontCare
     wrapper.cute_tl.module.io.mmu <> cute.io.mmu2llc
-    io.mmu2llc := DontCare
+
+    val tl_data_in = wrapper.cute_tl.module.io.matrix_data_in
+    tl_data_in.valid := io.matrix_data_in.valid
+    tl_data_in.bits := 0.U.asTypeOf(tl_data_in.bits)
+    tl_data_in.bits.opcode := TLMessages.AccessAckData
+    tl_data_in.bits.source := io.matrix_data_in.bits.sourceId
+    tl_data_in.bits.data := io.matrix_data_in.bits.data.data
+    io.matrix_data_in.ready := tl_data_in.ready
 }
 
 class XSCute(implicit p: Parameters) extends LazyModule {
-  val beatBytes = 32
-  val transferBytes = 64
   val cute_tl = LazyModule(new Cute2TL)
   val node = TLAdapterNode()
 
