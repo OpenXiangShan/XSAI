@@ -25,7 +25,6 @@ import $file.`rocket-chip`.hardfloat.common
 import $file.huancun.common
 import $file.coupledL2.common
 import $file.openLLC.common
-import $file.AME.common
 
 /* for publishVersion */
 import $ivy.`de.tototec::de.tobiasroeser.mill.vcs.version::0.4.0`
@@ -227,32 +226,6 @@ object macros extends ScalaModule {
   def scalaReflectIvy = ivy"org.scala-lang:scala-reflect:${defaultScalaVersion}"
 }
 
-object fpu extends SbtModule with HasChisel {
-
-  override def millSourcePath = pwd / "AME" / "FP8fpu"
-
-  override def moduleDeps = super.moduleDeps ++ Seq(rocketchip, utility)
-
-}
-
-object AME extends $file.AME.common.AMEModule with HasChisel {
-
-  override def millSourcePath = pwd / "AME"
-
-  def rocketModule: ScalaModule = rocketchip
-
-  def utilityModule: ScalaModule = utility
-
-  def fpuModule: ScalaModule = fpu
-
-  object test extends ScalaTests with TestModule.ScalaTest with ScalafmtModule {
-    override def ivyDeps = Agg(
-      ivy"org.scalatest::scalatest::3.2.19",
-      ivy"edu.berkeley.cs::chiseltest:6.0.0"
-    )
-  }
-}
-
 object CUTE extends ScalaModule with HasChisel {
 
   override def millSourcePath = pwd / "CUTE"
@@ -289,8 +262,6 @@ trait XiangShanModule extends ScalaModule {
 
   def macrosModule: ScalaModule
 
-  def ameModule: ScalaModule
-
   def cuteModule: ScalaModule
 
   override def moduleDeps = super.moduleDeps ++ Seq(
@@ -304,7 +275,6 @@ trait XiangShanModule extends ScalaModule {
     utilityModule,
     chiselAIAModule,
     macrosModule,
-    ameModule,
     cuteModule,
   )
 
@@ -337,8 +307,6 @@ object xiangshan extends XiangShanModule with HasChisel with ScalafmtModule {
   def chiselAIAModule = chiselAIA
 
   def macrosModule = macros
-
-  def ameModule = AME
 
   def cuteModule = CUTE
 
