@@ -36,7 +36,6 @@ import device.EnableJtag
 import huancun._
 import coupledL2._
 import coupledL2.prefetch._
-import amewrapper.{AMEConfigKey, AMEParams}
 import cute.{CuteParamsKey, CuteParams, CuteDebugParams, Cutev3extParams}
 
 class BaseConfig(n: Int) extends Config((site, here, up) => {
@@ -262,12 +261,6 @@ class MinimalMatrixConfig(n: Int) extends Config(
       ),
     ))
     case MatAccKey => MatAcc.CUTE
-    case AMEConfigKey => AMEParams(
-      numTrRegs = 2,
-      numAccRegs = 1,
-      dataWidth = 32,
-      matrixSize = 16
-    )
     case CuteParamsKey => CuteParams.CUTE_8Tops_128SCP.copy(
         Debug = CuteDebugParams.AllDebugOn,
         v3config = Cutev3extParams(

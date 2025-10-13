@@ -33,7 +33,6 @@ import coupledL2.tl2chi.PortIO
 import xiangshan.backend.trace.TraceCoreInterface
 import xiangshan.backend.fu.matrix._
 import xiangshan.backend.fu.matrix.Bundles._
-import amewrapper.AMEModule
 import cute.XSCute
 
 object MatAcc extends Enumeration {
@@ -50,11 +49,6 @@ class XSTile()(implicit p: Parameters) extends LazyModule
   override def shouldBeInlined: Boolean = false
   val core = LazyModule(new XSCore())
   val l2top = LazyModule(new L2Top())
-
-  val ameOpt = p(MatAccKey) match {
-    case MatAcc.AME => Some(LazyModule(new AMEModule()))
-    case MatAcc.CUTE => None
-  }
 
   val cuteOpt = p(MatAccKey) match {
     case MatAcc.AME => None
@@ -86,10 +80,6 @@ class XSTile()(implicit p: Parameters) extends LazyModule
     l2top.inner.misc_l2_pmu := l2top.inner.l1d_logger := memBlock.dcache_port :=
       memBlock.l1d_to_l2_buffer.node := memBlock.dcache.clientNode
   }
-
-  ameOpt.foreach(_.matrix_nodes.zipWithIndex.foreach { case (node, i) =>
-    l2top.inner.misc_l2_pmu :=* TLLogger("AmeReq" + i.toString) :=* node
-  })
 
   cuteOpt.foreach(
     l2top.inner.misc_l2_pmu := TLWidthWidget(64) := _.node
@@ -244,28 +234,6 @@ class XSTile()(implicit p: Parameters) extends LazyModule
     val amuCtrlArbiter = Module(new Arbiter(new AmuCtrlIO, CommitWidth))
     amuCtrlArbiter.io.in <> core.module.io.amuCtrl
     dontTouch(amuCtrlArbiter.io.in)
-
-    ameOpt.foreach { case ame =>
-      val ameTranslator = Module(new AmeTranslator)
-      require(ameTranslator.io.uop.Operands_io.rs1.getWidth == 48, "rs1 width should be 48")
-      ame.module.io <> DontCare
-      ameTranslator.io.amuCtrl <> amuCtrlArbiter.io.out
-
-      ame.module.io.Uop_io.ShakeHands_io <> ameTranslator.io.uop.ShakeHands_io
-      ame.module.io.Uop_io.Operands_io <> ameTranslator.io.uop.Operands_io
-      ame.module.io.Uop_io.InsType_io <> ameTranslator.io.uop.InsType_io
-      ame.module.io.Uop_io.mtileConfig_io <> ameTranslator.io.uop.mtileConfig_io
-      ameTranslator.io.mlu_l2 <> DontCare
-
-      val l2_matrix_d = l2top.module.io.matrixDataOut512L2
-      ame.module.io.matrix_data_in.zip(l2_matrix_d).foreach { case (sink, src) => sink <> src }
-      core.module.io.amuRelease <> ame.module.io.amuRelease
-
-      // ChiselDB for uop
-      val ameDB = ChiselDB.createTable("ame", ame.module.io, basicDB = true)
-      val ameLogEn = ame.module.io.Uop_io.ShakeHands_io.valid || ame.module.io.matrix_data_in.map(_.valid).reduce(_ || _)
-      ameDB.log(ame.module.io, ameLogEn, "ame io", clock, reset)
-    }
 
     cuteOpt.foreach { case cute =>
       l2top.module.io.matrixDataOut512L2 := DontCare

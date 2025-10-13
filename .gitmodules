@@ -28,9 +28,6 @@
 [submodule "ChiselAIA"]
 	path = ChiselAIA
 	url = https://github.com/OpenXiangShan/ChiselAIA.git
-[submodule "AME"]
-	path = AME
-	url = https://github.com/OpenXiangShan/RhyMAX.git
 [submodule "CUTE"]
 	path = CUTE
 	url = https://github.com/OpenXiangShan/CUTE.git
