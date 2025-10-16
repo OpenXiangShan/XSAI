@@ -42,7 +42,7 @@ import xiangshan.frontend.FtqPtr
 import xiangshan.mem.{LqPtr, LsqEnqIO, SqPtr, MlsqPtr}
 import xiangshan.backend.Bundles.{DynInst, ExceptionInfo, ExuOutput}
 import xiangshan.backend.ctrlblock.{DebugLSIO, DebugLsInfo, LsTopdownInfo}
-import xiangshan.backend.fu.matrix.Bundles.{MType, AmuCtrlIO, AmuMmaIO, AmuLsuIO, AmuReleaseIO}
+import xiangshan.backend.fu.matrix.Bundles.{MType, AmuCtrlIO}
 import xiangshan.backend.fu.vector.Bundles.VType
 import xiangshan.backend.rename.SnapshotGenerator
 import yunsuan.VfaluType
