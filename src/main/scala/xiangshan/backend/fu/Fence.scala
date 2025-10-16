@@ -22,12 +22,12 @@ import org.chipsalliance.cde.config.Parameters
 import utility.XSDebug
 import xiangshan.ExceptionNO.{illegalInstr, virtualInstr}
 import xiangshan._
-import xiangshan.backend.fu.matrix.Bundles.AmuReleaseIO
+import xiangshan.backend.fu.matrix.Bundles.AmuReleaseIO2XS
 class FenceIO(implicit p: Parameters) extends XSBundle {
   val sfence = Output(new SfenceBundle)
   val fencei = Output(Bool())
   val sbuffer = new FenceToSbuffer
-  val amuRelease = Flipped(Decoupled(new AmuReleaseIO))
+  val amuRelease = Flipped(Decoupled(new AmuReleaseIO2XS))
 }
 
 class FenceToSbuffer extends Bundle {
@@ -63,7 +63,7 @@ class Fence(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg) {
    */
 
   // tokens regs for mrelease & macquire
-  val tokens = RegInit(VecInit(Seq.fill(8)(0.U(64.W))))
+  val tokens = RegInit(VecInit(Seq.fill(p(XSCoreParamsKey).TokenRegs)(0.U(64.W))))
 
   // Registers for macquire
   val macquire_r1 = Reg(UInt(64.W))
@@ -128,11 +128,15 @@ class Fence(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg) {
   when (amuRelease.fire) {
     // check if there is address conflict
     val hasConflict = state === s_msyncregreset && 
-                      msyncregreset_token_idx === amuRelease.bits.tokenRd
+                      amuRelease.bits.tokenRd(msyncregreset_token_idx) === true.B
 
     when (!hasConflict) {
       // no conflict, normal execution
-      tokens(amuRelease.bits.tokenRd) := tokens(amuRelease.bits.tokenRd) + 1.U
+      for (i <- 0 until p(XSCoreParamsKey).TokenRegs) {
+        when (amuRelease.bits.tokenRd(i) === true.B) {
+          tokens(i) := tokens(i) + 1.U
+        }
+      }
     }
   }
 

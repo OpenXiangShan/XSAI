@@ -5,7 +5,7 @@ import chisel3._
 import chisel3.util._
 import xiangshan._
 import xiangshan.backend.fu.{FuConfig, FuncUnit, PipedFuncUnit}
-import xiangshan.backend.fu.matrix.Bundles.{AmuCtrlIO, AmuReleaseIO}
+import xiangshan.backend.fu.matrix.Bundles.{AmuCtrlIO, AmuReleaseIO2CUTE}
 
 class Mrelease(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUnit(cfg) {
   protected val in = io.in.bits
@@ -15,7 +15,7 @@ class Mrelease(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUnit(cfg)
   io.out.valid := io.in.valid
   io.in.ready := io.out.ready
   
-  val output = Wire(new AmuReleaseIO)
+  val output = Wire(new AmuReleaseIO2CUTE)
   output.tokenRd := in.data.imm
 
   out.res.data := 0.U

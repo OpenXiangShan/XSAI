@@ -308,13 +308,23 @@ object Bundles {
     }
   }
 
-  class AmuReleaseIO(implicit p: Parameters) extends XSBundle {
-    val tokenRd = UInt(log2Up(p(XSCoreParamsKey).TokenRegs).W)
+  class AmuReleaseIO2CUTE(implicit p: Parameters) extends XSBundle {
+    val tokenRd = UInt(p(XSCoreParamsKey).TokenRegs.W)
   }
 
-  object AmuReleaseIO {
-    def apply()(implicit p: Parameters) : AmuReleaseIO = {
-      new AmuReleaseIO()
+  object AmuReleaseIO2CUTE {
+    def apply()(implicit p: Parameters) : AmuReleaseIO2CUTE = {
+      new AmuReleaseIO2CUTE()
+    }
+  }
+
+  class AmuReleaseIO2XS(implicit p: Parameters) extends XSBundle {
+    val tokenRd = Vec(p(XSCoreParamsKey).TokenRegs, Bool())
+  }
+
+  object AmuReleaseIO2XS {
+    def apply()(implicit p: Parameters) : AmuReleaseIO2XS = {
+      new AmuReleaseIO2XS()
     }
   }
 

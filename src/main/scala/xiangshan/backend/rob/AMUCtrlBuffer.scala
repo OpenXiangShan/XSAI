@@ -246,7 +246,7 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
       difftestAmuCtrl.index  := i.U
       val mmaio = amuCtrl.bits.data.asTypeOf(new AmuMmaIO)
       val mlsio = amuCtrl.bits.data.asTypeOf(new AmuLsuIO)
-      val mreleaseio = amuCtrl.bits.data.asTypeOf(new AmuReleaseIO)
+      val mreleaseio = amuCtrl.bits.data.asTypeOf(new AmuReleaseIO2CUTE)
       when (amuCtrl.bits.isMma()) {
         difftestAmuCtrl.md     := mmaio.md
         difftestAmuCtrl.sat    := mmaio.sat

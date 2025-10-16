@@ -170,7 +170,7 @@ case class XSCoreParameters
   V0LogicRegs: Int = 1, // V0
   VlLogicRegs: Int = 1, // Vl
   MxLogicRegs: Int = 3, // Mtilem, Mtilen, Mtilek
-  TokenRegs: Int = 8,  // 8 / 16 / 32
+  TokenRegs: Int = 32,  // 8 / 16 / 32
   V0_IDX: Int = 0,
   Vl_IDX: Int = 0,
   Mtilem_IDX: Int = 0,
