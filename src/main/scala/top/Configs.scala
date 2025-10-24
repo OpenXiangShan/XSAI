@@ -246,26 +246,22 @@ class MinimalConfig(n: Int = 1) extends Config(
 
 class MinimalMatrixConfig(n: Int) extends Config(
   new MinimalConfig(n).alter((site, here, up) => {
-    case XSTileKey => up(XSTileKey).map(_.copy(
-      l2tlbParameters = L2TLBParameters(
-        l3Size = 4,
-        l2Size = 4,
-        l1nSets = 4,
-        l1nWays = 4,
-        l1ReservedBits = 1,
-        l0nSets = 4,
-        l0nWays = 8,
-        l0ReservedBits = 0,
-        spSize = 4,
-        dfilterSize = 48,
-      ),
-    ))
+    case XSTileKey => up(XSTileKey).map { p =>
+      p.copy(
+        l2tlbParameters = p.l2tlbParameters.copy(
+          dfilterSize = 48
+        ),
+        L2CacheParamsOpt = p.L2CacheParamsOpt.map(_.copy(
+          sets = 512
+        )),
+      )
+    }
     case MatAccKey => MatAcc.CUTE
     case CuteParamsKey => CuteParams.CUTE_8Tops_128SCP.copy(
-        Debug = CuteDebugParams.AllDebugOn,
-        v3config = Cutev3extParams(
-          TaskCtrl_AutoClear = true,
-        ),
+      Debug = CuteDebugParams.NoDebug,
+      v3config = Cutev3extParams(
+        TaskCtrl_AutoClear = true,
+      ),
     )
   })
 )
@@ -493,15 +489,22 @@ class DefaultConfig(n: Int = 1) extends Config(
 )
 
 class DefaultMatrixConfig(n: Int = 1) extends Config(
-  (new L3CacheConfig("16MB", inclusive = false, banks = 4, ways = 16)
-    ++ new L2CacheConfig("1MB", inclusive = true, banks = 4)
-    ++ new WithNKBL1D(64, ways = 4)
-    ++ new BaseConfig(n)).alter((site, here, up) => {
-    case XSTileKey => up(XSTileKey).map(_.copy(
-      l2tlbParameters = L2TLBParameters(
-        dfilterSize = 48,
+  new DefaultConfig(n).alter((site, here, up) => {
+    case XSTileKey => up(XSTileKey).map { p =>
+      p.copy(
+        l2tlbParameters = p.l2tlbParameters.copy(
+          dfilterSize = 48
+        ),
+        L2NBanks = 8
+      )
+    }
+    case MatAccKey => MatAcc.CUTE
+    case CuteParamsKey => CuteParams.CUTE_8Tops_128SCP.copy(
+      Debug = CuteDebugParams.NoDebug,
+      v3config = Cutev3extParams(
+        TaskCtrl_AutoClear = true,
       ),
-    ))
+    )
   })
 )
 
