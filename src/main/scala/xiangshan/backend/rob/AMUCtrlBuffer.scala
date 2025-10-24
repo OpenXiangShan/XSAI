@@ -225,6 +225,15 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
   // To AMU
   val deqPtr = RegInit(0.U.asTypeOf(new RobPtr))
   val deqEntries = (0 until CommitWidth).map(i => amuCtrlEntries((deqPtr + i.U).value))
+
+  class AmuCtrlTableEntry extends Bundle {
+    val op = UInt(2.W)
+    val mma = new AmuMmaIO
+    val mls = new AmuLsuIO
+    val mrelease = new AmuReleaseIO2CUTE
+  }
+  val amuCtrl_table = ChiselDB.createTable(s"AMUCtrl_table", new AmuCtrlTableEntry, basicDB = true)
+
   io.toAMU.zipWithIndex.foreach { case (amuCtrl, i) =>
     val deqEntry = deqEntries(i)
     deqEntry.checkSanity(s"AMUCtrlBuffer: deqEntry[$i]")
@@ -234,6 +243,34 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
       assert(!deqEntry.canDeq, s"AMUCtrlBuffer: deqEntry[$i] is already set to canDeq")
       deqEntry.canDeq := true.B
     }
+    val mmaio = amuCtrl.bits.data.asTypeOf(new AmuMmaIO)
+    val mlsio = amuCtrl.bits.data.asTypeOf(new AmuLsuIO)
+    val mreleaseio = amuCtrl.bits.data.asTypeOf(new AmuReleaseIO2CUTE)
+    val amuCtrl_table_entry = Wire(new AmuCtrlTableEntry)
+    amuCtrl_table_entry.op := amuCtrl.bits.op
+    when(amuCtrl.bits.isMma()) {
+      amuCtrl_table_entry.mma := mmaio
+    }.otherwise {
+      amuCtrl_table_entry.mma := 0.U.asTypeOf(new AmuMmaIO)
+    }
+    when(amuCtrl.bits.isMls()) {
+      amuCtrl_table_entry.mls := mlsio
+    }.otherwise {
+      amuCtrl_table_entry.mls := 0.U.asTypeOf(new AmuLsuIO)
+    }
+    when(amuCtrl.bits.isRelease()) {
+      amuCtrl_table_entry.mrelease := mreleaseio
+    }.otherwise {
+      amuCtrl_table_entry.mrelease := 0.U.asTypeOf(new AmuReleaseIO2CUTE)
+    }
+    amuCtrl_table.log(
+      data = amuCtrl_table_entry,
+      en = amuCtrl.fire,
+      site = s"AMUCtrl_table",
+      clock = clock,
+      reset = reset
+    )
+
     // Difftest
     if (env.EnableDifftest && HasMatrixExtension) {
       val difftestPC = dt_pc.get((deqPtr + i.U).value)
@@ -244,9 +281,6 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
       difftestAmuCtrl.pc     := Mux(pcTransType.shouldBeSext, SignExt(difftestPC, XLEN), difftestPC)
       difftestAmuCtrl.coreid := io.hartId.get
       difftestAmuCtrl.index  := i.U
-      val mmaio = amuCtrl.bits.data.asTypeOf(new AmuMmaIO)
-      val mlsio = amuCtrl.bits.data.asTypeOf(new AmuLsuIO)
-      val mreleaseio = amuCtrl.bits.data.asTypeOf(new AmuReleaseIO2CUTE)
       when (amuCtrl.bits.isMma()) {
         difftestAmuCtrl.md     := mmaio.md
         difftestAmuCtrl.sat    := mmaio.sat

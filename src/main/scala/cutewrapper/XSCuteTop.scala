@@ -7,6 +7,7 @@ import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import org.chipsalliance.cde.config._
 import coupledL2.MatrixDataBundle
+import utility.ChiselDB
 
 
 /**
@@ -36,15 +37,69 @@ class XSCuteTopImpl(wrapper: XSCuteTop) extends LazyModuleImp(wrapper) {
 class CuteDebugAdapter(label: String)(implicit p: Parameters) extends LazyModule {
   val node = TLAdapterNode() // identity adapter
   lazy val module = new LazyModuleImp(this) {
+    // ChiselDB Bundle definitions for TileLink monitoring
+    class TLAEventEntry extends Bundle {
+      val opcode = UInt(3.W)
+      val param = UInt(3.W)
+      val size = UInt(8.W)
+      val source = UInt(32.W)
+      val address = UInt(64.W)
+      val mask = UInt(64.W)
+      val data = UInt(512.W)
+    }
+
+    class TLDEventEntry extends Bundle {
+      val opcode = UInt(3.W)
+      val param = UInt(3.W)
+      val size = UInt(8.W)
+      val source = UInt(32.W)
+      val sink = UInt(32.W)
+      val denied = Bool()
+      val corrupt = Bool()
+      val data = UInt(512.W)
+    }
+
+    // Create ChiselDB tables
+    val tlAEventTable = ChiselDB.createTable("TLAEvent", new TLAEventEntry, basicDB = true)
+    val tlDEventTable = ChiselDB.createTable("TLDEvent", new TLDEventEntry, basicDB = true) 
+
     (node.in zip node.out).foreach { case ((in, edgeIn), (out, edgeOut)) =>
       out <> in
-      // Print TL-A channel info when fired
-      when (in.a.fire) {
-        printf(cf"[CuteDebugAdapter:$label] TL-A fired: opcode=0x${in.a.bits.opcode}%x param=0x${in.a.bits.param}%x size=0x${in.a.bits.size}%x source=0x${in.a.bits.source}%x address=0x${in.a.bits.address}%x mask=0x${in.a.bits.mask}%x data=0x${in.a.bits.data}%x\n")
-      }
-      when (in.d.fire) {
-          printf(cf"[CuteDebugAdapter:$label] TL-D fired: opcode=0x${in.d.bits.opcode}%x param=0x${in.d.bits.param}%x size=0x${in.d.bits.size}%x source=0x${in.d.bits.source}%x sink=0x${in.d.bits.sink}%x denied=${in.d.bits.denied} corrupt=${in.d.bits.corrupt} data=0x${in.d.bits.data}%x\n")
-      }
+
+      // Log TL-A channel events with ChiselDB
+      val entry_a = Wire(new TLAEventEntry)
+      entry_a.opcode := in.a.bits.opcode
+      entry_a.param := in.a.bits.param
+      entry_a.size := in.a.bits.size
+      entry_a.source := in.a.bits.source
+      entry_a.address := in.a.bits.address
+      entry_a.mask := in.a.bits.mask
+      entry_a.data := in.a.bits.data
+      tlAEventTable.log(
+        data = entry_a,
+        en = in.a.fire,
+        site = s"TLA_$label",
+        clock = clock,
+        reset = reset
+      )
+      
+      // Log TL-D channel events with ChiselDB
+      val entry_d = Wire(new TLDEventEntry)
+      entry_d.opcode := in.d.bits.opcode
+      entry_d.param := in.d.bits.param
+      entry_d.size := in.d.bits.size
+      entry_d.source := in.d.bits.source
+      entry_d.sink := in.d.bits.sink
+      entry_d.denied := in.d.bits.denied
+      entry_d.corrupt := in.d.bits.corrupt
+      entry_d.data := in.d.bits.data
+      tlDEventTable.log(
+        data = entry_d,
+        en = in.d.fire,
+        site = s"TLD_$label",
+        clock = clock,
+        reset = reset
+      )
     }
   }
 }
