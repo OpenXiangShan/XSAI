@@ -824,7 +824,7 @@ package object xiangshan {
 
     def isCvtDouble (func: UInt) = func(8, 5) === "b001_0".U
     def mcvtDoubleWidth = "b001_0_00000".U
-    def isCvtHalf   (func: UInt) = func(8, 6) === "b001_1".U
+    def isCvtHalf   (func: UInt) = func(8, 5) === "b001_1".U
     def mcvtHalfWidth   = "b001_1_00000".U
 
     // 4.5.1 Data Move between Matrix Registers
@@ -959,8 +959,10 @@ package object xiangshan {
     def isMax  (func: UInt) = func(5, 3) === "b100".U
     def isMin  (func: UInt) = func(5, 3) === "b101".U
     def isSqrt (func: UInt) = func(5, 3) === "b110".U
+    def isZero (func: UInt) = func(5, 3) === "b111".U
 
     def isDoubleWiden (func: UInt) = func(2) === "b1".U
+    def isZeroAcc     (func: UInt) = func(2) === "b1".U // only for MZERO inst
     
     // The same as the broadcast
     // def isWidth8  (func: UInt) = func(1, 0) === "b00".U
@@ -1005,6 +1007,9 @@ package object xiangshan {
     def mfsqrt16 = "b111_110_0_01".U
     def mfsqrt32 = "b111_110_0_10".U
     def mfsqrt64 = "b111_110_0_11".U
+
+    def mzeroacc = "b110_111_1_00".U
+    def mzerotr  = "b110_111_0_00".U
   }
 
   object MmvefOpType {

@@ -95,10 +95,10 @@ case class MTRANS(fuOp: BitPat) extends XSDecodeBase {
   }
 }
 
-case class MARITH(fuOp: BitPat, hasSrc2: Boolean = true) extends XSDecodeBase {
+case class MARITH(fuOp: BitPat, hasSrc1: Boolean = true, hasSrc2: Boolean = true) extends XSDecodeBase {
   def generate(): List[BitPat] = {
     val fu = FuType.marith
-    val src1: BitPat = SrcType.mx
+    val src1: BitPat = if (hasSrc1) SrcType.mx else SrcType.X
     val src2: BitPat = if (hasSrc2) SrcType.mx else SrcType.X
     XSDecode(src1, src2, SrcType.X, fu, fuOp, SelImm.IMM_MATRIXREG, UopSplitType.MAT_ARITH,
       xWen = F, fWen = F, vWen = F, mWen = F, xsTrap = F, noSpec = F, blockBack = F, flushPipe = F).generate()
@@ -563,66 +563,8 @@ object MatrixDecoder extends DecodeConstants {
   )
 
   val marith: Array[(BitPat, XSDecodeBase)] = Array(
-    // 4.5.2 Element-Wise Instructions
-    // TODO: Int matrix element-wise arithmetic instructions
-
-    // Fp matrix element-wise arithmetic instructions
-    MFADD_MM    -> MARITH(MarithOpType.mfadd8), // It will be overrided by msew in DecodeUnitComp
-    MFADD_CF_MM -> MARITH(MarithOpType.mfadd8),
-    MFADD_HF_MM -> MARITH(MarithOpType.mfadd16),
-    MFADD_F_MM  -> MARITH(MarithOpType.mfadd32),
-    MFADD_D_MM  -> MARITH(MarithOpType.mfadd64),
-
-    MFWADD_MM    -> MARITH(MarithOpType.mfwadd8), // It will be overrided by msew in DecodeUnitComp
-    MFWADD_CF_MM -> MARITH(MarithOpType.mfwadd8),
-    MFWADD_HF_MM -> MARITH(MarithOpType.mfwadd16),
-    MFWADD_F_MM  -> MARITH(MarithOpType.mfwadd32),
-
-    MFSUB_MM    -> MARITH(MarithOpType.mfsub8), // It will be overrided by msew in DecodeUnitComp
-    MFSUB_CF_MM -> MARITH(MarithOpType.mfsub8),
-    MFSUB_HF_MM -> MARITH(MarithOpType.mfsub16),
-    MFSUB_F_MM  -> MARITH(MarithOpType.mfsub32),
-    MFSUB_D_MM  -> MARITH(MarithOpType.mfsub64),
-
-    MFWSUB_MM    -> MARITH(MarithOpType.mfwsub8), // It will be overrided by msew in DecodeUnitComp
-    MFWSUB_CF_MM -> MARITH(MarithOpType.mfwsub8),
-    MFWSUB_HF_MM -> MARITH(MarithOpType.mfwsub16),
-    MFWSUB_F_MM  -> MARITH(MarithOpType.mfwsub32),
-
-    MFMIN_MM    -> MARITH(MarithOpType.mfmin8), // It will be overrided by msew in DecodeUnitComp
-    MFMIN_CF_MM -> MARITH(MarithOpType.mfmin8),
-    MFMIN_HF_MM -> MARITH(MarithOpType.mfmin16),
-    MFMIN_F_MM  -> MARITH(MarithOpType.mfmin32),
-    MFMIN_D_MM  -> MARITH(MarithOpType.mfmin64),
-
-    MFMAX_MM    -> MARITH(MarithOpType.mfmax8), // It will be overrided by msew in DecodeUnitComp
-    MFMAX_CF_MM -> MARITH(MarithOpType.mfmax8),
-    MFMAX_HF_MM -> MARITH(MarithOpType.mfmax16),
-    MFMAX_F_MM  -> MARITH(MarithOpType.mfmax32),
-    MFMAX_D_MM  -> MARITH(MarithOpType.mfmax64),
-
-    MFMUL_MM    -> MARITH(MarithOpType.mfmul8), // It will be overrided by msew in DecodeUnitComp
-    MFMUL_CF_MM -> MARITH(MarithOpType.mfmul8),
-    MFMUL_HF_MM -> MARITH(MarithOpType.mfmul16),
-    MFMUL_F_MM  -> MARITH(MarithOpType.mfmul32),
-    MFMUL_D_MM  -> MARITH(MarithOpType.mfmul64),
-
-    MFWMUL_MM    -> MARITH(MarithOpType.mfmul8), // It will be overrided by msew in DecodeUnitComp
-    MFWMUL_CF_MM -> MARITH(MarithOpType.mfmul8),
-    MFWMUL_HF_MM -> MARITH(MarithOpType.mfmul16),
-    MFWMUL_F_MM  -> MARITH(MarithOpType.mfmul32),
-
-    MFDIV_MM    -> MARITH(MarithOpType.mfdiv8), // It will be overrided by msew in DecodeUnitComp
-    MFDIV_CF_MM -> MARITH(MarithOpType.mfdiv8),
-    MFDIV_HF_MM -> MARITH(MarithOpType.mfdiv16),
-    MFDIV_F_MM  -> MARITH(MarithOpType.mfdiv32),
-    MFDIV_D_MM  -> MARITH(MarithOpType.mfdiv64),
-    
-    MFSQRT_MM    -> MARITH(MarithOpType.mfsqrt8), // It will be overrided by msew in DecodeUnitComp
-    MFSQRT_CF_MM -> MARITH(MarithOpType.mfsqrt8),
-    MFSQRT_HF_MM -> MARITH(MarithOpType.mfsqrt16),
-    MFSQRT_F_MM  -> MARITH(MarithOpType.mfsqrt32),
-    MFSQRT_D_MM  -> MARITH(MarithOpType.mfsqrt64),
+    MZERO_ACC_M -> MARITH(MarithOpType.mzeroacc, hasSrc1 = false, hasSrc2 = false),
+    MZERO_TR_M  -> MARITH(MarithOpType.mzerotr,  hasSrc1 = false, hasSrc2 = false),
   )
 
   // 4.6. Type-Convert Instructions

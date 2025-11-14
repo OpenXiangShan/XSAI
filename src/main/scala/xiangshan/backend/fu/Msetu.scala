@@ -61,9 +61,7 @@ class MsetMtilexModule(implicit p: Parameters) extends XSModule {
   // Calculate the maximum tilex
   private val log2Msew = msew(MSew.width - 1, 0) +& "b011".U  // Round back to map e4 to 2, e8 to 3, etc.
   private val log2Tmmax: UInt = log2Mlen.U(5.W) - log2Rlen.U(5.W)
-  private val log2Tnmax_0: UInt = log2Mlen.U(5.W) - log2Rlen.U(5.W)
-  private val log2Tnmax_1: UInt = log2Rlen.U(5.W) - log2Msew
-  private val log2Tnmax: UInt = Mux(log2Tnmax_0 > log2Tnmax_1, log2Tnmax_1, log2Tnmax_0)
+  private val log2Tnmax: UInt = log2Mlen.U(5.W) - log2Rlen.U(5.W)
   private val log2Tkmax: UInt = log2Rlen.U(5.W) - log2Msew
   
   // Select the required tilexmax
