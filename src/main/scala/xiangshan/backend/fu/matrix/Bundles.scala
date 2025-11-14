@@ -308,6 +308,17 @@ object Bundles {
     }
   }
 
+  class AmuArithIO(implicit p: Parameters) extends XSBundle {
+    val md     = UInt(4.W) // 3 : 0
+    val opType = UInt(9.W) // 12 : 4
+  }
+
+  object AmuArithIO {
+    def apply()(implicit p: Parameters) : AmuArithIO = {
+      new AmuArithIO()
+    }
+  }
+
   class AmuReleaseIO2CUTE(implicit p: Parameters) extends XSBundle {
     val tokenRd = UInt(p(XSCoreParamsKey).TokenRegs.W)
   }
@@ -333,11 +344,13 @@ object Bundles {
     // 0: MMA
     // 1: Load/Store
     // 2: Release
+    // 3: Arith
     val op = UInt(2.W)
     
     def isMma()     : Bool = op === AmuCtrlIO.mmaOp()
     def isMls()     : Bool = op === AmuCtrlIO.mlsOp()
     def isRelease() : Bool = op === AmuCtrlIO.releaseOp()
+    def isArith()   : Bool = op === AmuCtrlIO.arithOp()
     // data: The ctrl signal for op
     val data = UInt(150.W)
   }
@@ -350,5 +363,6 @@ object Bundles {
     def mmaOp()     : UInt = "b00".U
     def mlsOp()     : UInt = "b01".U
     def releaseOp() : UInt = "b10".U
+    def arithOp()   : UInt = "b11".U
   }
 }

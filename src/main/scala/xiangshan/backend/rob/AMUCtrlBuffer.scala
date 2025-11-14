@@ -231,6 +231,7 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
     val mma = new AmuMmaIO
     val mls = new AmuLsuIO
     val mrelease = new AmuReleaseIO2CUTE
+    val arith = new AmuArithIO
   }
   val amuCtrl_table = ChiselDB.createTable(s"AMUCtrl_table", new AmuCtrlTableEntry, basicDB = true)
 
@@ -246,6 +247,7 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
     val mmaio = amuCtrl.bits.data.asTypeOf(new AmuMmaIO)
     val mlsio = amuCtrl.bits.data.asTypeOf(new AmuLsuIO)
     val mreleaseio = amuCtrl.bits.data.asTypeOf(new AmuReleaseIO2CUTE)
+    val arithio = amuCtrl.bits.data.asTypeOf(new AmuArithIO)
     val amuCtrl_table_entry = Wire(new AmuCtrlTableEntry)
     amuCtrl_table_entry.op := amuCtrl.bits.op
     when(amuCtrl.bits.isMma()) {
@@ -262,6 +264,11 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
       amuCtrl_table_entry.mrelease := mreleaseio
     }.otherwise {
       amuCtrl_table_entry.mrelease := 0.U.asTypeOf(new AmuReleaseIO2CUTE)
+    }
+    when(amuCtrl.bits.isArith()) {
+      amuCtrl_table_entry.arith := arithio
+    }.otherwise {
+      amuCtrl_table_entry.arith := 0.U.asTypeOf(new AmuArithIO)
     }
     amuCtrl_table.log(
       data = amuCtrl_table_entry,
@@ -306,6 +313,10 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
       }
       when (amuCtrl.bits.isRelease()) {
         difftestAmuCtrl.tokenRd := mreleaseio.tokenRd
+      }
+      when (amuCtrl.bits.isArith()) {
+        difftestAmuCtrl.ms     := arithio.md
+        difftestAmuCtrl.opType := arithio.opType
       }
     }
   }

@@ -447,20 +447,14 @@ class ObserveStateMachine(top: XSCuteTopImpl)(implicit p: Parameters) {
       }
       
       is(ObserveState.sObserving) {
-        // Observe final state
-        val instFIFOInfo = top.io.ctrl2top.InstFIFO_Info
-        val instFIFOFull = top.io.ctrl2top.InstFIFO_Full
-        val instFIFOFinish = top.io.ctrl2top.InstFIFO_Finish
-        val headId = top.io.instfifo_head_id
-        val tailId = top.io.instfifo_tail_id
         
         when(observe_cycles % 100.U === 0.U) {
-          printf("ObserveSM: Execution cycle %d: InstFIFO_Info=%d, InstFIFO_Full=%d, Head=%d, Tail=%d\n",
-                 observe_cycles, instFIFOInfo, instFIFOFull, headId, tailId)
+          printf("ObserveSM: Execution cycle %d.\n",
+                 observe_cycles)
         }
         
         observe_cycles := observe_cycles + 1.U
-        when(instFIFOFinish === 1.U) {
+        when(false.B) { // TODO: set the condition for finishing observation
           state := ObserveState.sDone
           printf("ObserveSM: Final observation completed at cycle %d\n", cycle_cnt)
         }

@@ -3,8 +3,7 @@ package xiangshan.backend.fu.wrapper
 import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import xiangshan.backend.fu.{FuConfig, FuncUnit, PipedFuncUnit}
-
-// TODO: It's unused now. Further work is needed.
+import xiangshan.backend.fu.matrix.Bundles.{AmuArithIO, AmuCtrlIO}
 
 class Marith(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUnit(cfg) {
   protected val in = io.in.bits
@@ -17,8 +16,13 @@ class Marith(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUnit(cfg) {
   protected val mtilex0 = in.data.src(0)
   protected val mtilex1 = in.data.src(1)
 
-  out.res.data := 0.U
+  val output = Wire(new AmuArithIO)
+  dontTouch(output)
+  output.md     := in.data.imm(3, 0)
+  output.opType := in.ctrl.fuOpType
 
-  out.ctrl.amuCtrl.get.op   := 0.U
-  out.ctrl.amuCtrl.get.data := 0.U
+  out.res.data := output.asUInt
+
+  out.ctrl.amuCtrl.get.op   := AmuCtrlIO.arithOp()
+  out.ctrl.amuCtrl.get.data := output.asUInt
 }

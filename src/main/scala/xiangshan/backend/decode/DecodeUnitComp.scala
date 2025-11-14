@@ -463,8 +463,14 @@ class DecodeUnitComp()(implicit p : Parameters) extends XSModule with DecodeUnit
       csBundle(0).instr := latchedInst.instr
     }
     is(UopSplitType.MAT_ARITH) {
-      val mType = io.mtypeBypass
-      // TODO: implement me
+      csBundle(0).fuType := latchedInst.fuType
+      csBundle(0).fuOpType := latchedInst.fuOpType
+      csBundle(0).srcType(0) := SrcType.no
+      csBundle(0).srcType(1) := SrcType.no
+      csBundle(0).srcType(2) := SrcType.no
+      csBundle(0).srcType(3) := SrcType.no
+      csBundle(0).srcType(4) := SrcType.no
+      csBundle(0).instr := latchedInst.instr
     }
     is(UopSplitType.MAT_MBC) {
       val optype = latchedInst.fuOpType
