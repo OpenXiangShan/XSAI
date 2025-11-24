@@ -57,13 +57,10 @@ class VpuCsrIO(implicit p: Parameters) extends XSBundle {
 }
 
 class MpuCsrIO(implicit p: Parameters) extends XSBundle {
-  val mstart = Input(UInt(XLEN.W))
-
   val mtilem = Output(UInt(XLEN.W))
   val mtilen = Output(UInt(XLEN.W))
   val mtilek = Output(UInt(XLEN.W))
   
-  val set_mstart = Output(Valid(UInt(XLEN.W)))
   val set_mtype = Output(Valid(UInt(XLEN.W)))
 
   val dirty_ms = Output(Bool())

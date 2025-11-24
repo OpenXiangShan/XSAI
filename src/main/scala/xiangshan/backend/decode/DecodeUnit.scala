@@ -829,7 +829,6 @@ class DecodeUnitEnqIO(implicit p: Parameters) extends XSBundle {
   val vtype = Input(new VType)
   val vstart = Input(Vl())
   val mtype = Input(new MType)
-  val mstart = Input(Mtilex())
 }
 
 class DecodeUnitDeqIO(implicit p: Parameters) extends XSBundle {
@@ -1143,7 +1142,6 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   decodedInst.mpu.mint16 := io.enq.mtype.mint16
   decodedInst.mpu.mint8 := io.enq.mtype.mint8
   decodedInst.mpu.msew := io.enq.mtype.msew
-  decodedInst.mpu.mstart := io.enq.mstart
   decodedInst.mpu.specMill := io.enq.mtype.illegal
   decodedInst.mpu.specMba := io.enq.mtype.mba
   decodedInst.mpu.specMfp64 := io.enq.mtype.mfp64

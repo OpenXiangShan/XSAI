@@ -162,22 +162,6 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
     val MTILEK = RO(63, 0).withReset(0.U)
   }))
     .setAddr(CSRs.mtilek)
-  
-  val mstart = Module(new CSRModule("Mstart", new CSRBundle {
-    // mstart's width here references vstart's width
-    val MSTART = RW(MlWidth - 2, 0).withReset(0.U)
-  }) with HasRobCommitBundle {
-    when (wen) {
-      reg.MSTART := this.w.wdata(MlWidth - 2, 0)
-    }.elsewhen(robCommit.vsDirty && !robCommit.mstart.valid) {
-      reg.MSTART := 0.U
-    }.elsewhen(robCommit.mstart.valid) {
-      reg := robCommit.mstart.bits
-    }.otherwise {
-      reg := reg
-    }
-  })
-    .setAddr(CSRs.mstart)
 
   val mcsr = Module(new CSRModule("Mcsr", new CSRBundle {
     val MSAT = RW(0)
@@ -287,7 +271,6 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
     CSRs.mamul  -> (mamul.w           -> mamul.rdata),
     CSRs.mtok   -> (mtok.w            -> mtok.rdata),
     CSRs.mcsr   -> (mcsr.w            -> mcsr.rdata),
-    CSRs.mstart -> (mstart.w          -> mstart.rdata),
     CSRs.cycle  -> (cycle.w           -> cycle.rdata),
     CSRs.time   -> (time.w            -> time.rdata),
     CSRs.instret -> (instret.w        -> instret.rdata),
@@ -309,7 +292,6 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
     mamul,
     mtok,
     mcsr,
-    mstart,
     cycle,
     time,
     instret,
@@ -335,7 +317,6 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
     CSRs.mamul   -> mamul.rdata.asUInt,
     CSRs.mtok    -> mtok.rdata.asUInt,
     CSRs.mcsr    -> mcsr.rdata.asUInt,
-    CSRs.mstart  -> mstart.rdata.asUInt,
     CSRs.cycle   -> cycle.rdata,
     CSRs.time    -> time.rdata,
     CSRs.instret -> instret.rdata,

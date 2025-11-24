@@ -37,7 +37,6 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
 
   val setMtype = csrIn.mpu.set_mtype
   val setMsDirty = csrIn.mpu.dirty_ms
-  val setMstart = csrIn.mpu.set_mstart
   val mtilemFromPreg = csrIn.mpu.mtilem
   val mtilenFromPreg = csrIn.mpu.mtilen
   val mtilekFromPreg = csrIn.mpu.mtilek
@@ -174,7 +173,6 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
   csrMod.io.fromRob.commit.mtype.bits.mint4 := setMtype.bits(3)
   csrMod.io.fromRob.commit.mtype.bits.msew := setMtype.bits(2, 0)
   csrMod.io.fromRob.commit.msDirty := setMsDirty
-  csrMod.io.fromRob.commit.mstart := setMstart
   csrMod.io.fromRob.commit.mtilem := mtilemFromPreg
   csrMod.io.fromRob.commit.mtilen := mtilenFromPreg
   csrMod.io.fromRob.commit.mtilek := mtilekFromPreg
@@ -343,8 +341,6 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
   csrOut.fpu.frm    := csrMod.io.status.fpState.frm.asUInt
   csrOut.vpu.vstart := csrMod.io.status.vecState.vstart.asUInt
   csrOut.vpu.vxrm   := csrMod.io.status.vecState.vxrm.asUInt
-
-  csrOut.mpu.mstart := csrMod.io.status.matrixState.mstart.asUInt
 
   csrOut.isXRet := isXRet
 

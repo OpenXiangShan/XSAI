@@ -250,7 +250,6 @@ class RobCSRIO(implicit p: Parameters) extends XSBundle {
   val dirty_fs   = Output(Bool())
   val dirty_vs   = Output(Bool())
 
-  val mstart     = Output(Valid(UInt(XLEN.W)))
   val dirty_ms   = Output(Bool())
   val perfinfo   = new Bundle {
     val retiredInstr = Output(UInt(7.W))
@@ -324,8 +323,6 @@ class RobExceptionInfo(implicit p: Parameters) extends XSBundle {
   // if vstart is udpated by vector unit
   val vstartEn = Bool()
   val vstart = UInt(XLEN.W)
-  val mstartEn = Bool()
-  val mstart = UInt(XLEN.W)
   val vuopIdx = UopIdx()
   val isVecLoad = Bool()
   val isVlm = Bool()

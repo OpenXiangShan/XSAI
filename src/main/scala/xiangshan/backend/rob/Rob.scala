@@ -121,7 +121,6 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
     })
     val readGPAMemData = Input(new GPAMemEntry)
     val vstartIsZero = Input(Bool())
-    val mstartIsZero = Input(Bool())
     val toVecExcpMod = Output(new Bundle {
       val logicPhyRegMap = Vec(RabCommitWidth, ValidIO(new RegWriteFromRab))
       val excpInfo = ValidIO(new VecExcpInfo)
@@ -753,7 +752,6 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
   val dirty_ms = io.commits.isCommit && VecInit(dirtyMs).asUInt.orR
 
   val resetVstart = dirty_vs && !io.vstartIsZero
-  val resetMstart = dirty_ms && !io.mstartIsZero
 
   vecExcpInfo.valid := exceptionHappen && !intrEnable && exceptionDataRead.bits.vstartEn && exceptionDataRead.bits.isVecLoad && !exceptionDataRead.bits.isEnqExcp
   when (exceptionHappen) {
@@ -770,8 +768,6 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
 
   io.csr.vstart.valid := RegNext(Mux(exceptionHappen && deqHasException, exceptionDataRead.bits.vstartEn, resetVstart))
   io.csr.vstart.bits := RegNext(Mux(exceptionHappen && deqHasException, exceptionDataRead.bits.vstart, 0.U))
-  io.csr.mstart.valid := RegNext(Mux(exceptionHappen && deqHasException, exceptionDataRead.bits.mstartEn, resetMstart))
-  io.csr.mstart.bits := RegNext(Mux(exceptionHappen && deqHasException, exceptionDataRead.bits.mstart, 0.U))
 
   val vxsat = Wire(Valid(Bool()))
   vxsat.valid := io.commits.isCommit && vxsat.bits
@@ -1236,8 +1232,6 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
     exceptionGen.io.enq(i).bits.trigger := io.enq.req(i).bits.trigger
     exceptionGen.io.enq(i).bits.vstartEn := false.B //DontCare
     exceptionGen.io.enq(i).bits.vstart := 0.U //DontCare
-    exceptionGen.io.enq(i).bits.mstartEn := false.B //DontCare
-    exceptionGen.io.enq(i).bits.mstart := 0.U //DontCare
     exceptionGen.io.enq(i).bits.vuopIdx := 0.U
     exceptionGen.io.enq(i).bits.isVecLoad := false.B
     exceptionGen.io.enq(i).bits.isVlm := false.B
@@ -1277,8 +1271,6 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
     exc_wb.bits.trigger := trigger
     exc_wb.bits.vstartEn := (if (wb.bits.vls.nonEmpty) wb.bits.exceptionVec.get.asUInt.orR || TriggerAction.isDmode(trigger) else 0.U)
     exc_wb.bits.vstart := (if (wb.bits.vls.nonEmpty) wb.bits.vls.get.vpu.vstart else 0.U)
-    exc_wb.bits.mstartEn := false.B // TODO: support mstart
-    exc_wb.bits.mstart := 0.U // TODO: support mstart
     exc_wb.bits.vuopIdx := (if (wb.bits.vls.nonEmpty) wb.bits.vls.get.vpu.vuopIdx else 0.U)
     exc_wb.bits.isVecLoad := wb.bits.vls.map(_.isVecLoad).getOrElse(false.B)
     exc_wb.bits.isVlm := wb.bits.vls.map(_.isVlm).getOrElse(false.B)
