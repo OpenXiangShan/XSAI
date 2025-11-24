@@ -163,7 +163,6 @@ class DecodeUnitComp()(implicit p : Parameters) extends XSModule with DecodeUnit
 
   isMsettilexSimple := latchedInst.isMsettilex
   isMsettypeSimple := latchedInst.isMsettype
-  val mstartReg = latchedInst.mpu.mstart
 
   //Type of uop Div
   val typeOfSplit = latchedInst.uopSplitType
@@ -370,7 +369,7 @@ class DecodeUnitComp()(implicit p : Parameters) extends XSModule with DecodeUnit
         // Default
         // uop0 set rd
         csBundle(0).fuType := FuType.msetmtilexiwi.U
-        csBundle(0).flushPipe := Mux(MSETtilexOpType.isMsettilex(latchedInst.fuOpType), true.B, mstartReg =/= 0.U)
+        csBundle(0).flushPipe := MSETtilexOpType.isMsettilex(latchedInst.fuOpType)
         csBundle(0).blockBackward := false.B
         csBundle(0).rfWen := true.B
         csBundle(0).fpWen := false.B
@@ -388,7 +387,7 @@ class DecodeUnitComp()(implicit p : Parameters) extends XSModule with DecodeUnit
         csBundle(1).vlWen := false.B
         csBundle(1).mxWen := true.B
         csBundle(1).flushPipe := false.B
-        csBundle(1).blockBackward := Mux(MSETtilexOpType.isMsettilex(latchedInst.fuOpType), true.B, mstartReg =/= 0.U)
+        csBundle(1).blockBackward := MSETtilexOpType.isMsettilex(latchedInst.fuOpType)
         when(MSETtilexOpType.isMsettilexi(latchedInst.fuOpType)) {
           // atx
           csBundle(0).srcType(0) := SrcType.imm

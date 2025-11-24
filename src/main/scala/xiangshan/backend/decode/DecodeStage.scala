@@ -83,7 +83,6 @@ class DecodeStageIO(implicit p: Parameters) extends XSBundle {
   val vsetvlVType = Input(VType())
   val vstart = Input(Vl())
   val msettypeMType = Input(MType())
-  val mstart = Input(Mtilex()) // FIXME: don't use Mtilex here
 
   val toCSR = new Bundle {
     val trapInstInfo = ValidIO(new TrapInstInfo)
@@ -131,7 +130,6 @@ class DecodeStage(implicit p: Parameters) extends XSModule
     dst.io.enq.vtype := vtypeGen.io.vtype
     dst.io.enq.vstart := io.vstart
     dst.io.enq.mtype := mtypeGen.io.mtype
-    dst.io.enq.mstart := io.mstart
   }
 
   /** whether instructions decoded by simple decoders require complex decoding */

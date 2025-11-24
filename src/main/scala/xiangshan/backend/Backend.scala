@@ -738,9 +738,6 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
   debugMtilem_s1 := RegNext(debugMtilem_s0)
   debugMtilen_s1 := RegNext(debugMtilen_s0)
   debugMtilek_s1 := RegNext(debugMtilek_s0)
-  ctrlBlock.io.toDecode.mstart := csrio.mpu.mstart
-  csrio.mpu.set_mstart.valid := ctrlBlock.io.robio.csr.mstart.valid
-  csrio.mpu.set_mstart.bits := ctrlBlock.io.robio.csr.mstart.bits
   csrio.mpu.set_mtype.valid := commitMType.valid
   csrio.mpu.set_mtype.bits := ZeroExt(mtype, XLEN)
   csrio.mpu.mtilem := ZeroExt(debugMtilem_s1, XLEN)
@@ -860,7 +857,6 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
     sink.bits.trigger.foreach(_ := source.bits.uop.trigger)
   }
   wbDataPath.io.fromCSR.vstart := csrio.vpu.vstart
-  wbDataPath.io.fromCSR.mstart := csrio.mpu.mstart
 
   vecExcpMod.i.fromExceptionGen := ctrlBlock.io.toVecExcpMod.excpInfo
   vecExcpMod.i.fromRab.logicPhyRegMap := ctrlBlock.io.toVecExcpMod.logicPhyRegMap

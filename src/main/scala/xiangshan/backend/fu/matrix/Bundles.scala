@@ -231,12 +231,6 @@ object Bundles {
   }
 
   object MtypeMSew extends NamedUInt(3)
-
-  object Mstart {
-    def apply()(implicit p: Parameters): UInt = UInt(width.W)
-
-    def width(implicit p: Parameters) = p(XSCoreParamsKey).vlWidth - 1
-  }
   
   object Msat extends NamedUInt(1)
 
