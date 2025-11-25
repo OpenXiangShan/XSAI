@@ -697,8 +697,8 @@ package object xiangshan {
     def isInt         (func: UInt) = func(7) === "b0".U
     def isFloat       (func: UInt) = func(7) === "b1".U
 
-    def isSigned      (func: UInt) = func(6) === "b1".U // only for int
-    def isUnsigned    (func: UInt) = func(6) === "b0".U // only for int
+    def isSigned      (func: UInt) = func(6) === "b1".U // always true for float
+    def isUnsigned    (func: UInt) = func(6) === "b0".U // only for unsigned int
 
     def isFromE4   (func: UInt) = func(5, 3) === MSew.e4
     def isFromE8   (func: UInt) = func(5, 3) === MSew.e8
@@ -758,25 +758,25 @@ package object xiangshan {
     def MQMA_B  = "b0_1_001_10_0".U
 
     // MFMA.MM: float,unsigned,msew,nowiden(1W)
-    def MFMA    = "b10_100_00_0".U
+    def MFMA    = "b1_1_100_00_0".U
     // MFMA.CF: float,unsigned,fp8,nowiden(1W)
-    def MFMA_CF = "b10_000_00_0".U
+    def MFMA_CF = "b1_1_000_00_0".U
     // MFMA.HF: float,unsigned,fp16,nowiden(1W)
-    def MFMA_HF = "b10_001_00_0".U
+    def MFMA_HF = "b1_1_001_00_0".U
     // MFMA.F: float,unsigned,fp32,nowiden(1W)
-    def MFMA_F  = "b10_010_00_0".U
+    def MFMA_F  = "b1_1_010_00_0".U
 
     // MFWMA.MM: float,unsigned,msew,nowiden(1W)
-    def MFWMA    = "b10_100_01_0".U
+    def MFWMA    = "b1_1_100_01_0".U
     // MFWMA.CF: float,unsigned,fp8,nowiden(1W)
-    def MFWMA_CF = "b10_000_01_0".U
+    def MFWMA_CF = "b1_1_000_01_0".U
     // MFWMA.HF: float,unsigned,fp16,nowiden(1W)
-    def MFWMA_HF = "b10_001_01_0".U
+    def MFWMA_HF = "b1_1_001_01_0".U
 
     // MFQMA.MM: float,unsigned,msew,quad widen(4W)
-    def MFQMA    = "b10_100_10_0".U
+    def MFQMA    = "b1_1_100_10_0".U
     // MFQMA.CF: float,unsigned,fp8,quad widen(4W)
-    def MFQMA_CF = "b10_000_10_0".U
+    def MFQMA_CF = "b1_1_000_10_0".U
 
     def getFromType (func: UInt): UInt = func(5, 3)
     def getToType   (func: UInt): UInt = {
