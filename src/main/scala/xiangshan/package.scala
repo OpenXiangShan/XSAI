@@ -734,6 +734,29 @@ package object xiangshan {
     // MQMAU.B: int,unsigned,int8,quad widen(4W),nosaturate
     def MQMAU_B = "b0_0_001_10_0".U
 
+    // MMA.MM: int,signed,msew,nowiden(1W),nosaturate
+    def MMA     = "b0_1_100_00_0".U
+    // MMA.H: int,signed,int16,nowiden(1W),nosaturate
+    def MMA_H   = "b0_1_001_00_0".U
+    // MMA.W: int,signed,int32,nowiden(1W),nosaturate
+    def MMA_W   = "b0_1_010_00_0".U
+    // MMA.DW: int,signed,int64,nowiden(1W),nosaturate
+    def MMA_DW  = "b0_1_011_00_0".U
+
+    // MWMA.MM: int,signed,msew,widen(2W),nosaturate
+    def MWMA    = "b0_1_100_01_0".U
+    // MWMA.H: int,signed,int16,widen(2W),nosaturate
+    def MWMA_H  = "b0_1_001_01_0".U
+    // MWMA.W: int,signed,int32,widen(2W),nosaturate
+    def MWMA_W  = "b0_1_010_01_0".U
+    // MWMA.DW: int,signed,int64,widen(2W),nosaturate
+    def MWMA_DW = "b0_1_011_01_0".U
+
+    // MQMA.MM: int,signed,msew,quad widen(4W),nosaturate
+    def MQMA    = "b0_1_100_10_0".U
+    // MQMA.B: int,signed,int8,quad widen(4W),nosaturate
+    def MQMA_B  = "b0_1_001_10_0".U
+
     // MFMA.MM: float,unsigned,msew,nowiden(1W)
     def MFMA    = "b10_100_00_0".U
     // MFMA.CF: float,unsigned,fp8,nowiden(1W)
