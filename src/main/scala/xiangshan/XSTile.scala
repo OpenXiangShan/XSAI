@@ -82,7 +82,7 @@ class XSTile()(implicit p: Parameters) extends LazyModule
   }
 
   cuteOpt.foreach(
-    l2top.inner.misc_l2_pmu := TLWidthWidget(64) := _.node
+    l2top.inner.misc_l2_pmu := l2top.inner.cute_logger := TLWidthWidget(64) := _.node
   )
 
   l2top.inner.misc_l2_pmu := l2top.inner.l1i_logger := memBlock.frontendBridge.icache_node

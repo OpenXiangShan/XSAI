@@ -98,6 +98,7 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
   val l1d_logger = TLLogger(s"L2_L1D_${coreParams.HartId}", enbale_tllog)
   val l1i_logger = TLLogger(s"L2_L1I_${coreParams.HartId}", enbale_tllog)
   val ptw_logger = TLLogger(s"L2_PTW_${coreParams.HartId}", enbale_tllog)
+  val cute_logger = TLLogger(s"L2_CUTE_${coreParams.HartId}", enbale_tllog)
   val ptw_to_l2_buffer = LazyModule(new TLBuffer)
   val i_mmio_buffer = LazyModule(new TLBuffer)
 
