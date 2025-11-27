@@ -247,6 +247,8 @@ class XSTile()(implicit p: Parameters) extends LazyModule
       val matrix_data_arb = Module(new Arbiter(matrix_data_out(0).bits.cloneType, matrix_data_out.length))
       matrix_data_arb.io.in <> matrix_data_out
       matrix_data_in <> matrix_data_arb.io.out
+
+      cute.module.io.hartId := io.hartId
     }
   }
 

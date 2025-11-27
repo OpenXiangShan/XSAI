@@ -2,13 +2,14 @@ package cute
 
 import chisel3._
 import chisel3.util._
+import difftest._
 import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import org.chipsalliance.cde.config._
 import coupledL2.MatrixDataBundle
 import utility.ChiselDB
-
+import xiangshan.HasXSParameter
 
 /**
  * A simple wrapper demonstration that integrates CUTEV2Top and Cute2TL,
@@ -136,9 +137,13 @@ class XSCuteTop(implicit p: Parameters) extends LazyModule {
 class XSCuteIO(implicit p: Parameters) extends Bundle {
   val cute = new CUTETopIO
   val matrix_data_in = Flipped(Decoupled(new MatrixDataBundle()))
+  val hartId = Input(UInt(8.W))
 }
 
-class XSCuteImp(wrapper: XSCute) extends LazyModuleImp(wrapper) {
+class XSCuteImp(wrapper: XSCute)(implicit p: Parameters) extends LazyModuleImp(wrapper) 
+  with HasXSParameter 
+  with CUTEImplParameters
+{
     (wrapper.node.in zip wrapper.node.out).foreach { case ((in, edgeIn), (out, edgeOut)) =>
       out <> in
     }
@@ -156,6 +161,49 @@ class XSCuteImp(wrapper: XSCute) extends LazyModuleImp(wrapper) {
     tl_data_in.bits.source := io.matrix_data_in.bits.sourceId
     tl_data_in.bits.data := io.matrix_data_in.bits.data.data
     io.matrix_data_in.ready := tl_data_in.ready
+
+  // DiffTest: Monitor CUTE write requests to L2 Cache
+  if (env.EnableDifftest) {
+
+    val mmu = wrapper.cute_tl.module.io.mmu
+    // Use wrapper.node.in(0) instead of wrapper.cute_tl.node.out(0)
+    // because wrapper.node is connected to cute_tl.node and is visible in this module
+    val (tl_in, _) = wrapper.node.in(0)
+    
+    // Record write request information when it's sent
+    val writeReqTable = Reg(Vec(LLCSourceMaxNum, new Bundle {
+      val addr = UInt(64.W)
+      val data = Vec(64, UInt(8.W))
+      val mask = UInt(64.W)
+      val valid = Bool()
+    }))
+    dontTouch(writeReqTable)
+    
+    // Clear valid when response comes back
+    when(tl_in.d.fire && tl_in.d.bits.opcode === TLMessages.AccessAck) {
+      writeReqTable(tl_in.d.bits.source).valid := false.B
+    }
+    
+    // Record write request when it fires
+    when(mmu.Request.fire && mmu.Request.bits.RequestType_isWrite) {
+      val sourceId = mmu.ConherentRequsetSourceID.bits
+      writeReqTable(sourceId).addr := mmu.Request.bits.RequestPhysicalAddr
+      writeReqTable(sourceId).data := mmu.Request.bits.RequestData.asTypeOf(Vec(64, UInt(8.W)))
+      writeReqTable(sourceId).mask := mmu.Request.bits.RequestMask
+      writeReqTable(sourceId).valid := true.B
+    }
+    
+    // Trigger DiffTest event when write response comes back
+    val difftest = DifftestModule(new DiffMatrixStoreEvent, delay = 1)
+    difftest.coreid := io.hartId
+    difftest.index  := 0.U
+    difftest.valid  := tl_in.d.fire && writeReqTable(tl_in.d.bits.source).valid &&
+                       (tl_in.d.bits.opcode === TLMessages.AccessAck || tl_in.d.bits.opcode === TLMessages.ReleaseAck)
+                        
+    difftest.addr   := writeReqTable(tl_in.d.bits.source).addr
+    difftest.data   := writeReqTable(tl_in.d.bits.source).data
+    difftest.mask   := writeReqTable(tl_in.d.bits.source).mask
+  }
 }
 
 class XSCute(implicit p: Parameters) extends LazyModule {

@@ -25,6 +25,7 @@ import $file.`rocket-chip`.hardfloat.common
 import $file.huancun.common
 import $file.coupledL2.common
 import $file.openLLC.common
+import $file.CUTE.common
 
 /* for publishVersion */
 import $ivy.`de.tototec::de.tobiasroeser.mill.vcs.version::0.4.0`
@@ -226,7 +227,7 @@ object macros extends ScalaModule {
   def scalaReflectIvy = ivy"org.scala-lang:scala-reflect:${defaultScalaVersion}"
 }
 
-object CUTE extends ScalaModule with HasChisel {
+object CUTE extends $file.CUTE.common.CUTEModule with HasChisel {
 
   override def millSourcePath = pwd / "CUTE"
 
@@ -236,7 +237,6 @@ object CUTE extends ScalaModule with HasChisel {
 
   def coupledL2Module: ScalaModule = coupledL2
 
-  override def moduleDeps = super.moduleDeps ++ Seq(rocketModule, utilityModule, coupledL2Module)
 }
 
 // extends this trait to use XiangShan in other projects
