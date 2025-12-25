@@ -337,43 +337,43 @@ object MatrixDecoder extends DecodeConstants {
     // 4.4.1 Data Move Instructions between Matrix Registers
     // md[i, rs2*(RLEN/EEW) + j] = ms1[i, j]
     // md is accumulation reg and ms1 is tile reg
-    MMVE8_A_T  -> MMVE(FuType.marith, MarithOpType.mmove8AT, regStride = T),
-    MMVE16_A_T -> MMVE(FuType.marith, MarithOpType.mmove16AT, regStride = T),
-    MMVE32_A_T -> MMVE(FuType.marith, MarithOpType.mmove32AT, regStride = T),
-    MMVE64_A_T -> MMVE(FuType.marith, MarithOpType.mmove64AT, regStride = T),
+    // MMVE8_A_T  -> MMVE(FuType.marith, MarithOpType.mmove8AT, regStride = T),
+    // MMVE16_A_T -> MMVE(FuType.marith, MarithOpType.mmove16AT, regStride = T),
+    // MMVE32_A_T -> MMVE(FuType.marith, MarithOpType.mmove32AT, regStride = T),
+    // MMVE64_A_T -> MMVE(FuType.marith, MarithOpType.mmove64AT, regStride = T),
     
     // md[i, j] = md[i, rs2*(RLEN/EEW) + j]
     // md is tile reg and ms1 is accumulation reg
-    MMVE8_T_A  -> MMVE(FuType.marith, MarithOpType.mmove8TA, regStride = T),
-    MMVE16_T_A -> MMVE(FuType.marith, MarithOpType.mmove16TA, regStride = T),
-    MMVE32_T_A -> MMVE(FuType.marith, MarithOpType.mmove32TA, regStride = T),
-    MMVE64_T_A -> MMVE(FuType.marith, MarithOpType.mmove64TA, regStride = T),
+    // MMVE8_T_A  -> MMVE(FuType.marith, MarithOpType.mmove8TA, regStride = T),
+    // MMVE16_T_A -> MMVE(FuType.marith, MarithOpType.mmove16TA, regStride = T),
+    // MMVE32_T_A -> MMVE(FuType.marith, MarithOpType.mmove32TA, regStride = T),
+    // MMVE64_T_A -> MMVE(FuType.marith, MarithOpType.mmove64TA, regStride = T),
     
     // md[i, imm * (RLEN / EEW) + j] = ms1[i, j]
     // md is an accumulation register and ms1 is a tile register.
-    MMVIE8_A_T  -> MMVE(FuType.marith, MarithOpType.mmove8AT, immStride = T),
-    MMVIE16_A_T -> MMVE(FuType.marith, MarithOpType.mmove16AT, immStride = T),
-    MMVIE32_A_T -> MMVE(FuType.marith, MarithOpType.mmove32AT, immStride = T),
-    MMVIE64_A_T -> MMVE(FuType.marith, MarithOpType.mmove64AT, immStride = T),
+    // MMVIE8_A_T  -> MMVE(FuType.marith, MarithOpType.mmove8AT, immStride = T),
+    // MMVIE16_A_T -> MMVE(FuType.marith, MarithOpType.mmove16AT, immStride = T),
+    // MMVIE32_A_T -> MMVE(FuType.marith, MarithOpType.mmove32AT, immStride = T),
+    // MMVIE64_A_T -> MMVE(FuType.marith, MarithOpType.mmove64AT, immStride = T),
 
     // md[i, j] = ms1[i, imm * (RLEN / EEW) + j]
     // md is a tile register and ms1 is an accumulation register.
-    MMVIE8_T_A  -> MMVE(FuType.marith, MarithOpType.mmove8TA, immStride = T),
-    MMVIE16_T_A -> MMVE(FuType.marith, MarithOpType.mmove16TA, immStride = T),
-    MMVIE32_T_A -> MMVE(FuType.marith, MarithOpType.mmove32TA, immStride = T),
-    MMVIE64_T_A -> MMVE(FuType.marith, MarithOpType.mmove64TA, immStride = T),
+    // MMVIE8_T_A  -> MMVE(FuType.marith, MarithOpType.mmove8TA, immStride = T),
+    // MMVIE16_T_A -> MMVE(FuType.marith, MarithOpType.mmove16TA, immStride = T),
+    // MMVIE32_T_A -> MMVE(FuType.marith, MarithOpType.mmove32TA, immStride = T),
+    // MMVIE64_T_A -> MMVE(FuType.marith, MarithOpType.mmove64TA, immStride = T),
 
     // md = ms1, md and ms1 are both accumulation registers.
-    MMVE8_A_A  -> MMVE(FuType.marith, MarithOpType.mmove8AA),
-    MMVE16_A_A -> MMVE(FuType.marith, MarithOpType.mmove16AA),
-    MMVE32_A_A -> MMVE(FuType.marith, MarithOpType.mmove32AA),
-    MMVE64_A_A -> MMVE(FuType.marith, MarithOpType.mmove64AA),
+    // MMVE8_A_A  -> MMVE(FuType.marith, MarithOpType.mmove8AA),
+    // MMVE16_A_A -> MMVE(FuType.marith, MarithOpType.mmove16AA),
+    // MMVE32_A_A -> MMVE(FuType.marith, MarithOpType.mmove32AA),
+    // MMVE64_A_A -> MMVE(FuType.marith, MarithOpType.mmove64AA),
 
     // md = ms1, md and ms1 are both tile registers.
-    MMVE8_T_T  -> MMVE(FuType.marith, MarithOpType.mmove8TT),
-    MMVE16_T_T -> MMVE(FuType.marith, MarithOpType.mmove16TT),
-    MMVE32_T_T -> MMVE(FuType.marith, MarithOpType.mmove32TT),
-    MMVE64_T_T -> MMVE(FuType.marith, MarithOpType.mmove64TT),
+    // MMVE8_T_T  -> MMVE(FuType.marith, MarithOpType.mmove8TT),
+    // MMVE16_T_T -> MMVE(FuType.marith, MarithOpType.mmove16TT),
+    // MMVE32_T_T -> MMVE(FuType.marith, MarithOpType.mmove32TT),
+    // MMVE64_T_T -> MMVE(FuType.marith, MarithOpType.mmove64TT),
 
     // 4.4.2 Data Move Instructions between Matrix and Integer
     // x[rd] = ms1[i, j], i = rs2[15:0], j = rs2[XLEN-1:16]
@@ -421,74 +421,74 @@ object MatrixDecoder extends DecodeConstants {
 
     // f[rd] = ms1[i, j], i = rs2[15:0], j = rs2[XLEN-1:16]
     // rd is a float-point register and ms1 is an accumulation register.
-    MFMVE8_F_A -> MMVE(FuType.mmvef, MmvefOpType.placeholder, fWen = T),
-    MFMVE16_F_A -> MMVE(FuType.mmvef, MmvefOpType.placeholder, fWen = T),
-    MFMVE32_F_A -> MMVE(FuType.mmvef, MmvefOpType.placeholder, fWen = T),
-    MFMVE64_F_A -> MMVE(FuType.mmvef, MmvefOpType.placeholder, fWen = T),
+    // MFMVE8_F_A -> MMVE(FuType.mmvef, MmvefOpType.placeholder, fWen = T),
+    // MFMVE16_F_A -> MMVE(FuType.mmvef, MmvefOpType.placeholder, fWen = T),
+    // MFMVE32_F_A -> MMVE(FuType.mmvef, MmvefOpType.placeholder, fWen = T),
+    // MFMVE64_F_A -> MMVE(FuType.mmvef, MmvefOpType.placeholder, fWen = T),
 
     // md[i, j] = f[rs1], i = rs2[15:0], j = rs2[XLEN-1:16]
     // md is an accumulation register and rs1 is a float-point register.
-    MFMVE8_A_F -> MMVE(FuType.mmvef, MmvefOpType.placeholder),
-    MFMVE16_A_F -> MMVE(FuType.mmvef, MmvefOpType.placeholder),
-    MFMVE32_A_F -> MMVE(FuType.mmvef, MmvefOpType.placeholder),
-    MFMVE64_A_F -> MMVE(FuType.mmvef, MmvefOpType.placeholder),
+    // MFMVE8_A_F -> MMVE(FuType.mmvef, MmvefOpType.placeholder),
+    // MFMVE16_A_F -> MMVE(FuType.mmvef, MmvefOpType.placeholder),
+    // MFMVE32_A_F -> MMVE(FuType.mmvef, MmvefOpType.placeholder),
+    // MFMVE64_A_F -> MMVE(FuType.mmvef, MmvefOpType.placeholder),
 
     // 4.4.4 Data Broadcast Instructions
     // Broadcast the first row of a tile register to fill the whole matrix.
-    MBCAR_M -> MBC(MarithOpType.mbcARow),
-    MBCBR_M -> MBC(MarithOpType.mbcBRow),
+    // MBCAR_M -> MBC(MarithOpType.mbcARow),
+    // MBCBR_M -> MBC(MarithOpType.mbcBRow),
     
     // Broadcast the first row of an accumulation register to fill the whole matrix.
-    MBCCR_M -> MBC(MarithOpType.mbcCRow),
+    // MBCCR_M -> MBC(MarithOpType.mbcCRow),
 
     // Broadcast the first column of a tile register to fill the whole matrix.
-    MBCACE8_M  -> MBC(MarithOpType.mbcACol8),
-    MBCACE16_M -> MBC(MarithOpType.mbcACol16),
-    MBCACE32_M -> MBC(MarithOpType.mbcACol32),
-    MBCACE64_M -> MBC(MarithOpType.mbcACol64),
-    MBCBCE8_M  -> MBC(MarithOpType.mbcBCol8),
-    MBCBCE16_M -> MBC(MarithOpType.mbcBCol16),
-    MBCBCE32_M -> MBC(MarithOpType.mbcBCol32),
-    MBCBCE64_M -> MBC(MarithOpType.mbcBCol64),
+    // MBCACE8_M  -> MBC(MarithOpType.mbcACol8),
+    // MBCACE16_M -> MBC(MarithOpType.mbcACol16),
+    // MBCACE32_M -> MBC(MarithOpType.mbcACol32),
+    // MBCACE64_M -> MBC(MarithOpType.mbcACol64),
+    // MBCBCE8_M  -> MBC(MarithOpType.mbcBCol8),
+    // MBCBCE16_M -> MBC(MarithOpType.mbcBCol16),
+    // MBCBCE32_M -> MBC(MarithOpType.mbcBCol32),
+    // MBCBCE64_M -> MBC(MarithOpType.mbcBCol64),
 
     // Broadcast the first column of an accumulation register to fill the whole matrix.
-    MBCCCE8_M  -> MBC(MarithOpType.mbcCCol8),
-    MBCCCE16_M -> MBC(MarithOpType.mbcCCol16),
-    MBCCCE32_M -> MBC(MarithOpType.mbcCCol32),
-    MBCCCE64_M -> MBC(MarithOpType.mbcCCol64),
+    // MBCCCE8_M  -> MBC(MarithOpType.mbcCCol8),
+    // MBCCCE16_M -> MBC(MarithOpType.mbcCCol16),
+    // MBCCCE32_M -> MBC(MarithOpType.mbcCCol32),
+    // MBCCCE64_M -> MBC(MarithOpType.mbcCCol64),
 
     // Broadcast the first element of a tile register to fill the whole matrix.
-    MBCAEE8_M  -> MBC(MarithOpType.mbcAEle8),
-    MBCAEE16_M -> MBC(MarithOpType.mbcAEle16),
-    MBCAEE32_M -> MBC(MarithOpType.mbcAEle32),
-    MBCAEE64_M -> MBC(MarithOpType.mbcAEle64),
-    MBCBEE8_M  -> MBC(MarithOpType.mbcBEle8),
-    MBCBEE16_M -> MBC(MarithOpType.mbcBEle16),
-    MBCBEE32_M -> MBC(MarithOpType.mbcBEle32),
-    MBCBEE64_M -> MBC(MarithOpType.mbcBEle64),
+    // MBCAEE8_M  -> MBC(MarithOpType.mbcAEle8),
+    // MBCAEE16_M -> MBC(MarithOpType.mbcAEle16),
+    // MBCAEE32_M -> MBC(MarithOpType.mbcAEle32),
+    // MBCAEE64_M -> MBC(MarithOpType.mbcAEle64),
+    // MBCBEE8_M  -> MBC(MarithOpType.mbcBEle8),
+    // MBCBEE16_M -> MBC(MarithOpType.mbcBEle16),
+    // MBCBEE32_M -> MBC(MarithOpType.mbcBEle32),
+    // MBCBEE64_M -> MBC(MarithOpType.mbcBEle64),
 
     // Broadcast the first element of an accumulation register to fill the whole matrix.
-    MBCCEE8_M  -> MBC(MarithOpType.mbcCEle8),
-    MBCCEE16_M -> MBC(MarithOpType.mbcCEle16),
-    MBCCEE32_M -> MBC(MarithOpType.mbcCEle32),
-    MBCCEE64_M -> MBC(MarithOpType.mbcCEle64),
+    // MBCCEE8_M  -> MBC(MarithOpType.mbcCEle8),
+    // MBCCEE16_M -> MBC(MarithOpType.mbcCEle16),
+    // MBCCEE32_M -> MBC(MarithOpType.mbcCEle32),
+    // MBCCEE64_M -> MBC(MarithOpType.mbcCEle64),
     
     // 4.4.5. Matrix Transpose Instructions
     // Transpose square matrix of tile register.
-    MTAE8_M  -> MTRANS(MarithOpType.mtransA8),
-    MTAE16_M -> MTRANS(MarithOpType.mtransA16),
-    MTAE32_M -> MTRANS(MarithOpType.mtransA32),
-    MTAE64_M -> MTRANS(MarithOpType.mtransA64),
-    MTBE8_M  -> MTRANS(MarithOpType.mtransB8),
-    MTBE16_M -> MTRANS(MarithOpType.mtransB16),
-    MTBE32_M -> MTRANS(MarithOpType.mtransB32),
-    MTBE64_M -> MTRANS(MarithOpType.mtransB64),
+    // MTAE8_M  -> MTRANS(MarithOpType.mtransA8),
+    // MTAE16_M -> MTRANS(MarithOpType.mtransA16),
+    // MTAE32_M -> MTRANS(MarithOpType.mtransA32),
+    // MTAE64_M -> MTRANS(MarithOpType.mtransA64),
+    // MTBE8_M  -> MTRANS(MarithOpType.mtransB8),
+    // MTBE16_M -> MTRANS(MarithOpType.mtransB16),
+    // MTBE32_M -> MTRANS(MarithOpType.mtransB32),
+    // MTBE64_M -> MTRANS(MarithOpType.mtransB64),
 
     // Transpose square matrix of accumulation register.
-    MTCE8_M  -> MTRANS(MarithOpType.mtransC8),
-    MTCE16_M -> MTRANS(MarithOpType.mtransC16),
-    MTCE32_M -> MTRANS(MarithOpType.mtransC32),
-    MTCE64_M -> MTRANS(MarithOpType.mtransC64),
+    // MTCE8_M  -> MTRANS(MarithOpType.mtransC8),
+    // MTCE16_M -> MTRANS(MarithOpType.mtransC16),
+    // MTCE32_M -> MTRANS(MarithOpType.mtransC32),
+    // MTCE64_M -> MTRANS(MarithOpType.mtransC64),
   )
 
   val mmul: Array[(BitPat, XSDecodeBase)] = Array(
@@ -573,18 +573,18 @@ object MatrixDecoder extends DecodeConstants {
     // ...
 
     // Convert float to float
-    MFCVT_BF_HF_M  -> MCVT(MarithOpType.mcvtFp16ToBf16), // fp16 to bf16
-    MFCVT_HF_BF_M  -> MCVT(MarithOpType.mcvtBf16ToFp16), // bf16 to fp16
+    // MFCVT_BF_HF_M  -> MCVT(MarithOpType.mcvtFp16ToBf16), // fp16 to bf16
+    // MFCVT_HF_BF_M  -> MCVT(MarithOpType.mcvtBf16ToFp16), // bf16 to fp16
 
-    MFWCVT_FW_F_M  -> MCVT(MarithOpType.mcvtDoubleWidth), // single-width float to double-width float
-    MFWCVT_HF_CF_M -> MCVT(MarithOpType.mcvtFp8ToFp16), // fp8 to fp16
-    MFWCVT_F_HF_M  -> MCVT(MarithOpType.mcvtFp16ToFp32), // fp16 to fp32
-    MFWCVT_D_F_M   -> MCVT(MarithOpType.mcvtFp32ToFp64), // fp32 to fp64
+    // MFWCVT_FW_F_M  -> MCVT(MarithOpType.mcvtDoubleWidth), // single-width float to double-width float
+    // MFWCVT_HF_CF_M -> MCVT(MarithOpType.mcvtFp8ToFp16), // fp8 to fp16
+    // MFWCVT_F_HF_M  -> MCVT(MarithOpType.mcvtFp16ToFp32), // fp16 to fp32
+    // MFWCVT_D_F_M   -> MCVT(MarithOpType.mcvtFp32ToFp64), // fp32 to fp64
 
-    MFNCVT_F_FW_M  -> MCVT(MarithOpType.mcvtHalfWidth), // double-width float to single-width float
-    MFNCVT_CF_HF_M -> MCVT(MarithOpType.mcvtFp16ToFp8),  // fp16 to fp8
-    MFNCVT_HF_F_M  -> MCVT(MarithOpType.mcvtFp32ToFp16), // fp32 to fp16
-    MFNCVT_F_D_M   -> MCVT(MarithOpType.mcvtFp64ToFp32), // fp64 to fp32
+    // MFNCVT_F_FW_M  -> MCVT(MarithOpType.mcvtHalfWidth), // double-width float to single-width float
+    // MFNCVT_CF_HF_M -> MCVT(MarithOpType.mcvtFp16ToFp8),  // fp16 to fp8
+    // MFNCVT_HF_F_M  -> MCVT(MarithOpType.mcvtFp32ToFp16), // fp32 to fp16
+    // MFNCVT_F_D_M   -> MCVT(MarithOpType.mcvtFp64ToFp32), // fp64 to fp32
 
     // TODO: Convert integer to float
     // ...

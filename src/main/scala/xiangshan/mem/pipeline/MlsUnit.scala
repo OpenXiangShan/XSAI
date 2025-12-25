@@ -508,8 +508,6 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   amuCtrl.isacc     := MldstOpType.isMatrixC(s3_in.uop.fuOpType)
   amuCtrl.isA       := MldstOpType.isMatrixA(s3_in.uop.fuOpType)
   amuCtrl.isB       := MldstOpType.isMatrixB(s3_in.uop.fuOpType)
-  amuCtrl.isC       := MldstOpType.isMatrixC(s3_in.uop.fuOpType)
-  amuCtrl.isTile    := MldstOpType.isTile(s3_in.uop.fuOpType)
   when (MldstOpType.isWholeReg(s3_in.uop.fuOpType)) {
     amuCtrl.row     := (coreParams.MLEN / coreParams.RLEN).U
     when (MldstOpType.isAccum(s3_in.uop.fuOpType)) {

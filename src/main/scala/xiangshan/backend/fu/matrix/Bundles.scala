@@ -286,15 +286,13 @@ object Bundles {
     val isacc     = Bool()            // 6
     val isA       = Bool()            // 7
     val isB       = Bool()            // 8
-    val isC       = Bool()            // 9
-    val isTile    = Bool()            // 10
 
-    val baseAddr  = UInt(PAddrBits.W) // 58 : 11
-    val stride    = UInt(PAddrBits.W) // 106 : 59
+    val baseAddr  = UInt(PAddrBits.W) // 56 : 9
+    val stride    = UInt(PAddrBits.W) // 104 : 57
     
-    val row       = Mtilex()          // 115 : 107
-    val column    = Mtilex()          // 124 : 116
-    val widths    = MtypeMSew()       // 127 : 125
+    val row       = Mtilex()          // 113 : 105
+    val column    = Mtilex()          // 122 : 114
+    val widths    = MtypeMSew()       // 125 : 123
   }
 
   object AmuLsuIO {

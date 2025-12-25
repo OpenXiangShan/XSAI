@@ -110,7 +110,6 @@ class ConfigStateMachine(top: XSCuteTopImpl)(implicit p: Parameters) extends Cut
         mls.column   := K
         mls.widths   := MSew.e8
         mls.ls       := false.B
-        mls.isTile   := true.B
         mls.isA      := true.B
         top.io.ctrl2top.amuCtrl.bits.data := mls.asUInt
         top.io.ctrl2top.amuCtrl.bits.op := AmuCtrlIO.mlsOp()
@@ -127,7 +126,6 @@ class ConfigStateMachine(top: XSCuteTopImpl)(implicit p: Parameters) extends Cut
         mls.column   := K
         mls.widths   := MSew.e8
         mls.ls       := false.B
-        mls.isTile   := true.B
         mls.isB      := true.B
         top.io.ctrl2top.amuCtrl.bits.data := mls.asUInt
         top.io.ctrl2top.amuCtrl.bits.op := AmuCtrlIO.mlsOp()
@@ -145,7 +143,6 @@ class ConfigStateMachine(top: XSCuteTopImpl)(implicit p: Parameters) extends Cut
         mls.widths   := MSew.e32
         mls.ls       := false.B
         mls.isacc    := true.B
-        mls.isC      := true.B
         top.io.ctrl2top.amuCtrl.bits.data := mls.asUInt
         top.io.ctrl2top.amuCtrl.bits.op := AmuCtrlIO.mlsOp()
         state := ConfigState.sComputeMMA
@@ -180,7 +177,6 @@ class ConfigStateMachine(top: XSCuteTopImpl)(implicit p: Parameters) extends Cut
         mls.widths   := MSew.e32
         mls.ls       := true.B
         mls.isacc    := true.B
-        mls.isC      := true.B
         top.io.ctrl2top.amuCtrl.valid := true.B
         top.io.ctrl2top.amuCtrl.bits.data := mls.asUInt
         top.io.ctrl2top.amuCtrl.bits.op := AmuCtrlIO.mlsOp()
