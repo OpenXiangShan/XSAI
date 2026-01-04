@@ -399,8 +399,16 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
         ).map(x => FuTypeOrR(in.bits.fuType, x._1) && in.bits.fuOpType === x._2).reduce(_ || _)
       ).reverse)
     ).orR
-    // TODO: implement dirtyMs
-    uops(i).dirtyMs := false.B
+    uops(i).dirtyMs := (
+      compressMasksVec(i) & Cat(io.in.map(in =>
+        in.bits.mxWen ||
+        // mma/matrix load/mzero instructions dirty matrix state
+        // matrix store doesn't dirty matrix state
+        FuTypeOrR(in.bits.fuType, FuType.mma) ||
+        FuTypeOrR(in.bits.fuType, FuType.marith) ||
+        (FuTypeOrR(in.bits.fuType, FuType.mls) && MldstOpType.isLoad(in.bits.fuOpType))
+        ).reverse)
+    ).orR
     uops(i).debug_sim_trig.foreach(_ := (compressMasksVec(i) & Cat(io.in.map(_.bits.instr === XSDebugDecode.SIM_TRIG).reverse)).orR)
     // psrc0,psrc1,psrc2 don't require v0ReadPorts because their srcType can distinguish whether they are V0 or not
     uops(i).psrc(0) := Mux1H(Cat(uops(i).srcType(0)(4), uops(i).srcType(0)(2, 0)), Seq(io.intReadPorts(i)(0), io.fpReadPorts(i)(0), io.vecReadPorts(i)(0), io.mxReadPorts(i)(0)))
