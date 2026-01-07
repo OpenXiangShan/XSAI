@@ -27,8 +27,8 @@ import xiangshan.backend.Bundles.{ExuInput, ExuOutput, MemExuInput, MemExuOutput
 import xiangshan.{AddrTransType, FPUCtrlSignals, HasXSParameter, Redirect, XSBundle, XSModule}
 import xiangshan.backend.datapath.WbConfig.{PregWB, _}
 import xiangshan.backend.fu.FuType
-import xiangshan.backend.fu.matrix.Bundles.MType
 import xiangshan.backend.fu.vector.Bundles.{VType, Vxrm}
+import xiangshan.backend.fu.matrix.Bundles.{Xmxrm, Xmfrm, Xmsaten}
 import xiangshan.backend.fu.fpu.Bundles.Frm
 import xiangshan.backend.fu.wrapper.{CSRInput, CSRToDecode}
 
@@ -45,9 +45,9 @@ class ExeUnitIO(params: ExeUnitParams)(implicit p: Parameters) extends XSBundle 
   val vtype = Option.when(params.writeVConfig)((Valid(new VType)))
   val vlIsZero = Option.when(params.writeVConfig)(Output(Bool()))
   val vlIsVlmax = Option.when(params.writeVConfig)(Output(Bool()))
-  val mxIsZero = Option.when(params.writeMx)(Output(Bool()))
-  val mxIsMxmax = Option.when(params.writeMx)(Output(Bool()))
-  val mtype = Option.when(params.writeMType)((Valid(new MType)))
+  val xmxrm = Option.when(params.needSrcXmcsr)(Input(Xmxrm()))
+  val xmfrm = Option.when(params.needSrcXmcsr)(Input(Xmfrm()))
+  val xmsaten = Option.when(params.needSrcXmcsr)(Input(Xmsaten()))
   val instrAddrTransType = Option.when(params.hasJmpFu || params.hasBrhFu)(Input(new AddrTransType))
 }
 
@@ -272,7 +272,6 @@ class ExeUnitImp(
       sink.bits.ctrl.vpu         .foreach(x => x.fpu.isFpToVecInst := 0.U)
       sink.bits.ctrl.vpu         .foreach(x => x.fpu.isFP32Instr   := 0.U)
       sink.bits.ctrl.vpu         .foreach(x => x.fpu.isFP64Instr   := 0.U)
-      sink.bits.ctrl.mpu         .foreach(x => x := source.bits.mpu.get)
       sink.bits.perfDebugInfo    := source.bits.perfDebugInfo
       sink.bits.debug_seqNum     := source.bits.debug_seqNum
   }
@@ -301,7 +300,6 @@ class ExeUnitImp(
       sink.vpu.foreach(x => x.fpu.isFpToVecInst := 0.U)
       sink.vpu.foreach(x => x.fpu.isFP32Instr := 0.U)
       sink.vpu.foreach(x => x.fpu.isFP64Instr := 0.U)
-      sink.mpu.foreach(x => x := source.mpu.get)
       val sinkData = fu.io.in.bits.dataPipe.get(i)
       val sourceData = inPipe._1(i)
       sinkData.src.zip(sourceData.src).foreach { case (fuSrc, exuSrc) => fuSrc := exuSrc }
@@ -416,9 +414,9 @@ class ExeUnitImp(
   io.vxrm.foreach(exuio => funcUnits.foreach(fu => fu.io.vxrm.foreach(fuio => fuio <> exuio)))
   io.vlIsZero.foreach(exuio => funcUnits.foreach(fu => fu.io.vlIsZero.foreach(fuio => exuio := fuio)))
   io.vlIsVlmax.foreach(exuio => funcUnits.foreach(fu => fu.io.vlIsVlmax.foreach(fuio => exuio := fuio)))
-  io.mtype.foreach(exuio => funcUnits.foreach(fu => fu.io.mtype.foreach(fuio => exuio := fuio)))
-  io.mxIsZero.foreach(exuio => funcUnits.foreach(fu => fu.io.mxIsZero.foreach(fuio => exuio := fuio)))
-  io.mxIsMxmax.foreach(exuio => funcUnits.foreach(fu => fu.io.mxIsMxmax.foreach(fuio => exuio := fuio)))
+  io.xmxrm.foreach(exuio => funcUnits.foreach(fu => fu.io.xmxrm.foreach(fuio => fuio <> exuio)))
+  io.xmfrm.foreach(exuio => funcUnits.foreach(fu => fu.io.xmfrm.foreach(fuio => fuio <> exuio)))
+  io.xmsaten.foreach(exuio => funcUnits.foreach(fu => fu.io.xmsaten.foreach(fuio => fuio <> exuio)))
   // RegNext for better timing and it should be fine
   io.instrAddrTransType.foreach(exuio => funcUnits.foreach(fu => fu.io.instrAddrTransType.foreach(fuio => fuio := RegNext(exuio))))
 

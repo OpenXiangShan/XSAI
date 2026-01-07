@@ -130,21 +130,63 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
   }))
     .setAddr(CSRs.vlenb)
 
-  val mtype = 
-    if (DEV_FIXED_MTYPE) {
-      // Use a fixed value for mtype temporarily
-      Module(new CSRModule("Mtype", new CSRBundle {
-        // val MTYPE = RO(63, 0).withReset(0x0000000000000100.U)
-        val MTYPE = RO(63, 0).withReset(0.U)
-      }))
-        .setAddr(CSRs.mtype)
-    } else {
-      Module(new CSRModule("Mtype", new CSRMTypeBundle) with HasRobCommitBundle {
-        when(robCommit.mtype.valid) {
-          reg := robCommit.mtype.bits
-        }
-      })
-        .setAddr(CSRs.mtype)}
+  val xmcsr = Module(new CSRModule("Xmcsr", new CSRBundle {
+    val XMXRM    = RW(1,  0)
+    val XMSAT    = RW(    2)
+    val XMFFLAGS = RW(7,  3)
+    val XMFRM    = RW(10, 8)
+    val XMSATEN  = RW(11)
+    val VXSAT = RW(   0)
+    val VXRM  = RW(2, 1)
+  }) with HasRobCommitBundle {
+    val wAliasXmxrm = IO(Input(new CSRAddrWriteBundle(new CSRBundle {
+      val XMXRM = RW(1, 0)
+    })))
+    val wAliasXmsat = IO(Input(new CSRAddrWriteBundle(new CSRBundle {
+      val XMSAT = RW(2)
+    })))
+    val wAliasXmflags = IO(Input(new CSRAddrWriteBundle(new CSRBundle {
+      val XMFFLAGS = RW(7, 3)
+    })))
+    val wAliasXmfrm = IO(Input(new CSRAddrWriteBundle(new CSRBundle {
+      val XMFRM = RW(10, 8)
+    })))
+    val wAliasXmsaten = IO(Input(new CSRAddrWriteBundle(new CSRBundle {
+      val XMSATEN = RW(11)
+    })))
+    val xmxrm = IO(Output(Xmxrm()))
+    val xmsat = IO(Output(Xmsat()))
+    val xmfflags = IO(Output(Xmfflags()))
+    val xmfrm = IO(Output(Xmfrm()))
+    val xmsaten = IO(Output(Xmsaten()))
+
+    for (wAlias <- Seq(wAliasXmxrm, wAliasXmsat, wAliasXmflags, wAliasXmfrm, wAliasXmsaten)) {
+      for ((name, field) <- wAlias.wdataFields.elements) {
+        reg.elements(name).asInstanceOf[CSREnumType].addOtherUpdate(
+          wAlias.wen && field.asInstanceOf[CSREnumType].isLegal,
+          field.asInstanceOf[CSREnumType]
+        )
+      }
+    }
+
+    // write connection
+    reconnectReg()
+
+    // when(amu.xmsat.valid) {
+    //   reg.XMSAT := reg.XMSAT.asBool || robCommit.xmsat.bits.asBool
+    // }
+    // when(amu.xmfflags.valid) {
+    //   reg.XMFFLAGS := reg.XMFFLAGS.asUInt | amu.xmfflags.bits.asUInt
+    // }
+    // TODO: How to update xmsat and xmfflags from CUTE?
+
+    // read connection
+    xmxrm := reg.XMXRM.asUInt
+    xmsat := reg.XMSAT.asUInt
+    xmfflags := reg.XMFFLAGS.asUInt
+    xmfrm := reg.XMFRM.asUInt
+    xmsaten := reg.XMSATEN.asUInt
+  }).setAddr(CSRs.xmcsr)
 
   // Matrix tile size registers, read-only.
   // They can be updated only by msettilem/n/k instructions.
@@ -163,25 +205,25 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
   }))
     .setAddr(CSRs.mtilek)
 
-  val mcsr = Module(new CSRModule("Mcsr", new CSRBundle {
-    val MSAT = RW(0)
+  val xmisa = Module(new CSRModule("Xmisa", new CSRBundle {
+    val XMISA = XmisaField(63, 0).withReset(XmisaField.init)
   }))
-    .setAddr(CSRs.mcsr)
+    .setAddr(CSRs.xmisa)
 
-  val mlenb = Module(new CSRModule("Mlenb", new CSRBundle {
-    val MLENB = MlenbField(63, 0).withReset(MlenbField.init)
+  val xtlenb = Module(new CSRModule("Xtlenb", new CSRBundle {
+    val XTLENB = XtlenbField(63, 0).withReset(XtlenbField.init)
   }))
-    .setAddr(CSRs.mlenb)
+    .setAddr(CSRs.xtlenb)
 
-  val mrlenb = Module(new CSRModule("Mrlenb", new CSRBundle {
-    val MRLENB = MrlenbField(63, 0).withReset(MrlenbField.init)
+  val xtrlenb = Module(new CSRModule("Xtrlenb", new CSRBundle {
+    val XTRLENB = XtrlenbField(63, 0).withReset(XtrlenbField.init)
   }))
-    .setAddr(CSRs.mrlenb)
+    .setAddr(CSRs.xtrlenb)
 
-  val mamul = Module(new CSRModule("Mamul", new CSRBundle {
-    val MAMUL = MamulField(63, 0).withReset(MamulField.init)
+  val xalenb = Module(new CSRModule("Xalenb", new CSRBundle {
+    val XALENB = XalenbField(63, 0).withReset(XalenbField.init)
   }))
-    .setAddr(CSRs.mamul)
+    .setAddr(CSRs.xalenb)
 
   val mtok = Module(new CSRModule("Mtok", new CSRBundle {
     val MTOK = MtokField(63, 0).withReset(MtokField.init)
@@ -252,28 +294,33 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
   )
 
   val unprivilegedCSRMap: SeqMap[Int, (CSRAddrWriteBundle[_], UInt)] = SeqMap(
-    CSRs.fflags -> (fcsr.wAliasFflags -> fcsr.fflagsRdata),
-    CSRs.frm    -> (fcsr.wAliasFfm    -> fcsr.frmRdata),
-    CSRs.fcsr   -> (fcsr.w            -> fcsr.rdata),
-    CSRs.vstart -> (vstart.w          -> vstart.rdata),
-    CSRs.vxsat  -> (vcsr.wAliasVxsat  -> vcsr.vxsat),
-    CSRs.vxrm   -> (vcsr.wAliasVxrm   -> vcsr.vxrm),
-    CSRs.vcsr   -> (vcsr.w            -> vcsr.rdata),
-    CSRs.vl     -> (vl.w              -> vl.rdata),
-    CSRs.vtype  -> (vtype.w           -> vtype.rdata),
-    CSRs.vlenb  -> (vlenb.w           -> vlenb.rdata),
-    CSRs.mtype  -> (mtype.w           -> mtype.rdata),
-    CSRs.mtilem -> (mtilem.w          -> mtilem.rdata),
-    CSRs.mtilen -> (mtilen.w          -> mtilen.rdata),
-    CSRs.mtilek -> (mtilek.w          -> mtilek.rdata),
-    CSRs.mlenb  -> (mlenb.w           -> mlenb.rdata),
-    CSRs.mrlenb -> (mrlenb.w          -> mrlenb.rdata),
-    CSRs.mamul  -> (mamul.w           -> mamul.rdata),
-    CSRs.mtok   -> (mtok.w            -> mtok.rdata),
-    CSRs.mcsr   -> (mcsr.w            -> mcsr.rdata),
-    CSRs.cycle  -> (cycle.w           -> cycle.rdata),
-    CSRs.time   -> (time.w            -> time.rdata),
-    CSRs.instret -> (instret.w        -> instret.rdata),
+    CSRs.fflags   -> (fcsr.wAliasFflags -> fcsr.fflagsRdata),
+    CSRs.frm      -> (fcsr.wAliasFfm    -> fcsr.frmRdata),
+    CSRs.fcsr     -> (fcsr.w            -> fcsr.rdata),
+    CSRs.vstart   -> (vstart.w          -> vstart.rdata),
+    CSRs.vxsat    -> (vcsr.wAliasVxsat  -> vcsr.vxsat),
+    CSRs.vxrm     -> (vcsr.wAliasVxrm   -> vcsr.vxrm),
+    CSRs.vcsr     -> (vcsr.w            -> vcsr.rdata),
+    CSRs.vl       -> (vl.w              -> vl.rdata),
+    CSRs.vtype    -> (vtype.w           -> vtype.rdata),
+    CSRs.vlenb    -> (vlenb.w           -> vlenb.rdata),
+    CSRs.xmcsr    -> (xmcsr.w           -> xmcsr.rdata),
+    CSRs.xmxrm    -> (xmcsr.wAliasXmxrm   -> xmcsr.xmxrm),
+    CSRs.xmsat    -> (xmcsr.wAliasXmsat   -> xmcsr.xmsat),
+    CSRs.xmfflags -> (xmcsr.wAliasXmflags -> xmcsr.xmfflags),
+    CSRs.xmfrm    -> (xmcsr.wAliasXmfrm   -> xmcsr.xmfrm),
+    CSRs.xmsaten  -> (xmcsr.wAliasXmsaten -> xmcsr.xmsaten),
+    CSRs.mtilem   -> (mtilem.w          -> mtilem.rdata),
+    CSRs.mtilen   -> (mtilen.w          -> mtilen.rdata),
+    CSRs.mtilek   -> (mtilek.w          -> mtilek.rdata),
+    CSRs.xmisa    -> (xmisa.w           -> xmisa.rdata),
+    CSRs.xtlenb   -> (xtlenb.w          -> xtlenb.rdata),
+    CSRs.xtrlenb  -> (xtrlenb.w         -> xtrlenb.rdata),
+    CSRs.xalenb   -> (xalenb.w          -> xalenb.rdata),
+    CSRs.mtok     -> (mtok.w            -> mtok.rdata),
+    CSRs.cycle    -> (cycle.w           -> cycle.rdata),
+    CSRs.time     -> (time.w            -> time.rdata),
+    CSRs.instret  -> (instret.w         -> instret.rdata),
   ) ++ hpmcounters.map(counter => (counter.addr -> (counter.w -> counter.rdata)))
 
   val unprivilegedCSRMods: Seq[CSRModule[_]] = Seq(
@@ -283,15 +330,15 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
     vl,
     vtype,
     vlenb,
-    mtype,
+    xmcsr,
+    xmisa,
+    xtlenb,
+    xtrlenb,
+    xalenb,
+    mtok,
     mtilem,
     mtilen,
     mtilek,
-    mlenb,
-    mrlenb,
-    mamul,
-    mtok,
-    mcsr,
     cycle,
     time,
     instret,
@@ -308,15 +355,20 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
     CSRs.vl      -> vl.rdata.asUInt,
     CSRs.vtype   -> vtype.rdata.asUInt,
     CSRs.vlenb   -> vlenb.rdata.asUInt,
-    CSRs.mtype   -> mtype.rdata.asUInt,
+    CSRs.xmcsr   -> xmcsr.rdata.asUInt,
+    CSRs.xmxrm   -> xmcsr.xmxrm.asUInt,
+    CSRs.xmsat   -> xmcsr.xmsat.asUInt,
+    CSRs.xmfflags -> xmcsr.xmfflags.asUInt,
+    CSRs.xmfrm   -> xmcsr.xmfrm.asUInt,
+    CSRs.xmsaten -> xmcsr.xmsaten.asUInt,
+    CSRs.xmisa   -> xmisa.rdata.asUInt,
+    CSRs.xtlenb  -> xtlenb.rdata.asUInt,
+    CSRs.xtrlenb -> xtrlenb.rdata.asUInt,
+    CSRs.xalenb  -> xalenb.rdata.asUInt,
+    CSRs.mtok    -> mtok.rdata.asUInt,
     CSRs.mtilem  -> mtilem.rdata.asUInt,
     CSRs.mtilen  -> mtilen.rdata.asUInt,
     CSRs.mtilek  -> mtilek.rdata.asUInt,
-    CSRs.mlenb   -> mlenb.rdata.asUInt,
-    CSRs.mrlenb  -> mrlenb.rdata.asUInt,
-    CSRs.mamul   -> mamul.rdata.asUInt,
-    CSRs.mtok    -> mtok.rdata.asUInt,
-    CSRs.mcsr    -> mcsr.rdata.asUInt,
     CSRs.cycle   -> cycle.rdata,
     CSRs.time    -> time.rdata,
     CSRs.instret -> instret.rdata,
@@ -345,37 +397,24 @@ class CSRFFlagsBundle extends CSRBundle {
   val NV = WARL(4, wNoFilter)
 }
 
-class CSRMTypeBundle extends CSRBundle {
-  // mtype's mill is initialized to 1, when executing matrix instructions
-  // which depend on mtype, will raise illegal instruction exception
-  val MILL   = RO(    63).withReset(1.U)
-  val MBA    = RO(    15).withReset(0.U)
-  val mfp64  = RO(    14).withReset(0.U)
-  val mfp32  = RO(13, 12).withReset(0.U)
-  val mfp16  = RO(11, 10).withReset(0.U)
-  val mfp8   = RO(  9, 8).withReset(0.U)
-  val mint64 = RO(     7).withReset(0.U)
-  val mint32 = RO(     6).withReset(0.U)
-  val mint16 = RO(     5).withReset(0.U)
-  val mint8  = RO(     4).withReset(0.U)
-  val mint4  = RO(     3).withReset(0.U)
-  val msew   = RO(  2, 0).withReset(0.U)
-}
-
 object VlenbField extends CSREnum with ROApply {
   val init = Value((VLEN / 8).U)
 }
 
-object MlenbField extends CSREnum with ROApply {
-  val init = Value((MLEN / 8).U)
+object XmisaField extends CSREnum with ROApply {
+  val init = Value(0x2e6.U)
 }
 
-object MrlenbField extends CSREnum with ROApply {
-  val init = Value((RLEN / 8).U)
+object XtlenbField extends CSREnum with ROApply {
+  val init = Value((TLEN / 8).U)
 }
 
-object MamulField extends CSREnum with ROApply {
-  val init = Value(AMUL.U)
+object XtrlenbField extends CSREnum with ROApply {
+  val init = Value((TRLEN / 8).U)
+}
+
+object XalenbField extends CSREnum with ROApply {
+  val init = Value(((TLEN / TRLEN) * (TLEN / TRLEN) * MELEN / 8).U)
 }
 
 object MtokField extends CSREnum with ROApply {

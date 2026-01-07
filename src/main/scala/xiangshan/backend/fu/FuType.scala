@@ -72,17 +72,12 @@ object FuType extends OHEnumeration {
   val vsegstu = addType(name = "vsegstu")
 
   // matrix
-  val msetmtilexiwi = addType(name = "msetmtilexiwi") // msettilex read rs write rd
   val msetmtilexiwf = addType(name = "msetmtilexiwf") // msettilex read rs write mtilex
   val msetmtilexfwf = addType(name = "msetmtilexfwf") // msettilex read old mtilex write mtilex
-  val msetmtypeiwi = addType(name = "msetmtypeiwi") // msettype read rs write rd
-  val msetmtypeiwf = addType(name = "msetmtypeiwf") // msettype read rs write mtype
   
   val mls = addType(name = "mls")
   val mma   = addType(name = "mma")   // matrix mul (dense/sparse)
   val marith = addType(name = "marith") // arith, mve (for matrix), cvt, logic
-  // val mmvei  = addType(name = "mmvei")  // mve (for integer)
-  val mmvef  = addType(name = "mmvef")  // mve (for float)
   val mrelease = addType(name = "mrelease")
 
   val intArithAll = Seq(jmp, brh, i2f, i2v, csr, alu, mul, div, fence, bku)
@@ -149,9 +144,8 @@ object FuType extends OHEnumeration {
   val scalaNeedFrm = Seq(i2f, fmac, fDivSqrt)
   val vectorNeedFrm = Seq(vfalu, vfma, vfdiv, vfcvt)
 
-  val matrixMSETtilex = Seq(msetmtilexiwi, msetmtilexiwf, msetmtilexfwf)
-  val matrixMSETtype = Seq(msetmtypeiwi, msetmtypeiwf)
-  val matrixMSET = matrixMSETtilex ++ matrixMSETtype ++ Seq(mrelease)
+  val matrixMSETtilex = Seq(msetmtilexiwf, msetmtilexfwf)
+  val matrixMSET = matrixMSETtilex ++ Seq(mrelease)
   val matrixArith = Seq(mma, marith)
   val matrixMem = Seq(mls)
   val matrixAll = matrixMSET ++ matrixArith ++ matrixMem
@@ -164,7 +158,7 @@ object FuType extends OHEnumeration {
 
   def apply() = UInt(num.W)
 
-  def isInt(fuType: UInt): Bool = FuTypeOrR(fuType, intArithAll) || FuTypeOrR(fuType, vsetiwi, vsetiwf) || FuTypeOrR(fuType, msetmtypeiwi, msetmtypeiwf)
+  def isInt(fuType: UInt): Bool = FuTypeOrR(fuType, intArithAll) || FuTypeOrR(fuType, vsetiwi, vsetiwf)
   def isIntDq0(fuType: UInt)(implicit p: Parameters): Bool = FuTypeOrR(fuType, intDq0All)
   def isIntDq1(fuType: UInt)(implicit p: Parameters): Bool = FuTypeOrR(fuType, intDq1All)
   def isIntDq0Deq0(fuType: UInt)(implicit p: Parameters): Bool = FuTypeOrR(fuType, intDq0Deq0)
@@ -178,7 +172,6 @@ object FuType extends OHEnumeration {
 
   def isVset(fuType: UInt): Bool = FuTypeOrR(fuType, vecVSET)
   def isMsettilex(fuType: UInt): Bool = FuTypeOrR(fuType, matrixMSETtilex)
-  def isMsettype(fuType: UInt): Bool = FuTypeOrR(fuType, matrixMSETtype)
   def needAmuCtrl(fuType: UInt): Bool = FuTypeOrR(fuType, matrixArith ++ matrixMem ++ Seq(mrelease))
 
   def isJump(fuType: UInt): Bool = FuTypeOrR(fuType, jmp)
@@ -241,6 +234,8 @@ object FuType extends OHEnumeration {
 
   def isMload(fuType: UInt): Bool = FuTypeOrR(fuType, mls)
 
+  def isMMA(fuType: UInt): Bool = FuTypeOrR(fuType, mma)
+
   def isMsetRmxWmx(fuType: UInt): Bool = FuTypeOrR(fuType, msetmtilexfwf)
 
   object FuTypeOrR {
@@ -293,8 +288,6 @@ object FuType extends OHEnumeration {
     vfma -> "vfma",
     vfdiv -> "vfdiv",
     vfcvt -> "vfcvt",
-    msetmtypeiwi -> "msetmtypeiwi",
-    msetmtypeiwf -> "msetmtypeiwf",
   )
 }
 

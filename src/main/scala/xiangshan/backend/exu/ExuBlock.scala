@@ -10,7 +10,6 @@ import xiangshan.backend.issue.SchdBlockParams
 import xiangshan.{HasXSParameter, Redirect, XSBundle}
 import utility._
 import xiangshan.backend.fu.FuConfig.{AluCfg, BrhCfg}
-import xiangshan.backend.fu.matrix.Bundles.MType
 import xiangshan.backend.fu.vector.Bundles.{VType, Vxrm}
 import xiangshan.backend.fu.fpu.Bundles.Frm
 import xiangshan.backend.fu.wrapper.{CSRInput, CSRToDecode}
@@ -45,10 +44,10 @@ class ExuBlockImp(
     exu.io.vxrm.foreach(exuio => io.vxrm.get <> exuio)
     exu.io.vlIsZero.foreach(exuio => io.vlIsZero.get := exuio)
     exu.io.vlIsVlmax.foreach(exuio => io.vlIsVlmax.get := exuio)
-    exu.io.mxIsZero.foreach(exuio => io.mxIsZero.get := exuio)
-    exu.io.mxIsMxmax.foreach(exuio => io.mxIsMxmax.get := exuio)
     exu.io.vtype.foreach(exuio => io.vtype.get := exuio)
-    exu.io.mtype.foreach(exuio => io.mtype.get := exuio)
+    exu.io.xmxrm.foreach(exuio => io.xmxrm.get <> exuio)
+    exu.io.xmfrm.foreach(exuio => io.xmfrm.get <> exuio)
+    exu.io.xmsaten.foreach(exuio => io.xmsaten.get <> exuio)
     exu.io.in <> input
     output <> exu.io.out
     io.csrToDecode.foreach(toDecode => exu.io.csrToDecode.foreach(exuOut => toDecode := exuOut))
@@ -89,8 +88,7 @@ class ExuBlockIO(implicit p: Parameters, params: SchdBlockParams) extends XSBund
   val vtype = Option.when(params.writeVConfig)((Valid(new VType)))
   val vlIsZero = Option.when(params.writeVConfig)(Output(Bool()))
   val vlIsVlmax = Option.when(params.writeVConfig)(Output(Bool()))
-  val mxIsZero = Option.when(params.writeMx)(Output(Bool()))
-  val mxIsMxmax = Option.when(params.writeMx)(Output(Bool()))
-
-  val mtype = Option.when(params.writeMType)((Valid(new MType)))
+  val xmxrm = Option.when(params.needSrcXmcsr)(Input(UInt(2.W)))
+  val xmfrm = Option.when(params.needSrcXmcsr)(Input(UInt(3.W)))
+  val xmsaten = Option.when(params.needSrcXmcsr)(Input(UInt(1.W)))
 }

@@ -62,7 +62,6 @@ object RobBundles extends HasCircularQueuePtrHelper {
     val isRVC = Bool()
     val isVset = Bool()
     val isMsettilex = Bool()
-    val isMsettype = Bool()
     val isHls = Bool()
     val instrSize = UInt(log2Ceil(RenameWidth + 1).W)
     val needAmuCtrl = Bool()
@@ -108,7 +107,6 @@ object RobBundles extends HasCircularQueuePtrHelper {
     val isRVC = Bool()
     val isVset = Bool()
     val isMsettilex = Bool()
-    val isMsettype = Bool()
     val needAmuCtrl = Bool()
     val amuCtrl = new AmuCtrlIO // TODO: It's too big. Can we optimize it?
     val isHls = Bool()
@@ -145,7 +143,6 @@ object RobBundles extends HasCircularQueuePtrHelper {
     robEntry.isRVC := robEnq.preDecodeInfo.isRVC
     robEntry.isVset := robEnq.isVset
     robEntry.isMsettilex := robEnq.isMsettilex
-    robEntry.isMsettype := robEnq.isMsettype
     robEntry.isHls := robEnq.isHls
     robEntry.instrSize := robEnq.instrSize
     robEntry.rfWen := robEnq.rfWen
@@ -179,7 +176,6 @@ object RobBundles extends HasCircularQueuePtrHelper {
     robCommitEntry.isRVC := robEntry.isRVC
     robCommitEntry.isVset := robEntry.isVset
     robCommitEntry.isMsettilex := robEntry.isMsettilex
-    robCommitEntry.isMsettype := robEntry.isMsettype
     robCommitEntry.needAmuCtrl := robEntry.needAmuCtrl
     robCommitEntry.amuCtrl := robEntry.amuCtrl
     robCommitEntry.isHls := robEntry.isHls
@@ -314,7 +310,6 @@ class RobExceptionInfo(implicit p: Parameters) extends XSBundle {
   val flushPipe = Bool()
   val isVset = Bool()
   val isMsettilex = Bool()
-  val isMsettype = Bool()
   val needAmuCtrl = Bool()
   val replayInst = Bool() // redirect to that inst itself
   val singleStep = Bool() // TODO add frontend hit beneath

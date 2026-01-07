@@ -246,16 +246,16 @@ package object xiangshan {
     def wrti    = "b001_101".U
     def seti    = "b001_110".U
     def clri    = "b001_111".U
+    def minit   = "b001_000".U
 
     def isSystemOp (op: UInt): Bool = op(4)
     def isWfi      (op: UInt): Bool = op(5) && !op(1)
     def isWrsNto   (op: UInt): Bool = op(5) && op(1, 0) === "b10".U
     def isWrsSto   (op: UInt): Bool = op(5) && op(1, 0) === "b11".U
     def isCsrAccess(op: UInt): Bool = op(3)
-    def isReadOnly (op: UInt): Bool = op(3) && op(2, 0) === 0.U
-    def notReadOnly(op: UInt): Bool = op(3) && op(2, 0) =/= 0.U
     def isCSRRW    (op: UInt): Bool = op(3) && op(1, 0) === "b01".U
     def isCSRRSorRC(op: UInt): Bool = op(3) && op(1)
+    def isMinit    (op: UInt): Bool = op(3) && op(1, 0) === "b00".U
 
     def getCSROp(op: UInt) = op(1, 0)
     def needImm(op: UInt) = op(2)
@@ -458,27 +458,6 @@ package object xiangshan {
     def setVlmax(func: UInt)    = func | (1 << setVlmaxBit).U
   }
 
-  object MSETtypeOpType {
-    def msetsew    = "b0_000_0000".U
-    def msetint4   = "b0_000_0001".U
-    def msetint8   = "b0_000_0010".U
-    def msetint16  = "b0_000_0011".U
-    def msetint32  = "b0_000_0100".U
-    def msetint64  = "b0_000_0101".U
-    def msetfp8    = "b0_000_0110".U
-    def msetfp16   = "b0_000_0111".U
-    def msetfp32   = "b0_000_1000".U
-    def msetfp64   = "b0_000_1001".U
-    def msetba     = "b0_000_1010".U
-
-    def msettype   = "b1_001_0000".U
-    def msettypei  = "b0_001_0001".U
-    def msettypehi = "b0_001_0010".U
-
-    def isMsetTypeFromReg = (func: UInt) => func(7)
-    def isMsetTypeFromImm = (func: UInt) => !func(7)
-  }
-
   object MSETtilexOpType {
     def placeholder = "b1100_0000".U
 
@@ -583,103 +562,82 @@ package object xiangshan {
     def isLoad  (func: UInt) = func(8) === "b0".U
     def isStore (func: UInt) = func(8) === "b1".U
     
-    def isSync  (func: UInt) = func(7) === "b0".U
-    def isAsync (func: UInt) = func(7) === "b1".U
+    // def isSync  (func: UInt) = func(7) === "b0".U
+    // def isAsync (func: UInt) = func(7) === "b1".U
     
     def isMatrixA  (func: UInt) = func(3) === "b1".U
     def isMatrixB  (func: UInt) = func(4) === "b1".U
     def isMatrixC  (func: UInt) = func(5) === "b1".U
     def isWholeReg (func: UInt) = func(6) === "b1".U
-    def isTile     (func: UInt) = func(6) === "b1".U && func(2) === "b0".U
-    def isAccum    (func: UInt) = func(6) === "b1".U && func(2) === "b1".U
 
-    def isUntransposed (func: UInt) = func(6) =/= "b1".U && func(2) === "b0".U
-    def isTransposed   (func: UInt) = func(6) =/= "b1".U && func(2) === "b1".U
+    def isUntransposed (func: UInt) = func(2) === "b0".U
+    def isTransposed   (func: UInt) = func(2) === "b1".U
     
-    def isFp8  (func: UInt) = func(1, 0) === "b00".U
-    def isFp16 (func: UInt) = func(1, 0) === "b01".U
-    def isFp32 (func: UInt) = func(1, 0) === "b10".U
-    // def isFp64 (func: UInt) = func(1, 0) === "b11".U
+    def isE8  (func: UInt) = func(1, 0) === "b00".U
+    def isE16 (func: UInt) = func(1, 0) === "b01".U
+    def isE32 (func: UInt) = func(1, 0) === "b10".U
+    def isE64 (func: UInt) = func(1, 0) === "b11".U
     
     // Sync load/store
-    def mlaeFp8    = "b0_0_0001_0_00".U
-    def mlaeFp16   = "b0_0_0001_0_01".U
-    def mlaeFp32   = "b0_0_0001_0_10".U
-    def mlateFp8   = "b0_0_0001_1_00".U
-    def mlateFp16  = "b0_0_0001_1_01".U
-    def mlateFp32  = "b0_0_0001_1_10".U
-    def mlbeFp8    = "b0_0_0010_0_00".U
-    def mlbeFp16   = "b0_0_0010_0_01".U
-    def mlbeFp32   = "b0_0_0010_0_10".U
-    def mlbteFp8   = "b0_0_0010_1_00".U
-    def mlbteFp16  = "b0_0_0010_1_01".U
-    def mlbteFp32  = "b0_0_0010_1_10".U
-    def mlceFp8    = "b0_0_0100_0_00".U
-    def mlceFp16   = "b0_0_0100_0_01".U
-    def mlceFp32   = "b0_0_0100_0_10".U
-    def mlcteFp8   = "b0_0_0100_1_00".U
-    def mlcteFp16  = "b0_0_0100_1_01".U
-    def mlcteFp32  = "b0_0_0100_1_10".U
+    def mlae8    = "b0_0_0001_0_00".U
+    def mlae16   = "b0_0_0001_0_01".U
+    def mlae32   = "b0_0_0001_0_10".U
+    def mlae64   = "b0_0_0001_0_11".U
+    def mlate8   = "b0_0_0001_1_00".U
+    def mlate16  = "b0_0_0001_1_01".U
+    def mlate32  = "b0_0_0001_1_10".U
+    def mlate64  = "b0_0_0001_1_11".U
+    def mlbe8    = "b0_0_0010_0_00".U
+    def mlbe16   = "b0_0_0010_0_01".U
+    def mlbe32   = "b0_0_0010_0_10".U
+    def mlbe64   = "b0_0_0010_0_11".U
+    def mlbte8   = "b0_0_0010_1_00".U
+    def mlbte16  = "b0_0_0010_1_01".U
+    def mlbte32  = "b0_0_0010_1_10".U
+    def mlbte64  = "b0_0_0010_1_11".U
+    def mlce8    = "b0_0_0100_0_00".U
+    def mlce16   = "b0_0_0100_0_01".U
+    def mlce32   = "b0_0_0100_0_10".U
+    def mlce64   = "b0_0_0100_0_11".U
+    def mlcte8   = "b0_0_0100_1_00".U
+    def mlcte16  = "b0_0_0100_1_01".U
+    def mlcte32  = "b0_0_0100_1_10".U
+    def mlcte64  = "b0_0_0100_1_11".U
 
-    def mltreFp8   = "b0_0_1000_0_00".U
-    def mltreFp16  = "b0_0_1000_0_01".U
-    def mltreFp32  = "b0_0_1000_0_10".U
-    def mlacceFp8  = "b0_0_1000_1_00".U
-    def mlacceFp16 = "b0_0_1000_1_01".U
-    def mlacceFp32 = "b0_0_1000_1_10".U
+    def mlme8    = "b0_0_1000_0_00".U
+    def mlme16   = "b0_0_1000_0_01".U
+    def mlme32   = "b0_0_1000_0_10".U
+    def mlme64   = "b0_0_1000_0_11".U
 
-    def msaeFp8    = "b1_0_0001_0_00".U
-    def msaeFp16   = "b1_0_0001_0_01".U
-    def msaeFp32   = "b1_0_0001_0_10".U
-    def msateFp8   = "b1_0_0001_1_00".U
-    def msateFp16  = "b1_0_0001_1_01".U
-    def msateFp32  = "b1_0_0001_1_10".U
-    def msbeFp8    = "b1_0_0010_0_00".U
-    def msbeFp16   = "b1_0_0010_0_01".U
-    def msbeFp32   = "b1_0_0010_0_10".U
-    def msbteFp8   = "b1_0_0010_1_00".U
-    def msbteFp16  = "b1_0_0010_1_01".U
-    def msbteFp32  = "b1_0_0010_1_10".U
-    def msceFp8    = "b1_0_0100_0_00".U
-    def msceFp16   = "b1_0_0100_0_01".U
-    def msceFp32   = "b1_0_0100_0_10".U
-    def mscteFp8   = "b1_0_0100_1_00".U
-    def mscteFp16  = "b1_0_0100_1_01".U
-    def mscteFp32  = "b1_0_0100_1_10".U
+    def msae8    = "b1_0_0001_0_00".U
+    def msae16   = "b1_0_0001_0_01".U
+    def msae32   = "b1_0_0001_0_10".U
+    def msae64   = "b1_0_0001_0_11".U
+    def msate8   = "b1_0_0001_1_00".U
+    def msate16  = "b1_0_0001_1_01".U
+    def msate32  = "b1_0_0001_1_10".U
+    def msate64  = "b1_0_0001_1_11".U
+    def msbe8    = "b1_0_0010_0_00".U
+    def msbe16   = "b1_0_0010_0_01".U
+    def msbe32   = "b1_0_0010_0_10".U
+    def msbe64   = "b1_0_0010_0_11".U
+    def msbte8   = "b1_0_0010_1_00".U
+    def msbte16  = "b1_0_0010_1_01".U
+    def msbte32  = "b1_0_0010_1_10".U
+    def msbte64  = "b1_0_0010_1_11".U
+    def msce8    = "b1_0_0100_0_00".U
+    def msce16   = "b1_0_0100_0_01".U
+    def msce32   = "b1_0_0100_0_10".U
+    def msce64   = "b1_0_0100_0_11".U
+    def mscte8   = "b1_0_0100_1_00".U
+    def mscte16  = "b1_0_0100_1_01".U
+    def mscte32  = "b1_0_0100_1_10".U
+    def mscte64  = "b1_0_0100_1_11".U
 
-    def mstreFp8   = "b1_0_1000_0_00".U
-    def mstreFp16  = "b1_0_1000_0_01".U
-    def mstreFp32  = "b1_0_1000_0_10".U
-    def msacceFp8  = "b1_0_1000_1_00".U
-    def msacceFp16 = "b1_0_1000_1_01".U
-    def msacceFp32 = "b1_0_1000_1_10".U
-
-    // Async store
-    def msaeFp8Async    = "b1_1_0001_0_00".U
-    def msaeFp16Async   = "b1_1_0001_0_01".U
-    def msaeFp32Async   = "b1_1_0001_0_10".U
-    def msateFp8Async   = "b1_1_0001_1_00".U
-    def msateFp16Async  = "b1_1_0001_1_01".U
-    def msateFp32Async  = "b1_1_0001_1_10".U
-    def msbeFp8Async    = "b1_1_0010_0_00".U
-    def msbeFp16Async   = "b1_1_0010_0_01".U
-    def msbeFp32Async   = "b1_1_0010_0_10".U
-    def msbteFp8Async   = "b1_1_0010_1_00".U
-    def msbteFp16Async  = "b1_1_0010_1_01".U
-    def msbteFp32Async  = "b1_1_0010_1_10".U
-    def msceFp8Async    = "b1_1_0100_0_00".U
-    def msceFp16Async   = "b1_1_0100_0_01".U
-    def msceFp32Async   = "b1_1_0100_0_10".U
-    def mscteFp8Async   = "b1_1_0100_1_00".U
-    def mscteFp16Async  = "b1_1_0100_1_01".U
-    def mscteFp32Async  = "b1_1_0100_1_10".U
-    
-    def mstreFp8Async   = "b1_1_1000_0_00".U
-    def mstreFp16Async  = "b1_1_1000_0_01".U
-    def mstreFp32Async  = "b1_1_1000_0_10".U
-    def msacceFp8Async  = "b1_1_1000_1_00".U
-    def msacceFp16Async = "b1_1_1000_1_01".U
-    def msacceFp32Async = "b1_1_1000_1_10".U
+    def msme8    = "b1_0_1000_0_00".U
+    def msme16   = "b1_0_1000_0_01".U
+    def msme32   = "b1_0_1000_0_10".U
+    def msme64   = "b1_0_1000_0_11".U
   }
 
   object MmulOpType {
@@ -694,119 +652,54 @@ package object xiangshan {
     // to: target element width, 2'b00 for 1W, 2'b01 for 2W, 2'b10 for 4W
     // sat: 0 for no saturation, 1 for saturation
 
+    def hybridprec    (func: UInt) = func(8) === "b1".U
+
     def isInt         (func: UInt) = func(7) === "b0".U
     def isFloat       (func: UInt) = func(7) === "b1".U
 
-    def isSigned      (func: UInt) = func(6) === "b1".U // always true for float
-    def isUnsigned    (func: UInt) = func(6) === "b0".U // only for unsigned int
+    def isFp16     (func: UInt) = isFloat(func) && !func(6)
+    def isBf16     (func: UInt) = isFloat(func) && func(6)
+    def isE5m2     (func: UInt) = isFloat(func) && !func(4)
+    def isE4m3     (func: UInt) = isFloat(func) && func(4)
+    def isFp32     (func: UInt) = isFloat(func) && !func(4)
+    def isTf32     (func: UInt) = isFloat(func) && func(4)
 
-    def isFromE4   (func: UInt) = func(5, 3) === MSew.e4
-    def isFromE8   (func: UInt) = func(5, 3) === MSew.e8
-    def isFromE16  (func: UInt) = func(5, 3) === MSew.e16
-    def isFromE32  (func: UInt) = func(5, 3) === MSew.e32
-    def isFromE64  (func: UInt) = func(5, 3) === MSew.e64
-    def isFromMsew (func: UInt) = func(5, 3) === "b100".U
+    def ms1sign    (func: UInt) = isInt(func) && func(5)
+    def ms1unsigned(func: UInt) = isInt(func) && !func(5)
+    def ms2sign    (func: UInt) = isInt(func) && func(4)
+    def ms2unsigned(func: UInt) = isInt(func) && !func(4)
 
-    def isTo1W     (func: UInt) = func(2, 1) === "b00".U
-    def isTo2W     (func: UInt) = func(2, 1) === "b01".U
-    def isTo4W     (func: UInt) = func(2, 1) === "b10".U
+    def isFromE4   (func: UInt) = func(3, 2) === "b11".U
+    def isFromE8   (func: UInt) = func(3, 2) === "b00".U
+    def isFromE16  (func: UInt) = func(3, 2) === "b01".U
+    def isFromE32  (func: UInt) = func(3, 2) === "b10".U
 
-    def isSat      (func: UInt) = func(0) === "b1".U
+    def isToE4     (func: UInt) = func(1, 0) === "b11".U
+    def isToE8     (func: UInt) = func(1, 0) === "b00".U
+    def isToE16    (func: UInt) = func(1, 0) === "b01".U
+    def isToE32    (func: UInt) = func(1, 0) === "b10".U
 
-    // MMAU.MM: int,unsigned,msew,nowiden(1W),nosaturate
-    def MMAU    = "b0_0_100_00_0".U
-    // MMAU.H: int,unsigned,int16,nowiden(1W),nosaturate
-    def MMAU_H  = "b0_0_001_00_0".U
-    // MMAU.W: int,unsigned,int32,nowiden(1W),nosaturate
-    def MMAU_W  = "b0_0_010_00_0".U
-    // MMAU.DW: int,unsigned,int64,nowiden(1W),nosaturate
-    def MMAU_DW = "b0_0_011_00_0".U
+    def mma_e5m2_fp16 = "b0_1_000_00_01".U
+    def mma_e4m3_fp16 = "b0_1_001_00_01".U
+    def mma_e5m2_bf16 = "b0_1_100_00_01".U
+    def mma_e4m3_bf16 = "b0_1_101_00_01".U
+    def mma_e5m2_fp32 = "b0_1_000_00_10".U
+    def mma_e4m3_fp32 = "b0_1_001_00_10".U
+    def mma_fp16_fp16 = "b0_1_000_01_01".U
+    def mma_fp16_fp32 = "b0_1_000_01_10".U
+    def mma_bf16_fp32 = "b0_1_100_01_10".U
 
-    // MWMAU.MM: int,unsigned,msew,widen(2W),nosaturate
-    def MWMAU   = "b0_0_100_01_0".U
-    // MWMAU.H: int,unsigned,int16,widen(2W),nosaturate
-    def MWMAU_H = "b0_0_001_01_0".U
-    // MWMAU.W: int,unsigned,int32,widen(2W),nosaturate
-    def MWMAU_W = "b0_0_010_01_0".U
+    def mma_int8_int32    = "b0_0_011_00_10".U
+    def mma_uint8_int32   = "b0_0_000_00_10".U
+    def mma_usint8_int32  = "b0_0_001_00_10".U
+    def mma_suint8_uint32 = "b0_0_010_00_10".U
+    def mma_int4_int32    = "b0_0_011_11_10".U
+    def mma_uint4_uint32  = "b0_0_000_11_10".U
+    def mma_usint4_uint32 = "b0_0_001_11_10".U
+    def mma_suint4_int32  = "b0_0_010_11_10".U
 
-    // MQMAU.MM: int,unsigned,msew,quad widen(4W),nosaturate
-    def MQMAU   = "b0_0_100_10_0".U
-    // MQMAU.B: int,unsigned,int8,quad widen(4W),nosaturate
-    def MQMAU_B = "b0_0_001_10_0".U
-
-    // MMA.MM: int,signed,msew,nowiden(1W),nosaturate
-    def MMA     = "b0_1_100_00_0".U
-    // MMA.H: int,signed,int16,nowiden(1W),nosaturate
-    def MMA_H   = "b0_1_001_00_0".U
-    // MMA.W: int,signed,int32,nowiden(1W),nosaturate
-    def MMA_W   = "b0_1_010_00_0".U
-    // MMA.DW: int,signed,int64,nowiden(1W),nosaturate
-    def MMA_DW  = "b0_1_011_00_0".U
-
-    // MWMA.MM: int,signed,msew,widen(2W),nosaturate
-    def MWMA    = "b0_1_100_01_0".U
-    // MWMA.H: int,signed,int16,widen(2W),nosaturate
-    def MWMA_H  = "b0_1_001_01_0".U
-    // MWMA.W: int,signed,int32,widen(2W),nosaturate
-    def MWMA_W  = "b0_1_010_01_0".U
-    // MWMA.DW: int,signed,int64,widen(2W),nosaturate
-    def MWMA_DW = "b0_1_011_01_0".U
-
-    // MQMA.MM: int,signed,msew,quad widen(4W),nosaturate
-    def MQMA    = "b0_1_100_10_0".U
-    // MQMA.B: int,signed,int8,quad widen(4W),nosaturate
-    def MQMA_B  = "b0_1_001_10_0".U
-
-    // MFMA.MM: float,unsigned,msew,nowiden(1W)
-    def MFMA    = "b1_1_100_00_0".U
-    // MFMA.CF: float,unsigned,fp8,nowiden(1W)
-    def MFMA_CF = "b1_1_000_00_0".U
-    // MFMA.HF: float,unsigned,fp16,nowiden(1W)
-    def MFMA_HF = "b1_1_001_00_0".U
-    // MFMA.F: float,unsigned,fp32,nowiden(1W)
-    def MFMA_F  = "b1_1_010_00_0".U
-
-    // MFWMA.MM: float,unsigned,msew,nowiden(1W)
-    def MFWMA    = "b1_1_100_01_0".U
-    // MFWMA.CF: float,unsigned,fp8,nowiden(1W)
-    def MFWMA_CF = "b1_1_000_01_0".U
-    // MFWMA.HF: float,unsigned,fp16,nowiden(1W)
-    def MFWMA_HF = "b1_1_001_01_0".U
-
-    // MFQMA.MM: float,unsigned,msew,quad widen(4W)
-    def MFQMA    = "b1_1_100_10_0".U
-    // MFQMA.CF: float,unsigned,fp8,quad widen(4W)
-    def MFQMA_CF = "b1_1_000_10_0".U
-
-    def getFromType (func: UInt): UInt = func(5, 3)
-    def getToType   (func: UInt): UInt = {
-      val wide = WireInit(func(2, 1))
-      val toType = WireInit(0.U(3.W))
-      switch(wide) {
-        is("b00".U) {
-          toType := getFromType(func)
-        }
-        is("b01".U) {
-          toType := MuxLookup(getFromType(func), "b100".U)(Seq(
-            MSew.e4  -> MSew.e8,
-            MSew.e8  -> MSew.e16,
-            MSew.e16 -> MSew.e32,
-            MSew.e32 -> MSew.e64
-          ))
-        }
-        is("b10".U) {
-          toType := MuxLookup(getFromType(func), "b100".U)(Seq(
-            MSew.e4  -> MSew.e16,
-            MSew.e8  -> MSew.e32,
-            MSew.e16 -> MSew.e64
-          ))
-        }
-        is("b11".U) {
-          toType := "b100".U
-        }
-      }
-      toType
-    }
+    def getFromType(func: UInt) = func(3, 2)
+    def getToType(func: UInt) = func(1, 0)
   }
 
   object MarithOpType {
@@ -985,7 +878,6 @@ package object xiangshan {
     def isZero (func: UInt) = func(5, 3) === "b111".U
 
     def isDoubleWiden (func: UInt) = func(2) === "b1".U
-    def isZeroAcc     (func: UInt) = func(2) === "b1".U // only for MZERO inst
     
     // The same as the broadcast
     // def isWidth8  (func: UInt) = func(1, 0) === "b00".U
@@ -1031,8 +923,10 @@ package object xiangshan {
     def mfsqrt32 = "b111_110_0_10".U
     def mfsqrt64 = "b111_110_0_11".U
 
-    def mzeroacc = "b110_111_1_00".U
-    def mzerotr  = "b110_111_0_00".U
+    def mzero1r  = "b110_111_0_00".U
+    def mzero2r  = "b110_111_0_01".U
+    def mzero4r  = "b110_111_0_10".U
+    def mzero8r  = "b110_111_0_11".U
   }
 
   object MmvefOpType {
@@ -1368,71 +1262,61 @@ package object xiangshan {
   }
 
   object UopSplitType {
-    def SCA_SIM          = "b0000000".U //
-    def VSET             = "b0010001".U // dirty: vset
-    def VEC_VVV          = "b0010010".U // VEC_VVV
-    def VEC_VXV          = "b0010011".U // VEC_VXV
-    def VEC_0XV          = "b0010100".U // VEC_0XV
-    def VEC_VVW          = "b0010101".U // VEC_VVW
-    def VEC_WVW          = "b0010110".U // VEC_WVW
-    def VEC_VXW          = "b0010111".U // VEC_VXW
-    def VEC_WXW          = "b0011000".U // VEC_WXW
-    def VEC_WVV          = "b0011001".U // VEC_WVV
-    def VEC_WXV          = "b0011010".U // VEC_WXV
-    def VEC_EXT2         = "b0011011".U // VF2 0 -> V
-    def VEC_EXT4         = "b0011100".U // VF4 0 -> V
-    def VEC_EXT8         = "b0011101".U // VF8 0 -> V
-    def VEC_VVM          = "b0011110".U // VEC_VVM
-    def VEC_VXM          = "b0011111".U // VEC_VXM
-    def VEC_SLIDE1UP     = "b0100000".U // vslide1up.vx
-    def VEC_FSLIDE1UP    = "b0100001".U // vfslide1up.vf
-    def VEC_SLIDE1DOWN   = "b0100010".U // vslide1down.vx
-    def VEC_FSLIDE1DOWN  = "b0100011".U // vfslide1down.vf
-    def VEC_VRED         = "b0100100".U // VEC_VRED
-    def VEC_SLIDEUP      = "b0100101".U // VEC_SLIDEUP
-    def VEC_SLIDEDOWN    = "b0100111".U // VEC_SLIDEDOWN
-    def VEC_M0X          = "b0101001".U // VEC_M0X  0MV
-    def VEC_MVV          = "b0101010".U // VEC_MVV  VMV
-    def VEC_VWW          = "b0101100".U //
-    def VEC_RGATHER      = "b0101101".U // vrgather.vv, vrgather.vi
-    def VEC_RGATHER_VX   = "b0101110".U // vrgather.vx
-    def VEC_RGATHEREI16  = "b0101111".U // vrgatherei16.vv
-    def VEC_COMPRESS     = "b0110000".U // vcompress.vm
-    def VEC_US_LDST      = "b0110001".U // vector unit-strided load/store
-    def VEC_S_LDST       = "b0110010".U // vector strided load/store
-    def VEC_I_LDST       = "b0110011".U // vector indexed load/store
-    def VEC_US_FF_LD     = "b0110100".U // vector unit-stride fault-only-first load
-    def VEC_VFV          = "b0111000".U // VEC_VFV
-    def VEC_VFW          = "b0111001".U // VEC_VFW
-    def VEC_WFW          = "b0111010".U // VEC_WVW
-    def VEC_VFM          = "b0111011".U // VEC_VFM
-    def VEC_VFRED        = "b0111100".U // VEC_VFRED
-    def VEC_VFREDOSUM    = "b0111101".U // VEC_VFREDOSUM
-    def VEC_MVNR         = "b0000100".U // vmvnr
+    def SCA_SIM          = "b000000".U //
+    def VSET             = "b010001".U // dirty: vset
+    def VEC_VVV          = "b010010".U // VEC_VVV
+    def VEC_VXV          = "b010011".U // VEC_VXV
+    def VEC_0XV          = "b010100".U // VEC_0XV
+    def VEC_VVW          = "b010101".U // VEC_VVW
+    def VEC_WVW          = "b010110".U // VEC_WVW
+    def VEC_VXW          = "b010111".U // VEC_VXW
+    def VEC_WXW          = "b011000".U // VEC_WXW
+    def VEC_WVV          = "b011001".U // VEC_WVV
+    def VEC_WXV          = "b011010".U // VEC_WXV
+    def VEC_EXT2         = "b011011".U // VF2 0 -> V
+    def VEC_EXT4         = "b011100".U // VF4 0 -> V
+    def VEC_EXT8         = "b011101".U // VF8 0 -> V
+    def VEC_VVM          = "b011110".U // VEC_VVM
+    def VEC_VXM          = "b011111".U // VEC_VXM
+    def VEC_SLIDE1UP     = "b100000".U // vslide1up.vx
+    def VEC_FSLIDE1UP    = "b100001".U // vfslide1up.vf
+    def VEC_SLIDE1DOWN   = "b100010".U // vslide1down.vx
+    def VEC_FSLIDE1DOWN  = "b100011".U // vfslide1down.vf
+    def VEC_VRED         = "b100100".U // VEC_VRED
+    def VEC_SLIDEUP      = "b100101".U // VEC_SLIDEUP
+    def VEC_SLIDEDOWN    = "b100111".U // VEC_SLIDEDOWN
+    def VEC_M0X          = "b101001".U // VEC_M0X  0MV
+    def VEC_MVV          = "b101010".U // VEC_MVV  VMV
+    def VEC_VWW          = "b101100".U //
+    def VEC_RGATHER      = "b101101".U // vrgather.vv, vrgather.vi
+    def VEC_RGATHER_VX   = "b101110".U // vrgather.vx
+    def VEC_RGATHEREI16  = "b101111".U // vrgatherei16.vv
+    def VEC_COMPRESS     = "b110000".U // vcompress.vm
+    def VEC_US_LDST      = "b110001".U // vector unit-strided load/store
+    def VEC_S_LDST       = "b110010".U // vector strided load/store
+    def VEC_I_LDST       = "b110011".U // vector indexed load/store
+    def VEC_US_FF_LD     = "b110100".U // vector unit-stride fault-only-first load
+    def VEC_VFV          = "b111000".U // VEC_VFV
+    def VEC_VFW          = "b111001".U // VEC_VFW
+    def VEC_WFW          = "b111010".U // VEC_WVW
+    def VEC_VFM          = "b111011".U // VEC_VFM
+    def VEC_VFRED        = "b111100".U // VEC_VFRED
+    def VEC_VFREDOSUM    = "b111101".U // VEC_VFREDOSUM
+    def VEC_MVNR         = "b000100".U // vmvnr
 
-    def AMO_CAS_W        = "b0110101".U // amocas_w
-    def AMO_CAS_D        = "b0110110".U // amocas_d
-    def AMO_CAS_Q        = "b0110111".U // amocas_q
+    def AMO_CAS_W        = "b110101".U // amocas_w
+    def AMO_CAS_D        = "b110110".U // amocas_d
+    def AMO_CAS_Q        = "b110111".U // amocas_q
 
-    def MSETTILEX        = "b1000001".U // msettilex
-    def MSETTYPE         = "b1000010".U // msettype
-    def MAT_MEM          = "b1100001".U // matrix load/store
-    def MAT_MUL          = "b1100010".U // matrix multiply
-    def MAT_ARITH        = "b1100011".U // matrix arithmetic
-    def MAT_CVT          = "b1100100".U // matrix type convert
-    def MAT_MBC          = "b1100101".U // matrix broadcast
     // dummy means that the instruction is a complex instruction but uop number is 1
-    def dummy     = "b1111111".U
+    def dummy     = "b111111".U
 
-    def X = BitPat("b00000000")
+    def X = BitPat("b000000")
 
     def apply() = UInt(7.W)
     def needSplit(UopSplitType: UInt) = UopSplitType(4) || UopSplitType(5)
 
     def isAMOCAS(UopSplitType: UInt): Bool = UopSplitType === AMO_CAS_W || UopSplitType === AMO_CAS_D || UopSplitType === AMO_CAS_Q
-
-    def isVEC(UopSplitType: UInt): Bool = UopSplitType(6) === "b0".U && !isAMOCAS(UopSplitType)
-    def isMATRIX(UopSplitType: UInt): Bool = UopSplitType(6) === "b1".U
   }
 
   object ExceptionNO {

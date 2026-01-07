@@ -289,23 +289,36 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
       difftestAmuCtrl.coreid := io.hartId.get
       difftestAmuCtrl.index  := i.U
       when (amuCtrl.bits.isMma()) {
+        // difftestAmuCtrl.md       := mmaio.md
+        // difftestAmuCtrl.sat      := mmaio.sat
+        // difftestAmuCtrl.isfp     := mmaio.isfp
+        // difftestAmuCtrl.issigned := mmaio.issigned
+        // difftestAmuCtrl.ms1      := mmaio.ms1
+        // difftestAmuCtrl.ms2      := mmaio.ms2
+        // difftestAmuCtrl.mtilem   := mmaio.mtilem
+        // difftestAmuCtrl.mtilen   := mmaio.mtilen
+        // difftestAmuCtrl.mtilek   := mmaio.mtilek
+        // difftestAmuCtrl.types    := mmaio.types
+        // difftestAmuCtrl.typed    := mmaio.typed
+
+        difftestAmuCtrl.rm       := mmaio.rm
         difftestAmuCtrl.md       := mmaio.md
         difftestAmuCtrl.sat      := mmaio.sat
-        difftestAmuCtrl.isfp     := mmaio.isfp
-        difftestAmuCtrl.issigned := mmaio.issigned
         difftestAmuCtrl.ms1      := mmaio.ms1
         difftestAmuCtrl.ms2      := mmaio.ms2
         difftestAmuCtrl.mtilem   := mmaio.mtilem
         difftestAmuCtrl.mtilen   := mmaio.mtilen
         difftestAmuCtrl.mtilek   := mmaio.mtilek
-        difftestAmuCtrl.types    := mmaio.types
+        difftestAmuCtrl.types1   := mmaio.types1
+        difftestAmuCtrl.types2   := mmaio.types2
         difftestAmuCtrl.typed    := mmaio.typed
+        difftestAmuCtrl.isfp     := mmaio.isfp
       }
       when (amuCtrl.bits.isMls()) {
         difftestAmuCtrl.ms        := mlsio.ms
         difftestAmuCtrl.ls        := mlsio.ls
         difftestAmuCtrl.transpose := mlsio.transpose
-        difftestAmuCtrl.isacc     := mlsio.isacc
+        difftestAmuCtrl.types1    := mlsio.isacc
         difftestAmuCtrl.base      := mlsio.baseAddr
         difftestAmuCtrl.stride    := mlsio.stride
         difftestAmuCtrl.row       := mlsio.row

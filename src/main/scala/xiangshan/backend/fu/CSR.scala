@@ -58,11 +58,13 @@ class VpuCsrIO(implicit p: Parameters) extends XSBundle {
 }
 
 class MpuCsrIO(implicit p: Parameters) extends XSBundle {
+  val xmxrm = Input(UInt(2.W))
+  val xmfrm = Input(UInt(3.W))
+  val xmsaten = Input(UInt(1.W))
+  
   val mtilem = Output(UInt(XLEN.W))
   val mtilen = Output(UInt(XLEN.W))
   val mtilek = Output(UInt(XLEN.W))
-  
-  val set_mtype = Output(Valid(UInt(XLEN.W)))
 
   val dirty_ms = Output(Bool())
 }
@@ -142,22 +144,6 @@ class VtypeStruct(implicit p: Parameters) extends XSBundle {
   val vta = UInt(1.W)
   val vsew = UInt(3.W)
   val vlmul = UInt(3.W)
-}
-
-class MtypeStruct(implicit p: Parameters) extends XSBundle {
-  val mill = UInt(1.W)
-  val reserved = UInt((XLEN - 17).W)
-  val mba = UInt(1.W)
-  val mfp64 = UInt(1.W)
-  val mfp32 = UInt(2.W)
-  val mfp16 = UInt(2.W)
-  val mfp8 = UInt(2.W)
-  val mint64 = UInt(1.W)
-  val mint32 = UInt(1.W)
-  val mint16 = UInt(1.W)
-  val mint8 = UInt(1.W)
-  val mint4 = UInt(1.W)
-  val msew = UInt(3.W)
 }
 
 /*

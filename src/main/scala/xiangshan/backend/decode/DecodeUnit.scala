@@ -31,7 +31,6 @@ import xiangshan.backend.fu.FuType
 import xiangshan.backend.Bundles.{DecodedInst, DynInst, StaticInst}
 import xiangshan.backend.decode.isa.PseudoInstructions
 import xiangshan.backend.decode.isa.bitfield.{InstVType, OPCODE5Bit, XSInstBitFields}
-import xiangshan.backend.fu.matrix.Bundles.{MType, Mtilex}
 import xiangshan.backend.fu.vector.Bundles.{VType, Vl}
 import xiangshan.backend.fu.wrapper.CSRToDecode
 import xiangshan.backend.decode.Zimop._
@@ -724,7 +723,7 @@ case class Imm_VRORVI() extends Imm(6){
   }
 }
 
-// Used in msettypei, msettypehi, msettilemi, msettileni, msettileki
+// Used in msettilemi, msettileni, msettileki
 case class Imm_MSET() extends Imm(10){
   // TODO: check if this is correct
   override def do_toImm32(minBits: UInt): UInt = ZeroExt(minBits, 32)
@@ -757,11 +756,11 @@ case class Imm_CSRCONST() extends Imm(20){
   }
 }
 
-case class Imm_MATRIXREG() extends Imm(12){
+case class Imm_MATRIXREG() extends Imm(9){
   override def do_toImm32(minBits: UInt): UInt = ZeroExt(minBits, 32)
 
   override def minBitsFromInstr(instr: UInt): UInt = {
-    Cat(instr(23, 20), instr(18, 15), instr(10, 7))
+    Cat(instr(22, 20), instr(17, 15), instr(9, 7))
   }
 }
 
@@ -828,7 +827,6 @@ class DecodeUnitEnqIO(implicit p: Parameters) extends XSBundle {
   val ctrlFlow = Input(new StaticInst)
   val vtype = Input(new VType)
   val vstart = Input(Vl())
-  val mtype = Input(new MType)
 }
 
 class DecodeUnitDeqIO(implicit p: Parameters) extends XSBundle {
@@ -1010,7 +1008,6 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
 
   decodedInst.isVset      := FuType.isVset(decodedInst.fuType)
   decodedInst.isMsettilex := FuType.isMsettilex(decodedInst.fuType)
-  decodedInst.isMsettype  := FuType.isMsettype(decodedInst.fuType)
   decodedInst.needAmuCtrl := FuType.needAmuCtrl(decodedInst.fuType)
 
   private val needReverseInsts = Seq(VRSUB_VI, VRSUB_VX, VFRDIV_VF, VFRSUB_VF, VFMV_F_S)
@@ -1140,31 +1137,6 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   decodedInst.srcType(3) := Mux(inst.VM === 0.U, SrcType.vp, SrcType.DC) // mask src
   decodedInst.srcType(4) := SrcType.vp // vconfig
 
-  decodedInst.mpu := 0.U.asTypeOf(decodedInst.mpu)
-  decodedInst.mpu.mill := io.enq.mtype.illegal
-  decodedInst.mpu.mba := io.enq.mtype.mba
-  decodedInst.mpu.mfp64 := io.enq.mtype.mfp64
-  decodedInst.mpu.mfp32 := io.enq.mtype.mfp32
-  decodedInst.mpu.mfp16 := io.enq.mtype.mfp16
-  decodedInst.mpu.mfp8 := io.enq.mtype.mfp8
-  decodedInst.mpu.mint64 := io.enq.mtype.mint64
-  decodedInst.mpu.mint32 := io.enq.mtype.mint32
-  decodedInst.mpu.mint16 := io.enq.mtype.mint16
-  decodedInst.mpu.mint8 := io.enq.mtype.mint8
-  decodedInst.mpu.msew := io.enq.mtype.msew
-  decodedInst.mpu.specMill := io.enq.mtype.illegal
-  decodedInst.mpu.specMba := io.enq.mtype.mba
-  decodedInst.mpu.specMfp64 := io.enq.mtype.mfp64
-  decodedInst.mpu.specMfp32 := io.enq.mtype.mfp32
-  decodedInst.mpu.specMfp16 := io.enq.mtype.mfp16
-  decodedInst.mpu.specMfp8 := io.enq.mtype.mfp8
-  decodedInst.mpu.specMint64 := io.enq.mtype.mint64
-  decodedInst.mpu.specMint32 := io.enq.mtype.mint32
-  decodedInst.mpu.specMint16 := io.enq.mtype.mint16
-  decodedInst.mpu.specMint8 := io.enq.mtype.mint8
-  decodedInst.mpu.specMint4 := io.enq.mtype.mint4
-  decodedInst.mpu.specMsew := io.enq.mtype.msew
-
   val uopInfoGen = Module(new UopInfoGen)
   uopInfoGen.io.in.preInfo.isVecArith := inst.isVecArith
   uopInfoGen.io.in.preInfo.isVecMem := inst.isVecStore || inst.isVecLoad
@@ -1187,10 +1159,11 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   io.deq.uopInfo.numOfWB := uopInfoGen.io.out.uopInfo.numOfWB
   io.deq.uopInfo.lmul := uopInfoGen.io.out.uopInfo.lmul
 
-  // The same as above, but for mlenb, mrlenb, mamul, mtilem, mtilen, mtilek
-  val isCsrrMlenb  = isCsrr && inst.CSRIDX === CSRs.mlenb.U
-  val isCsrrMrlenb = isCsrr && inst.CSRIDX === CSRs.mrlenb.U
-  val isCsrrMamul  = isCsrr && inst.CSRIDX === CSRs.mamul.U
+  // The same as above, but for xmisa, xtlenb, xtrlenb, xalenb, mtok, mtilem, mtilen, mtilek
+  val isCsrrXmisa = isCsrr && inst.CSRIDX === CSRs.xmisa.U
+  val isCsrrXtlenb = isCsrr && inst.CSRIDX === CSRs.xtlenb.U
+  val isCsrrXtrlenb = isCsrr && inst.CSRIDX === CSRs.xtrlenb.U
+  val isCsrrXalenb = isCsrr && inst.CSRIDX === CSRs.xalenb.U
   val isCsrrMtok   = isCsrr && inst.CSRIDX === CSRs.mtok.U
   val isCsrrMtilem = isCsrr && inst.CSRIDX === CSRs.mtilem.U
   val isCsrrMtilen = isCsrr && inst.CSRIDX === CSRs.mtilen.U
@@ -1205,6 +1178,10 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   // for fli.s|fli.d instruction
   val isFLI = inst.FUNCT7 === BitPat("b11110??") && inst.RS2 === 1.U && inst.RM === 0.U && inst.OPCODE5Bit === OPCODE5Bit.OP_FP
 
+  val isMsettilex = FuType.isMsettilex(decodedInst.fuType)
+  val isMMA = FuType.isMMA(decodedInst.fuType)
+  val isMls = FuType.isMls(decodedInst.fuType)
+
   when (isCsrrVl) {
     // convert to vsetvl instruction
     decodedInst.srcType(0) := SrcType.no
@@ -1216,33 +1193,13 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     decodedInst.waitForward   := false.B
     decodedInst.blockBackward := false.B
     decodedInst.exceptionVec(illegalInstr) := io.fromCSR.illegalInst.vsIsOff
-  }.elsewhen (isCsrrMtilem) {
+  }.elsewhen (isCsrrMtilem || isCsrrMtilen || isCsrrMtilek) {
     decodedInst.srcType(0) := SrcType.no
     decodedInst.srcType(1) := SrcType.no
     decodedInst.srcType(2) := SrcType.mx
     decodedInst.srcType(3) := SrcType.no
     decodedInst.srcType(4) := SrcType.no
-    decodedInst.lsrc(2)    := Mtilem_IDX.U
-    decodedInst.waitForward   := false.B
-    decodedInst.blockBackward := false.B
-    decodedInst.exceptionVec(illegalInstr) := io.fromCSR.illegalInst.msIsOff
-  }.elsewhen (isCsrrMtilen) {
-    decodedInst.srcType(0) := SrcType.no
-    decodedInst.srcType(1) := SrcType.no
-    decodedInst.srcType(2) := SrcType.mx
-    decodedInst.srcType(3) := SrcType.no
-    decodedInst.srcType(4) := SrcType.no
-    decodedInst.lsrc(2)    := Mtilen_IDX.U
-    decodedInst.waitForward   := false.B
-    decodedInst.blockBackward := false.B
-    decodedInst.exceptionVec(illegalInstr) := io.fromCSR.illegalInst.msIsOff
-  }.elsewhen (isCsrrMtilek) {
-    decodedInst.srcType(0) := SrcType.no
-    decodedInst.srcType(1) := SrcType.no
-    decodedInst.srcType(2) := SrcType.mx
-    decodedInst.srcType(3) := SrcType.no
-    decodedInst.srcType(4) := SrcType.no
-    decodedInst.lsrc(2)    := Mtilek_IDX.U
+    decodedInst.lsrc(2)    := inst.CSRIDX - CSRs.mtilem.U
     decodedInst.waitForward   := false.B
     decodedInst.blockBackward := false.B
     decodedInst.exceptionVec(illegalInstr) := io.fromCSR.illegalInst.msIsOff
@@ -1258,7 +1215,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     decodedInst.blockBackward := false.B
     decodedInst.canRobCompress := true.B
     decodedInst.exceptionVec(illegalInstr) := io.fromCSR.illegalInst.vsIsOff
-  }.elsewhen (isCsrrMlenb || isCsrrMrlenb || isCsrrMamul || isCsrrMtok) {
+  }.elsewhen (isCsrrXmisa || isCsrrXtlenb || isCsrrXtrlenb || isCsrrXalenb || isCsrrMtok) {
     // convert to addi instruction
     decodedInst.srcType(0) := SrcType.reg
     decodedInst.srcType(1) := SrcType.imm
@@ -1280,6 +1237,37 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     decodedInst.srcType(1) := SrcType.imm
     // use x0 as src1
     decodedInst.lsrc(0) := 0.U
+  }.elsewhen (isMsettilex) {
+    decodedInst.mxWen      := true.B
+    decodedInst.ldest      := MSETtilexOpType.toMxIdx(decodedInst.fuOpType)
+  }.elsewhen (isMMA) {
+    decodedInst.srcType(0) := SrcType.no
+    decodedInst.srcType(1) := SrcType.no
+    decodedInst.srcType(2) := SrcType.mx
+    decodedInst.srcType(3) := SrcType.mx
+    decodedInst.srcType(4) := SrcType.mx
+    decodedInst.lsrc(2) := Mtilem_IDX.U
+    decodedInst.lsrc(3) := Mtilen_IDX.U
+    decodedInst.lsrc(4) := Mtilek_IDX.U
+  }.elsewhen (isMls) {
+    decodedInst.srcType(0) := SrcType.xp
+    decodedInst.srcType(1) := SrcType.xp
+    when (MldstOpType.isWholeReg(decodedInst.fuOpType)) {
+      decodedInst.srcType(2) := SrcType.no
+      decodedInst.srcType(3) := SrcType.no
+    }.otherwise {
+      decodedInst.srcType(2) := SrcType.mx
+      decodedInst.srcType(3) := SrcType.mx
+    }
+    decodedInst.srcType(4) := SrcType.no
+    decodedInst.lsrc(2) := Mux1H(
+      decodedInst.fuOpType(6, 3),
+      Seq(Mtilem_IDX.U, Mtilek_IDX.U, Mtilem_IDX.U, 0.U)
+    )
+    decodedInst.lsrc(3) := Mux1H(
+      decodedInst.fuOpType(6, 3),
+      Seq(Mtilek_IDX.U, Mtilen_IDX.U, Mtilen_IDX.U, 0.U)
+    )
   }
 
   io.deq.decodedInst := decodedInst
@@ -1287,16 +1275,17 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   io.deq.decodedInst.fuType := Mux1H(Seq(
     // keep condition
     (!FuType.FuTypeOrR(decodedInst.fuType, FuType.vldu, FuType.vstu) && 
-      !isCsrrVl && !isCsrrVlenb && !isCsrrMlenb && !isCsrrMrlenb && !isCsrrMamul &&
+      !isCsrrVl && !isCsrrVlenb && !isCsrrXmisa && !isCsrrXtlenb && !isCsrrXtrlenb && !isCsrrXalenb &&
       !isCsrrMtok && !isCsrrMtilem && !isCsrrMtilen && !isCsrrMtilek) -> decodedInst.fuType,
     (isCsrrVl) -> FuType.vsetfwf.U,
     (isCsrrVlenb) -> FuType.alu.U,
     (isCsrrMtilem) -> FuType.msetmtilexfwf.U,
     (isCsrrMtilen) -> FuType.msetmtilexfwf.U,
     (isCsrrMtilek) -> FuType.msetmtilexfwf.U,
-    (isCsrrMlenb) -> FuType.alu.U,
-    (isCsrrMrlenb) -> FuType.alu.U,
-    (isCsrrMamul) -> FuType.alu.U,
+    (isCsrrXmisa) -> FuType.alu.U,
+    (isCsrrXtlenb) -> FuType.alu.U,
+    (isCsrrXtrlenb) -> FuType.alu.U,
+    (isCsrrXalenb) -> FuType.alu.U,
     (isCsrrMtok) -> FuType.alu.U,
 
     // change vlsu to vseglsu when NF =/= 0.U
@@ -1311,9 +1300,10 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   io.deq.decodedInst.imm := MuxCase(decodedInst.imm, Seq(
     isCsrrVlenb  -> (VLEN / 8).U,
     isZimop      -> 0.U,
-    isCsrrMlenb  -> (MLEN / 8).U,
-    isCsrrMrlenb -> (RLEN / 8).U,
-    isCsrrMamul  -> AMUL.U,
+    isCsrrXmisa  -> 0x2e6.U,
+    isCsrrXtlenb -> (TLEN / 8).U,
+    isCsrrXtrlenb -> (TRLEN / 8).U,
+    isCsrrXalenb -> ((TLEN / TRLEN) * (TLEN / TRLEN) * MELEN / 8).U,
     isCsrrMtok   -> MTOK.U,
   ))
 
@@ -1323,9 +1313,10 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     isCsrrMtilem -> MSETtilexOpType.csrrmtilem,
     isCsrrMtilen -> MSETtilexOpType.csrrmtilen,
     isCsrrMtilek -> MSETtilexOpType.csrrmtilek,
-    isCsrrMlenb -> ALUOpType.add,
-    isCsrrMrlenb -> ALUOpType.add,
-    isCsrrMamul -> ALUOpType.add,
+    isCsrrXmisa -> ALUOpType.add,
+    isCsrrXtlenb -> ALUOpType.add,
+    isCsrrXtrlenb -> ALUOpType.add,
+    isCsrrXalenb -> ALUOpType.add,
     isCsrrMtok -> ALUOpType.add,
     isFLI       -> Cat(1.U, inst.FMT, inst.RS1),
     (isPreW || isPreR || isPreI) -> Mux1H(Seq(

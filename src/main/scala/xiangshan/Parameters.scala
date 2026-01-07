@@ -47,8 +47,6 @@ import xiangshan.backend.datapath.WakeUpConfig
 import xiangshan.mem.prefetch.{PrefetcherParams, SMSParams}
 
 import scala.math.{max, min, pow}
-import xiangshan.backend.fu.wrapper.MSetMtilexRiWi
-import xiangshan.backend.fu.wrapper.MSetMtilexRiWmf
 
 case object XSTileKey extends Field[Seq[XSCoreParameters]]
 
@@ -64,11 +62,11 @@ case class XSCoreParameters
   HSXLEN: Int = 64,
   HasBitmapCheck: Boolean = true,
   HasBitmapCheckDefault: Boolean = false,
-  MLEN: Int = 128 * 64 * 8,   // Expect TMMAX 128 TNMAX 128 TKMAX 64 with e8
-  RLEN: Int = 64 * 8,         // 64 * e8
-  AMUL: Int = 4,              // e32 / e8
+  TLEN: Int = 128 * 64 * 8,   // Expect TMMAX 128 TNMAX 128 TKMAX 64 with e8
+  TRLEN: Int = 64 * 8,         // 64 * e8
+  MELEN: Int = 32,
   MTOK: Int = 32,             // 8 or 16 or 32
-  MTILEXLEN: Int = 16,        // 16 bits is sufficient
+  MTILEXLEN: Int = 9,         // 9 bits is sufficient
   HasMExtension: Boolean = true,
   HasCExtension: Boolean = true,
   HasHExtension: Boolean = true,
@@ -195,7 +193,6 @@ case class XSCoreParameters
   RobSize: Int = 160,
   RabSize: Int = 256,
   VTypeBufferSize: Int = 64, // used to reorder vtype
-  MTypeBufferSize: Int = 64, // So, mtype also needs a buffer?
   IssueQueueSize: Int = 24,
   IssueQueueCompEntrySize: Int = 16,
   intPreg: PregParams = IntPregParams(
@@ -437,8 +434,8 @@ case class XSCoreParameters
         ExeUnitParams("BJU3", Seq(CsrCfg, FenceCfg, DivCfg), Seq(IntWB(port = 4, 1)), Seq(Seq(IntRD(0, 1)), Seq(IntRD(1, 1)))),
       ), numEntries = IssueQueueSize, numEnq = 2, numComp = IssueQueueCompEntrySize),
       IssueBlockParams(Seq(
-        ExeUnitParams("MSET0", Seq(MSetMtilexRiWiCfg, MSetMtilexRiWmfCfg), Seq(IntWB(port = 2, 2), MxWB(port = intSchdMxWbPort, 0)), Seq(Seq(IntRD(0, 2)))),
-        ExeUnitParams("MSETTYPE", Seq(MSetMtypeRiWiCfg, MreleaseCfg), Seq(IntWB(port = 3, 2)), Seq(Seq(IntRD(2, 2))))
+        ExeUnitParams("MSET0", Seq(MSetMtilexRiWmfCfg), Seq(MxWB(port = intSchdMxWbPort, 0)), Seq(Seq(IntRD(0, 2)))),
+        ExeUnitParams("MRELEASE", Seq(MreleaseCfg), Seq(), Seq(Seq(IntRD(2, 2))))
       ), numEntries = IssueQueueSize, numEnq = 2, numComp = IssueQueueCompEntrySize),
     ),
       numPregs = intPreg.numEntries,
@@ -496,7 +493,7 @@ case class XSCoreParameters
     implicit val schdType: SchedulerType = MfScheduler()
     SchdBlockParams(Seq(
       IssueBlockParams(Seq(
-        ExeUnitParams("MSET1", Seq(MSetMtilexRmfWmfCfg), Seq(IntWB(port = 3, 1), MxWB(port = mfSchdMxWbPort, 0)), Seq(Seq(), Seq(), Seq(MxRD(0, 0)))),
+        ExeUnitParams("MSET1", Seq(MSetMtilexRmfWmfCfg), Seq(IntWB(port = 3, 1)), Seq(Seq(), Seq(), Seq(MxRD(0, 0)))),
       ), numEntries = 16, numEnq = 2, numComp = 12),
       IssueBlockParams(Seq(
         ExeUnitParams("MEX0", Seq(MmaCfg), Seq(), Seq(Seq(), Seq(), Seq(MxRD(0, 1)), Seq(MxRD(1, 0)), Seq(MxRD(2, 0)))),
@@ -559,7 +556,7 @@ case class XSCoreParameters
     Seq(
       WakeUpConfig(
         Seq("ALU0", "ALU1", "ALU2", "ALU3", "LDU0", "LDU1", "LDU2") ->
-        Seq("ALU0", "BJU0", "ALU1", "BJU1", "ALU2", "BJU2", "ALU3", "BJU3", "LDU0", "LDU1", "LDU2", "STA0", "STA1", "STD0", "STD1", "MSET0", "MSETTYPE", "MLSU0")
+        Seq("ALU0", "BJU0", "ALU1", "BJU1", "ALU2", "BJU2", "ALU3", "BJU3", "LDU0", "LDU1", "LDU2", "STA0", "STA1", "STD0", "STD1", "MSET0", "MRELEASE", "MLSU0")
       ),
       // TODO: add load -> fp slow wakeup
       WakeUpConfig(
@@ -652,9 +649,12 @@ trait HasXSParameter {
   def XLEN = coreParams.XLEN
   def VLEN = coreParams.VLEN
   def ELEN = coreParams.ELEN
-  def MLEN = coreParams.MLEN
-  def RLEN = coreParams.RLEN
-  def AMUL = coreParams.AMUL
+  def TLEN = coreParams.TLEN
+  def TRLEN = coreParams.TRLEN
+  def MELEN = coreParams.MELEN
+  def ROWNUM = TLEN / TRLEN
+  def ARLEN = ROWNUM * MELEN
+  def ALEN = ARLEN * ROWNUM
   def MTOK = coreParams.MTOK
 
   def DEV_FIXED_MTYPE = false
@@ -832,7 +832,6 @@ trait HasXSParameter {
   def RobSize = coreParams.RobSize
   def RabSize = coreParams.RabSize
   def VTypeBufferSize = coreParams.VTypeBufferSize
-  def MTypeBufferSize = coreParams.MTypeBufferSize
   def IntRegCacheSize = coreParams.IntRegCacheSize
   def MemRegCacheSize = coreParams.MemRegCacheSize
   def RegCacheSize = coreParams.RegCacheSize

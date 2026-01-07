@@ -136,6 +136,8 @@ case class IssueBlockParams(
 
   def needSrcVxrm: Boolean = exuBlockParams.map(_.needSrcVxrm).reduce(_ || _)
 
+  def needSrcXmcsr: Boolean = exuBlockParams.map(_.needSrcXmcsr).reduce(_ || _)
+
   def writeVConfig: Boolean = exuBlockParams.map(_.writeVConfig).reduce(_ || _)
   
   def writeVType: Boolean = exuBlockParams.map(_.writeVType).reduce(_ || _)

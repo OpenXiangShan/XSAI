@@ -10,12 +10,11 @@ import xiangshan.backend.Bundles.VPUCtrlSignals
 import xiangshan.backend.rob.RobPtr
 import xiangshan.frontend.{FtqPtr, PreDecodeInfo}
 import xiangshan.backend.datapath.DataConfig._
-import xiangshan.backend.fu.matrix.Bundles.{MType, AmuCtrlIO}
+import xiangshan.backend.fu.matrix.Bundles.AmuCtrlIO
 import xiangshan.backend.fu.vector.Bundles.Vxsat
 import xiangshan.ExceptionNO.illegalInstr
 import xiangshan.backend.fu.vector.Bundles.VType
 import xiangshan.backend.fu.wrapper.{CSRInput, CSRToDecode}
-import xiangshan.backend.Bundles.MPUCtrlSignals
 
 class FuncUnitCtrlInput(cfg: FuConfig)(implicit p: Parameters) extends XSBundle {
   val fuOpType    = FuOpType()
@@ -37,7 +36,6 @@ class FuncUnitCtrlInput(cfg: FuConfig)(implicit p: Parameters) extends XSBundle 
   })
   val fpu         = OptionWrapper(cfg.writeFflags, new FPUCtrlSignals)
   val vpu         = OptionWrapper(cfg.needVecCtrl, new VPUCtrlSignals)
-  val mpu         = OptionWrapper(cfg.needMPUCtrl || cfg.needOldMtype, new MPUCtrlSignals)
 }
 
 class FuncUnitCtrlOutput(cfg: FuConfig)(implicit p: Parameters) extends XSBundle {
@@ -55,7 +53,6 @@ class FuncUnitCtrlOutput(cfg: FuConfig)(implicit p: Parameters) extends XSBundle
   val preDecode     = OptionWrapper(cfg.hasPredecode, new PreDecodeInfo)
   val fpu           = OptionWrapper(cfg.writeFflags, new FPUCtrlSignals)
   val vpu           = OptionWrapper(cfg.needVecCtrl, new VPUCtrlSignals)
-  val mpu           = OptionWrapper(cfg.needMPUCtrl, new MPUCtrlSignals)
   val amuCtrl       = OptionWrapper(cfg.needAmuCtrl, new AmuCtrlIO)
 }
 
@@ -108,10 +105,10 @@ class FuncUnitIO(cfg: FuConfig)(implicit p: Parameters) extends XSBundle {
   val vlIsZero = OptionWrapper(cfg.writeVlRf, Output(Bool()))
   val vlIsVlmax = OptionWrapper(cfg.writeVlRf, Output(Bool()))
   val instrAddrTransType = Option.when(cfg.isJmp || cfg.isBrh)(Input(new AddrTransType))
-  val mtype = OptionWrapper(cfg.writeMType, (Valid(new MType)))
-  val mtilex = OptionWrapper(cfg.writeMxRf, (Valid(UInt(XLEN.W))))
-  val mxIsZero = OptionWrapper(cfg.writeMxRf, Output(Bool()))
-  val mxIsMxmax = OptionWrapper(cfg.writeMxRf, Output(Bool()))
+  val xmxrm = OptionWrapper(cfg.needSrcXmcsr, Input(UInt(2.W)))
+  val xmfrm = OptionWrapper(cfg.needSrcXmcsr, Input(UInt(3.W)))
+  val xmsaten = OptionWrapper(cfg.needSrcXmcsr, Input(UInt(1.W)))
+  // val mtilex = OptionWrapper(cfg.writeMxRf, (Valid(UInt(XLEN.W))))
 }
 
 abstract class FuncUnit(val cfg: FuConfig)(implicit p: Parameters) extends XSModule with HasCriticalErrors {
@@ -134,7 +131,6 @@ abstract class FuncUnit(val cfg: FuConfig)(implicit p: Parameters) extends XSMod
     io.out.bits.ctrl.preDecode.foreach(_ := RegEnable(io.in.bits.ctrl.preDecode.get, io.in.fire))
     io.out.bits.ctrl.fpu      .foreach(_ := RegEnable(io.in.bits.ctrl.fpu.get, io.in.fire))
     io.out.bits.ctrl.vpu      .foreach(_ := RegEnable(io.in.bits.ctrl.vpu.get, io.in.fire))
-    io.out.bits.ctrl.mpu      .foreach(_ := RegEnable(io.in.bits.ctrl.mpu.get, io.in.fire))
     io.out.bits.perfDebugInfo := RegEnable(io.in.bits.perfDebugInfo, io.in.fire)
     io.out.bits.debug_seqNum := RegEnable(io.in.bits.debug_seqNum, io.in.fire)
   }
@@ -152,7 +148,6 @@ abstract class FuncUnit(val cfg: FuConfig)(implicit p: Parameters) extends XSMod
     io.out.bits.ctrl.preDecode.foreach(_ := DataHoldBypass(io.in.bits.ctrl.preDecode.get, io.in.fire))
     io.out.bits.ctrl.fpu.foreach(_ := DataHoldBypass(io.in.bits.ctrl.fpu.get, io.in.fire))
     io.out.bits.ctrl.vpu.foreach(_ := DataHoldBypass(io.in.bits.ctrl.vpu.get, io.in.fire))
-    io.out.bits.ctrl.mpu.foreach(_ := DataHoldBypass(io.in.bits.ctrl.mpu.get, io.in.fire))
     io.out.bits.perfDebugInfo := DataHoldBypass(io.in.bits.perfDebugInfo, io.in.fire)
     io.out.bits.debug_seqNum := DataHoldBypass(io.in.bits.debug_seqNum, io.in.fire)
   }
@@ -170,7 +165,6 @@ abstract class FuncUnit(val cfg: FuConfig)(implicit p: Parameters) extends XSMod
     io.out.bits.ctrl.preDecode.foreach(_ := io.in.bits.ctrl.preDecode.get)
     io.out.bits.ctrl.fpu.foreach(_ := io.in.bits.ctrl.fpu.get)
     io.out.bits.ctrl.vpu.foreach(_ := io.in.bits.ctrl.vpu.get)
-    io.out.bits.ctrl.mpu.foreach(_ := io.in.bits.ctrl.mpu.get)
     io.out.bits.perfDebugInfo := io.in.bits.perfDebugInfo
     io.out.bits.debug_seqNum := io.in.bits.debug_seqNum
   }
@@ -263,7 +257,6 @@ trait HasPipelineReg { this: FuncUnit =>
   io.out.bits.ctrl.mxWen.foreach(_ := ctrlVec.last.mxWen.get)
   io.out.bits.ctrl.fpu.foreach(_ := ctrlVec.last.fpu.get)
   io.out.bits.ctrl.vpu.foreach(_ := ctrlVec.last.vpu.get)
-  io.out.bits.ctrl.mpu.foreach(_ := ctrlVec.last.mpu.get)
   io.out.bits.perfDebugInfo := fixPerfVec.last
   io.out.bits.debug_seqNum := fixSeqNumVec.last
 

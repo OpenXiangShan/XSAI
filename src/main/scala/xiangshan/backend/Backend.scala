@@ -41,7 +41,7 @@ import xiangshan.backend.datapath.DataConfig._
 import xiangshan.backend.datapath._
 import xiangshan.backend.dispatch.CoreDispatchTopDownIO
 import xiangshan.backend.exu.ExuBlock
-import xiangshan.backend.fu.matrix.Bundles.{MType, AmuCtrlIO}
+import xiangshan.backend.fu.matrix.Bundles.AmuCtrlIO
 import xiangshan.backend.fu.vector.Bundles.{VConfig, VType}
 import xiangshan.backend.fu.{FenceIO, FenceToSbuffer, FuConfig, FuType, PerfCounterIO}
 import xiangshan.backend.fu.NewCSR.PFEvent
@@ -264,10 +264,6 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
   private val vlFromIntIsVlmax = intExuBlock.io.vlIsVlmax.get
   private val vlFromVfIsZero = vfExuBlock.io.vlIsZero.get
   private val vlFromVfIsVlmax = vfExuBlock.io.vlIsVlmax.get
-  private val mxFromIntIsZero = intExuBlock.io.mxIsZero.get
-  private val mxFromIntIsMxmax = intExuBlock.io.mxIsMxmax.get
-  private val mxFromMfIsZero = mfExuBlock.io.mxIsZero.get
-  private val mxFromMfIsMxmax = mfExuBlock.io.mxIsMxmax.get
 
   private val backendCriticalError = Wire(Bool())
 
@@ -415,10 +411,6 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
   intScheduler.io.vlWriteBackInfo.vlFromIntIsVlmax := false.B
   intScheduler.io.vlWriteBackInfo.vlFromVfIsZero := false.B
   intScheduler.io.vlWriteBackInfo.vlFromVfIsVlmax := false.B
-  intScheduler.io.mxWriteBackInfo.mxFromIntIsZero := false.B
-  intScheduler.io.mxWriteBackInfo.mxFromIntIsMxmax := false.B
-  intScheduler.io.mxWriteBackInfo.mxFromMfIsZero := false.B
-  intScheduler.io.mxWriteBackInfo.mxFromMfIsMxmax := false.B
 
   fpScheduler.io.fromTop.hartId := io.fromTop.hartId
   fpScheduler.io.fromCtrlBlock.flush := ctrlBlock.io.toIssueBlock.flush
@@ -445,10 +437,6 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
   fpScheduler.io.vlWriteBackInfo.vlFromIntIsVlmax := false.B
   fpScheduler.io.vlWriteBackInfo.vlFromVfIsZero := false.B
   fpScheduler.io.vlWriteBackInfo.vlFromVfIsVlmax := false.B
-  fpScheduler.io.mxWriteBackInfo.mxFromIntIsZero := false.B
-  fpScheduler.io.mxWriteBackInfo.mxFromIntIsMxmax := false.B
-  fpScheduler.io.mxWriteBackInfo.mxFromMfIsZero := false.B
-  fpScheduler.io.mxWriteBackInfo.mxFromMfIsMxmax := false.B
 
   memScheduler.io.fromTop.hartId := io.fromTop.hartId
   memScheduler.io.fromCtrlBlock.flush := ctrlBlock.io.toIssueBlock.flush
@@ -499,10 +487,6 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
   memScheduler.io.vlWriteBackInfo.vlFromIntIsVlmax := vlFromIntIsVlmax
   memScheduler.io.vlWriteBackInfo.vlFromVfIsZero := vlFromVfIsZero
   memScheduler.io.vlWriteBackInfo.vlFromVfIsVlmax := vlFromVfIsVlmax
-  memScheduler.io.mxWriteBackInfo.mxFromIntIsZero := mxFromIntIsZero
-  memScheduler.io.mxWriteBackInfo.mxFromIntIsMxmax := mxFromIntIsMxmax
-  memScheduler.io.mxWriteBackInfo.mxFromMfIsZero := mxFromMfIsZero
-  memScheduler.io.mxWriteBackInfo.mxFromMfIsMxmax := mxFromMfIsMxmax
   memScheduler.io.fromOg2Resp.get := og2ForVector.io.toMemIQOg2Resp
 
   vfScheduler.io.fromTop.hartId := io.fromTop.hartId
@@ -530,10 +514,6 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
   vfScheduler.io.vlWriteBackInfo.vlFromIntIsVlmax := vlFromIntIsVlmax
   vfScheduler.io.vlWriteBackInfo.vlFromVfIsZero := vlFromVfIsZero
   vfScheduler.io.vlWriteBackInfo.vlFromVfIsVlmax := vlFromVfIsVlmax
-  vfScheduler.io.mxWriteBackInfo.mxFromIntIsZero := mxFromIntIsZero
-  vfScheduler.io.mxWriteBackInfo.mxFromIntIsMxmax := mxFromIntIsMxmax
-  vfScheduler.io.mxWriteBackInfo.mxFromMfIsZero := mxFromMfIsZero
-  vfScheduler.io.mxWriteBackInfo.mxFromMfIsMxmax := mxFromMfIsMxmax
   vfScheduler.io.fromOg2Resp.get := og2ForVector.io.toVfIQOg2Resp
 
   mfScheduler.io.fromTop.hartId := io.fromTop.hartId
@@ -561,10 +541,6 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
   mfScheduler.io.vlWriteBackInfo.vlFromIntIsVlmax := vlFromIntIsVlmax
   mfScheduler.io.vlWriteBackInfo.vlFromVfIsZero := vlFromVfIsZero
   mfScheduler.io.vlWriteBackInfo.vlFromVfIsVlmax := vlFromVfIsVlmax
-  mfScheduler.io.mxWriteBackInfo.mxFromIntIsZero := mxFromIntIsZero
-  mfScheduler.io.mxWriteBackInfo.mxFromIntIsMxmax := mxFromIntIsMxmax
-  mfScheduler.io.mxWriteBackInfo.mxFromMfIsZero := mxFromMfIsZero
-  mfScheduler.io.mxWriteBackInfo.mxFromMfIsMxmax := mxFromMfIsMxmax
   
   dataPath.io.hartId := io.fromTop.hartId
   dataPath.io.flush := ctrlBlock.io.toDataPath.flush
@@ -695,16 +671,6 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
   val hasVsetvl = ctrlBlock.io.robio.commitVType.hasVsetvl
   val vtype = VType.toVtypeStruct(Mux(hasVsetvl, vsetvlVType, commitVType.bits)).asUInt
 
-  val fromIntExuMsetMType = intExuBlock.io.mtype.getOrElse(0.U.asTypeOf((Valid(new MType))))
-  val fromMfExuMsetMType = mfExuBlock.io.mtype.getOrElse(0.U.asTypeOf((Valid(new MType))))
-  val fromMsetMType = Mux(fromIntExuMsetMType.valid, fromIntExuMsetMType.bits, fromMfExuMsetMType.bits)
-  val msettypeMType = RegEnable(fromMsetMType, 0.U.asTypeOf(new MType), fromIntExuMsetMType.valid || fromMfExuMsetMType.valid)
-  ctrlBlock.io.toDecode.msettypeMType := msettypeMType
-  
-  val commitMType = ctrlBlock.io.robio.commitMType.mtype
-  val hasMsettype = ctrlBlock.io.robio.commitMType.hasMsettype
-  val mtype = MType.toMtypeStruct((Mux(hasMsettype, msettypeMType, commitMType.bits))).asUInt
-
   // csr not store the value of vl, so when using difftest we assign the value of vl to debugVl
   val debugVl_s0 = WireInit(UInt(VlData().dataWidth.W), 0.U)
   val debugVl_s1 = WireInit(UInt(VlData().dataWidth.W), 0.U)
@@ -738,8 +704,6 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
   debugMtilem_s1 := RegNext(debugMtilem_s0)
   debugMtilen_s1 := RegNext(debugMtilen_s0)
   debugMtilek_s1 := RegNext(debugMtilek_s0)
-  csrio.mpu.set_mtype.valid := commitMType.valid
-  csrio.mpu.set_mtype.bits := ZeroExt(mtype, XLEN)
   csrio.mpu.mtilem := ZeroExt(debugMtilem_s1, XLEN)
   csrio.mpu.mtilen := ZeroExt(debugMtilen_s1, XLEN)
   csrio.mpu.mtilek := ZeroExt(debugMtilek_s1, XLEN)
@@ -812,6 +776,9 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
   fpExuBlock.io.vxrm.foreach(_ := csrio.vpu.vxrm)
   vfExuBlock.io.frm.foreach(_ := csrio.fpu.frm)
   vfExuBlock.io.vxrm.foreach(_ := csrio.vpu.vxrm)
+  mfExuBlock.io.xmxrm.foreach(_ := csrio.mpu.xmxrm)
+  mfExuBlock.io.xmfrm.foreach(_ := csrio.mpu.xmfrm)
+  mfExuBlock.io.xmsaten.foreach(_ := csrio.mpu.xmsaten)
 
   wbDataPath.io.flush := ctrlBlock.io.redirect
   wbDataPath.io.fromTop.hartId := io.fromTop.hartId

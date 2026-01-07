@@ -12,13 +12,10 @@ class Marith(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUnit(cfg) {
   connect0LatencyCtrlSingal
   io.out.valid := io.in.valid
   io.in.ready := io.out.ready
-  
-  protected val mtilex0 = in.data.src(0)
-  protected val mtilex1 = in.data.src(1)
 
   val output = Wire(new AmuArithIO)
   dontTouch(output)
-  output.md     := in.data.imm(3, 0)
+  output.md     := in.data.imm(2, 0)
   output.opType := in.ctrl.fuOpType
 
   out.res.data := output.asUInt

@@ -109,11 +109,6 @@ object EntryBundles extends HasCircularQueuePtrHelper {
     val vlFromIntIsVlmax      = Input(Bool())
     val vlFromVfIsZero        = Input(Bool())
     val vlFromVfIsVlmax       = Input(Bool())
-    // mtilex
-    val mxFromIntIsZero       = Input(Bool())
-    val mxFromIntIsMxmax      = Input(Bool())
-    val mxFromMfIsZero        = Input(Bool())
-    val mxFromMfIsMxmax       = Input(Bool())
     //cancel
     val og0Cancel             = Input(ExuVec())
     val og1Cancel             = Input(ExuVec())
@@ -332,12 +327,6 @@ object EntryBundles extends HasCircularQueuePtrHelper {
       val vlFromVfIsVlmax = commonIn.vlFromVfIsVlmax
       val vlIsVlmax = (vlFromIntIsVlmax && vlWakeUpByIntWb) || (vlFromVfIsVlmax && vlWakeUpByVfWb)
       val vlIsNonZero = (!vlFromIntIsZero && vlWakeUpByIntWb) || (!vlFromVfIsZero && vlWakeUpByVfWb)
-      val mxFromIntIsZero = commonIn.mxFromIntIsZero
-      val mxFromIntIsMxmax = commonIn.mxFromIntIsMxmax
-      val mxFromMfIsZero = commonIn.mxFromMfIsZero
-      val mxFromMfIsMxmax = commonIn.mxFromMfIsMxmax
-      val mxIsMxmax = (mxFromIntIsMxmax && mxWakeUpByIntWb) || (mxFromMfIsMxmax && mxWakeUpByMfWb)
-      val mxIsNonZero = (!mxFromIntIsZero && mxWakeUpByIntWb) || (!mxFromMfIsZero && mxWakeUpByMfWb)
       val ignoreTail = vlIsVlmax && (vm =/= 0.U || vma) && !isWritePartVd
       val ignoreWhole = (vm =/= 0.U || vma) && vta
       val srcIsVec = SrcType.isVp(srcStatus.srcType)

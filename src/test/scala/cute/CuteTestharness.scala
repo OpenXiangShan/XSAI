@@ -159,7 +159,7 @@ class ConfigStateMachine(top: XSCuteTopImpl)(implicit p: Parameters) extends Cut
         mma.mtilem := M
         mma.mtilen := N
         mma.mtilek := K
-        mma.types := MSew.e8
+        mma.types1 := MSew.e8
         mma.typed := MSew.e32
         mma.isfp := false.B
         top.io.ctrl2top.amuCtrl.bits.data := mma.asUInt

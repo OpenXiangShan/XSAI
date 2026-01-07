@@ -4,11 +4,11 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.BundleLiterals._
 import org.chipsalliance.cde.config.Parameters
+import xiangshan._
 import xiangshan.backend.fu.NewCSR.CSRDefines.{CSRROField => RO, CSRRWField => RW, CSRWARLField => WARL, _}
 import xiangshan.backend.fu.NewCSR.CSRFunc._
 import xiangshan.backend.fu.fpu.Bundles.Fflags
 import xiangshan.backend.fu.vector.Bundles.{Vl, Vstart, Vxsat}
-import xiangshan.backend.fu.matrix.Bundles.{Msat, Mtilex}
 import xiangshan.frontend.BPUCtrl
 import xiangshan.mem.prefetch.PrefetchCtrl
 import chisel3.experimental.noPrefix
@@ -159,7 +159,7 @@ object CSRBundles {
     ))
   }
 
-  class RobCommitCSR(implicit p: Parameters) extends Bundle {
+  class RobCommitCSR(implicit p: Parameters) extends XSBundle {
     // need contain 8x8
     val instNum = ValidIO(UInt(7.W))
     val fflags  = ValidIO(Fflags())
@@ -171,10 +171,9 @@ object CSRBundles {
     val vstart  = ValidIO(Vstart())
 
     val msDirty = Bool()
-    val mtype   = ValidIO(new CSRMTypeBundle)
-    val mtilem  = Mtilex()
-    val mtilen  = Mtilex()
-    val mtilek  = Mtilex()
+    val mtilem  = UInt(XLEN.W)
+    val mtilen  = UInt(XLEN.W)
+    val mtilek  = UInt(XLEN.W)
   }
 
   class CSRCustomState(implicit p: Parameters) extends Bundle {

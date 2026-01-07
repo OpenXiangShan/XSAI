@@ -35,7 +35,6 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
   val setVxsat = csrIn.vpu.set_vxsat
   val vlFromPreg = csrIn.vpu.vl
 
-  val setMtype = csrIn.mpu.set_mtype
   val setMsDirty = csrIn.mpu.dirty_ms
   val mtilemFromPreg = csrIn.mpu.mtilem
   val mtilenFromPreg = csrIn.mpu.mtilen
@@ -53,7 +52,7 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
   )
 
   // split imm/src1/rd from IMM_Z: src1/rd for tval
-  val addr = Imm_Z().getCSRAddr(imm)
+  val addr = Mux(CSROpType.isMinit(func), "h300".U, Imm_Z().getCSRAddr(imm))
   val rd   = Imm_Z().getRD(imm)
   val rs1  = Imm_Z().getRS1(imm)
   val imm5 = Imm_Z().getImm5(imm)
@@ -83,12 +82,14 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
     CSROpType.wrti -> csri,
     CSROpType.seti -> (regOut | csri),
     CSROpType.clri -> (regOut & (~csri).asUInt),
+    CSROpType.minit -> Cat(regOut(63, 27), "b01".U, regOut(24, 0)),
   ))
 
   private val csrAccess = valid && CSROpType.isCsrAccess(func)
   private val csrWen = valid && (
     CSROpType.isCSRRW(func) ||
-    CSROpType.isCSRRSorRC(func) && rs1 =/= 0.U
+    CSROpType.isCSRRSorRC(func) && rs1 =/= 0.U ||
+    CSROpType.isMinit(func)
   )
   private val csrRen = valid && (
     CSROpType.isCSRRW(func) && rd =/= 0.U ||
@@ -159,19 +160,6 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
   csrMod.io.fromRob.commit.vtype.bits.VSEW := setVtype.bits(5, 3)
   csrMod.io.fromRob.commit.vtype.bits.VLMUL := setVtype.bits(2, 0)
 
-  csrMod.io.fromRob.commit.mtype.valid := setMtype.valid
-  csrMod.io.fromRob.commit.mtype.bits.MILL := setMtype.bits(XLEN - 1)
-  csrMod.io.fromRob.commit.mtype.bits.MBA := setMtype.bits(15)
-  csrMod.io.fromRob.commit.mtype.bits.mfp64 := setMtype.bits(14)
-  csrMod.io.fromRob.commit.mtype.bits.mfp32 := setMtype.bits(13, 12)
-  csrMod.io.fromRob.commit.mtype.bits.mfp16 := setMtype.bits(11, 10)
-  csrMod.io.fromRob.commit.mtype.bits.mfp8 := setMtype.bits(9, 8)
-  csrMod.io.fromRob.commit.mtype.bits.mint64 := setMtype.bits(7)
-  csrMod.io.fromRob.commit.mtype.bits.mint32 := setMtype.bits(6)
-  csrMod.io.fromRob.commit.mtype.bits.mint16 := setMtype.bits(5)
-  csrMod.io.fromRob.commit.mtype.bits.mint8 := setMtype.bits(4)
-  csrMod.io.fromRob.commit.mtype.bits.mint4 := setMtype.bits(3)
-  csrMod.io.fromRob.commit.mtype.bits.msew := setMtype.bits(2, 0)
   csrMod.io.fromRob.commit.msDirty := setMsDirty
   csrMod.io.fromRob.commit.mtilem := mtilemFromPreg
   csrMod.io.fromRob.commit.mtilen := mtilenFromPreg
@@ -353,6 +341,10 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
   csrOut.fpu.frm    := csrMod.io.status.fpState.frm.asUInt
   csrOut.vpu.vstart := csrMod.io.status.vecState.vstart.asUInt
   csrOut.vpu.vxrm   := csrMod.io.status.vecState.vxrm.asUInt
+  
+  csrOut.mpu.xmxrm   := csrMod.io.status.matrixState.xmxrm.asUInt
+  csrOut.mpu.xmfrm   := csrMod.io.status.matrixState.xmfrm.asUInt
+  csrOut.mpu.xmsaten := csrMod.io.status.matrixState.xmsaten.asUInt
 
   csrOut.isXRet := isXRet
 

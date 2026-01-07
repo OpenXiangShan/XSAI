@@ -12,7 +12,6 @@ import xiangshan.backend._
 import xiangshan.backend.datapath.WbConfig._
 import xiangshan.backend.exu.ExeUnitParams
 import xiangshan.backend.implicitCast._
-import xiangshan.backend.fu.matrix.Bundles.Mtilex
 import difftest.common.FileControl.write
 
 class WbFuBusyTable(bp: BackendParams)(implicit  p: Parameters) extends LazyModule {

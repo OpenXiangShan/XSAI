@@ -26,7 +26,6 @@ import xiangshan.backend.Bundles._
 import xiangshan.backend.datapath.WbConfig._
 import xiangshan.backend.issue.SchdBlockParams
 import xiangshan.backend.datapath.{DataSource}
-import xiangshan.backend.fu.matrix.Bundles.Mtilex
 
 class BusyTableReadIO(implicit p: Parameters) extends XSBundle {
   val req = Input(UInt(PhyRegIdxWidth.W))
@@ -272,15 +271,6 @@ class VlBusyTable(numReadPorts: Int, numWritePorts: Int, numPhyPregs: Int, pregW
 }
 
 class MxBusyTable(numReadPorts: Int, numWritePorts: Int, numPhyPregs: Int, pregWB: PregWB)(implicit p: Parameters) extends BusyTable(numReadPorts, numWritePorts, numPhyPregs, pregWB) {
-
-  val io_mx_Wb = IO(new Bundle() {
-    val mxWriteBackInfo = new Bundle {
-      val mxFromIntIsZero  = Input(Bool())
-      val mxFromIntIsMxmax = Input(Bool())
-      val mxFromMfIsZero   = Input(Bool())
-      val mxFromMfIsMxmax  = Input(Bool())
-    }
-  })
   val io_mx_read = IO(new Bundle() {
     val mxReadInfo = Vec(numReadPorts, new MxBusyTableReadIO)
   })
@@ -288,50 +278,6 @@ class MxBusyTable(numReadPorts: Int, numWritePorts: Int, numPhyPregs: Int, pregW
   var intSchdMxWbPort = p(XSCoreParamsKey).intSchdMxWbPort
   var mfSchdMxWbPort = p(XSCoreParamsKey).mfSchdMxWbPort
 
-  val zeroTableUpdate = Wire(Vec(numPhyPregs, Bool()))
-  val mxmaxTableUpdate = Wire(Vec(numPhyPregs, Bool()))
-
   val intMxWb = Mux(io.wbPregs(intSchdMxWbPort).valid, UIntToOH(io.wbPregs(intSchdMxWbPort).bits), 0.U)
   val mfMxWb = Mux(io.wbPregs(mfSchdMxWbPort).valid, UIntToOH(io.wbPregs(mfSchdMxWbPort).bits), 0.U)
-
-  val zeroTable = VecInit((0 until numPhyPregs).zip(zeroTableUpdate).map{ case (idx, update) =>
-    RegEnable(update, 0.U(1.W), allocMask(idx) || ldCancelMask(idx) || intMxWb(idx) || mfMxWb(idx))
-  }).asUInt
-  val mxmaxTable = VecInit((0 until numPhyPregs).zip(mxmaxTableUpdate).map{ case (idx, update) =>
-    RegEnable(update, 0.U(1.W), allocMask(idx) || ldCancelMask(idx) || intMxWb(idx) || mfMxWb(idx))
-  }).asUInt
-
-
-  zeroTableUpdate.zipWithIndex.foreach{ case (update, idx) =>
-    when(intMxWb(idx)) {
-      // int schd mtilex write back, check whether the mtilex is zero
-      update := !io_mx_Wb.mxWriteBackInfo.mxFromIntIsZero
-    }.elsewhen(mfMxWb(idx)) {
-      // mf schd mtilex write back, check whether the mtilex is zero
-      update := !io_mx_Wb.mxWriteBackInfo.mxFromMfIsZero
-    }.elsewhen(allocMask(idx) || ldCancelMask(idx)) {
-      update := true.B
-    }.otherwise {
-      update := zeroTable(idx)
-    }
-  }
-
-  mxmaxTableUpdate.zipWithIndex.foreach{ case (update, idx) =>
-    when(intMxWb(idx)) {
-      // int schd vl write back, check whether the vl is vlmax
-      update := !io_mx_Wb.mxWriteBackInfo.mxFromIntIsMxmax
-    }.elsewhen(mfMxWb(idx)) {
-      // vf schd vl write back, check whether the vl is vlmax
-      update := !io_mx_Wb.mxWriteBackInfo.mxFromMfIsMxmax
-    }.elsewhen(allocMask(idx) || ldCancelMask(idx)) {
-      update := true.B
-    }.otherwise {
-      update := mxmaxTable(idx)
-    }
-  }
-
-  io_mx_read.mxReadInfo.zip(io.read).foreach{ case (mxRes, res) =>
-    mxRes.is_zero := !zeroTable(res.req)
-    mxRes.is_mxmax := !mxmaxTable(res.req)
-  }
 }

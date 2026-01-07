@@ -106,13 +106,6 @@ class SchedulerIO()(implicit params: SchdBlockParams, p: Parameters) extends XSB
     val vlFromVfIsVlmax  = Input(Bool())
   }
 
-  val mxWriteBackInfo = new Bundle {
-    val mxFromIntIsZero      = Input(Bool())
-    val mxFromIntIsMxmax = Input(Bool())
-    val mxFromMfIsZero       = Input(Bool())
-    val mxFromMfIsMxmax  = Input(Bool())
-  }
-
   val fromSchedulers = new Bundle {
     val wakeupVec: MixedVec[ValidIO[IssueQueueIQWakeUpBundle]] = Flipped(params.genIQWakeUpInValidBundle)
     val wakeupVecDelayed: MixedVec[ValidIO[IssueQueueIQWakeUpBundle]] = Flipped(params.genIQWakeUpInValidBundle)
@@ -282,10 +275,6 @@ abstract class SchedulerImpBase(wrapper: Scheduler)(implicit params: SchdBlockPa
     iq.io.vlFromIntIsZero := io.vlWriteBackInfo.vlFromIntIsZero
     iq.io.vlFromVfIsVlmax := io.vlWriteBackInfo.vlFromVfIsVlmax
     iq.io.vlFromVfIsZero := io.vlWriteBackInfo.vlFromVfIsZero
-    iq.io.mxFromIntIsMxmax := io.mxWriteBackInfo.mxFromIntIsMxmax
-    iq.io.mxFromIntIsZero      := io.mxWriteBackInfo.mxFromIntIsZero
-    iq.io.mxFromMfIsMxmax  := io.mxWriteBackInfo.mxFromMfIsMxmax
-    iq.io.mxFromMfIsZero       := io.mxWriteBackInfo.mxFromMfIsZero
   }
 
   private val iqWakeUpOutMap: Map[Int, ValidIO[IssueQueueIQWakeUpBundle]] =

@@ -9,7 +9,7 @@ import xiangshan.backend.Bundles._
 import xiangshan.backend.ctrlblock.{DebugLsInfoBundle, LsTopdownInfo}
 import xiangshan.backend.fu._
 import xiangshan.backend.fu.FuConfig._
-import xiangshan.backend.fu.matrix.Bundles.{AmuLsuIO, AmuCtrlIO, Mtilex}
+import xiangshan.backend.fu.matrix.Bundles.{AmuLsuIO, AmuCtrlIO}
 import xiangshan.backend.fu.NewCSR._
 import xiangshan.backend.fu.util.SdtrigExt
 import xiangshan.cache._
@@ -204,6 +204,44 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   // TODO: address align check
   val s0_addr_aligned = true.B
 
+  val illegal_regidx = Mux(s0_uop.imm(2),
+    (MldstOpType.isMatrixA(s0_uop.fuOpType) || MldstOpType.isMatrixB(s0_uop.fuOpType)),
+    MldstOpType.isMatrixC(s0_uop.fuOpType)
+  )
+  val illegal_mtilem = Mux1H(Seq(
+    MldstOpType.isMatrixA(s0_uop.fuOpType)  -> (io.lsin.bits.src(2) > ROWNUM.U),
+    MldstOpType.isMatrixB(s0_uop.fuOpType)  -> false.B,
+    MldstOpType.isMatrixC(s0_uop.fuOpType)  -> (io.lsin.bits.src(2) > ROWNUM.U),
+    MldstOpType.isWholeReg(s0_uop.fuOpType) -> false.B,
+  ))
+  val illegal_mtilen = Mux1H(Seq(
+    MldstOpType.isMatrixA(s0_uop.fuOpType) -> false.B,
+    MldstOpType.isMatrixB(s0_uop.fuOpType) -> (io.lsin.bits.src(3) > ROWNUM.U),
+    MldstOpType.isMatrixC(s0_uop.fuOpType) -> Mux1H(Seq(
+      MldstOpType.isE8(s0_uop.fuOpType)  -> (io.lsin.bits.src(3) > (ARLEN / 8).U),
+      MldstOpType.isE16(s0_uop.fuOpType) -> (io.lsin.bits.src(3) > (ARLEN / 16).U),
+      MldstOpType.isE32(s0_uop.fuOpType) -> (io.lsin.bits.src(3) > (ARLEN / 32).U),
+      MldstOpType.isE64(s0_uop.fuOpType) -> (io.lsin.bits.src(3) > (ARLEN / 64).U),
+    )),
+    MldstOpType.isWholeReg(s0_uop.fuOpType) -> false.B,
+  ))
+  val illegal_mtilek = Mux1H(Seq(
+    MldstOpType.isMatrixA(s0_uop.fuOpType) -> Mux1H(Seq(
+      MldstOpType.isE8(s0_uop.fuOpType)  -> (io.lsin.bits.src(3) > (TRLEN / 8).U),
+      MldstOpType.isE16(s0_uop.fuOpType) -> (io.lsin.bits.src(3) > (TRLEN / 16).U),
+      MldstOpType.isE32(s0_uop.fuOpType) -> (io.lsin.bits.src(3) > (TRLEN / 32).U),
+      MldstOpType.isE64(s0_uop.fuOpType) -> (io.lsin.bits.src(3) > (TRLEN / 64).U),
+    )),
+    MldstOpType.isMatrixB(s0_uop.fuOpType) -> Mux1H(Seq(
+      MldstOpType.isE8(s0_uop.fuOpType)  -> (io.lsin.bits.src(2) > (TRLEN / 8).U),
+      MldstOpType.isE16(s0_uop.fuOpType) -> (io.lsin.bits.src(2) > (TRLEN / 16).U),
+      MldstOpType.isE32(s0_uop.fuOpType) -> (io.lsin.bits.src(2) > (TRLEN / 32).U),
+      MldstOpType.isE64(s0_uop.fuOpType) -> (io.lsin.bits.src(2) > (TRLEN / 64).U),
+    )),
+    MldstOpType.isMatrixC(s0_uop.fuOpType) -> false.B,
+    MldstOpType.isWholeReg(s0_uop.fuOpType) -> false.B,
+  ))
+
   s0_out               := DontCare
   s0_out.vaddr         := s0_vaddr
   s0_out.uop           := s0_uop
@@ -213,6 +251,7 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   s0_out.stride        := io.lsin.bits.src(1)
   s0_out.mtile0        := io.lsin.bits.src(2)
   s0_out.mtile1        := io.lsin.bits.src(3)
+  s0_out.uop.exceptionVec(illegalInstr)        := illegal_regidx || illegal_mtilem || illegal_mtilen || illegal_mtilek
   s0_out.uop.exceptionVec(loadAddrMisaligned)  := !s0_addr_aligned && s0_ld_flow
   s0_out.uop.exceptionVec(storeAddrMisaligned) := !s0_addr_aligned && !s0_ld_flow
   s0_out.forward_tlDchannel := false.B
@@ -496,11 +535,11 @@ class MlsUnit(implicit p: Parameters) extends XSModule
 
   val amuCtrl = Wire(new AmuLsuIO)
   amuCtrl.ls := MldstOpType.isStore(s3_in.uop.fuOpType)
-  amuCtrl.ms := s3_in.uop.imm(3, 0)
+  amuCtrl.ms := s3_in.uop.imm(2, 0)
   amuCtrl.widths    := Mux1H(Seq(
-    MldstOpType.isFp8(s3_in.uop.fuOpType)  -> MSew.e8,
-    MldstOpType.isFp16(s3_in.uop.fuOpType) -> MSew.e16,
-    MldstOpType.isFp32(s3_in.uop.fuOpType) -> MSew.e32,
+    MldstOpType.isE8(s3_in.uop.fuOpType)  -> MSew.e8,
+    MldstOpType.isE16(s3_in.uop.fuOpType) -> MSew.e16,
+    MldstOpType.isE32(s3_in.uop.fuOpType) -> MSew.e32,
   ))
   amuCtrl.baseAddr  := s3_in.paddr
   amuCtrl.stride    := s3_in.stride
@@ -509,21 +548,18 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   amuCtrl.isA       := MldstOpType.isMatrixA(s3_in.uop.fuOpType)
   amuCtrl.isB       := MldstOpType.isMatrixB(s3_in.uop.fuOpType)
   when (MldstOpType.isWholeReg(s3_in.uop.fuOpType)) {
-    amuCtrl.row     := (coreParams.MLEN / coreParams.RLEN).U
-    when (MldstOpType.isAccum(s3_in.uop.fuOpType)) {
+    amuCtrl.row     := ROWNUM.U
+    when (s3_in.uop.imm(2)) {
       amuCtrl.column := Mux1H(Seq(
-        MldstOpType.isFp8(s3_in.uop.fuOpType)  ->
-          (coreParams.RLEN * coreParams.AMUL / 8).U,
-        MldstOpType.isFp16(s3_in.uop.fuOpType) ->
-          (coreParams.RLEN * coreParams.AMUL / 16).U,
-        MldstOpType.isFp32(s3_in.uop.fuOpType) ->
-          (coreParams.RLEN * coreParams.AMUL / 32).U,
+        MldstOpType.isE8(s3_in.uop.fuOpType)  -> (ARLEN / 8).U,
+        MldstOpType.isE16(s3_in.uop.fuOpType) -> (ARLEN / 16).U,
+        MldstOpType.isE32(s3_in.uop.fuOpType) -> (ARLEN / 32).U,
       ))
     } .otherwise { // MldstOpType.isTile(s3_in.uop.fuOpType)
       amuCtrl.column := Mux1H(Seq(
-        MldstOpType.isFp8(s3_in.uop.fuOpType)  -> (coreParams.RLEN / 8).U,
-        MldstOpType.isFp16(s3_in.uop.fuOpType) -> (coreParams.RLEN / 16).U,
-        MldstOpType.isFp32(s3_in.uop.fuOpType) -> (coreParams.RLEN / 32).U,
+        MldstOpType.isE8(s3_in.uop.fuOpType)  -> (coreParams.TRLEN / 8).U,
+        MldstOpType.isE16(s3_in.uop.fuOpType) -> (coreParams.TRLEN / 16).U,
+        MldstOpType.isE32(s3_in.uop.fuOpType) -> (coreParams.TRLEN / 32).U,
       ))
     }
   } .otherwise {

@@ -42,7 +42,7 @@ import xiangshan.frontend.FtqPtr
 import xiangshan.mem.{LqPtr, LsqEnqIO, SqPtr, MlsqPtr}
 import xiangshan.backend.Bundles.{DynInst, ExceptionInfo, ExuOutput}
 import xiangshan.backend.ctrlblock.{DebugLSIO, DebugLsInfo, LsTopdownInfo}
-import xiangshan.backend.fu.matrix.Bundles.{MType, AmuCtrlIO}
+import xiangshan.backend.fu.matrix.Bundles.AmuCtrlIO
 import xiangshan.backend.fu.vector.Bundles.VType
 import xiangshan.backend.rename.SnapshotGenerator
 import yunsuan.VfaluType
@@ -103,13 +103,6 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
       val commitVType = new Bundle {
         val vtype = ValidIO(VType())
         val hasVsetvl = Output(Bool())
-      }
-      val isResumeMType = Output(Bool())
-      val walkToArchMType = Output(Bool())
-      val walkMType = ValidIO(MType())
-      val commitMType = new Bundle {
-        val mtype = ValidIO(MType())
-        val hasMsettype = Output(Bool())
       }
     }
     val fromVecExcpMod = Input(new Bundle {
@@ -176,7 +169,6 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
 
   val rab = Module(new RenameBuffer(RabSize))
   val vtypeBuffer = Module(new VTypeBuffer(VTypeBufferSize))
-  val mtypeBuffer = Module(new MTypeBuffer(MTypeBufferSize))
   val amuBuffer = Module(new AmuCtrlBuffer())
   val bankNum = 8
   assert(RobSize % bankNum == 0, "RobSize % bankNum must be 0")
@@ -205,8 +197,8 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
   val deqPtr = deqPtrVec(0)
   val walkPtr = walkPtrVec(0)
   val allocatePtrVec = VecInit((0 until RenameWidth).map(i => enqPtrVec(PopCount(io.enq.req.take(i).map(req => req.valid && req.bits.firstUop)))))
-  io.enq.canAccept := allowEnqueue && !hasBlockBackward && rab.io.canEnq && vtypeBuffer.io.canEnq && mtypeBuffer.io.canEnq && !io.fromVecExcpMod.busy && amuBuffer.io.canEnqueue
-  io.enq.canAcceptForDispatch := allowEnqueueForDispatch && !hasBlockBackward && rab.io.canEnqForDispatch && vtypeBuffer.io.canEnqForDispatch && mtypeBuffer.io.canEnqForDispatch && !io.fromVecExcpMod.busy && amuBuffer.io.canEnqueueForDispatch
+  io.enq.canAccept := allowEnqueue && !hasBlockBackward && rab.io.canEnq && vtypeBuffer.io.canEnq && !io.fromVecExcpMod.busy && amuBuffer.io.canEnqueue
+  io.enq.canAcceptForDispatch := allowEnqueueForDispatch && !hasBlockBackward && rab.io.canEnqForDispatch && vtypeBuffer.io.canEnqForDispatch && !io.fromVecExcpMod.busy && amuBuffer.io.canEnqueueForDispatch
   io.enq.resp := allocatePtrVec
   val canEnqueue = VecInit(io.enq.req.map(req => req.valid && req.bits.firstUop && io.enq.canAccept))
   val timer = GTimer()
@@ -406,26 +398,6 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
   io.toDecode.walkToArchVType := vtypeBuffer.io.toDecode.walkToArchVType
   io.toDecode.commitVType := vtypeBuffer.io.toDecode.commitVType
   io.toDecode.walkVType := vtypeBuffer.io.toDecode.walkVType
-
-  /**
-   * connection of [[mtypeBuffer]]
-   */
-  mtypeBuffer.io.redirect.valid := io.redirect.valid
-  mtypeBuffer.io.req.zip(io.enq.req).map { case (sink, source) =>
-    sink.valid := source.valid && io.enq.canAccept
-    sink.bits := source.bits
-  }
-
-  private val commitIsMTypeVec = VecInit(io.commits.commitValid.zip(io.commits.info).map { case (valid, info) => io.commits.isCommit && valid && info.isMsettype })
-  private val walkIsMTypeVec = VecInit(io.commits.walkValid.zip(walkInfo).map { case (valid, info) => io.commits.isWalk && valid && info.isMsettype })
-  mtypeBuffer.io.fromRob.commitSize := PopCount(commitIsMTypeVec)
-  mtypeBuffer.io.fromRob.walkSize := PopCount(walkIsMTypeVec)
-  mtypeBuffer.io.snpt := io.snpt
-  mtypeBuffer.io.snpt.snptEnq := snptEnq
-  io.toDecode.isResumeMType := mtypeBuffer.io.toDecode.isResumeMType
-  io.toDecode.walkToArchMType := mtypeBuffer.io.toDecode.walkToArchMType
-  io.toDecode.commitMType := mtypeBuffer.io.toDecode.commitMType
-  io.toDecode.walkMType := mtypeBuffer.io.toDecode.walkMType
 
   // When blockBackward instruction leaves Rob (commit or walk), hasBlockBackward should be set to false.B
   // To reduce registers usage, for hasBlockBackward cases, we allow enqueue after ROB is empty.
@@ -722,8 +694,6 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
   rab.io.fromRob.walkEnd := state === s_walk && walkFinished
   vtypeBuffer.io.fromRob.walkEnd := state === s_walk && walkFinished
 
-  mtypeBuffer.io.fromRob.walkEnd := state === s_walk && walkFinished // TODO: check if this is correct
-
   require(RenameWidth <= CommitWidth)
 
   // wiring to csr
@@ -892,7 +862,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
   state_next := Mux(
     io.redirect.valid || RegNext(io.redirect.valid), s_walk,
     Mux(
-      state === s_walk && walkFinished && rab.io.status.walkEnd && vtypeBuffer.io.status.walkEnd && mtypeBuffer.io.status.walkEnd, s_idle,
+      state === s_walk && walkFinished && rab.io.status.walkEnd && vtypeBuffer.io.status.walkEnd, s_idle,
       state
     )
   )
@@ -922,7 +892,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
 
   val enqPtrGenModule = Module(new RobEnqPtrWrapper)
   enqPtrGenModule.io.redirect := io.redirect
-  enqPtrGenModule.io.allowEnqueue := allowEnqueue && rab.io.canEnq && vtypeBuffer.io.canEnq && mtypeBuffer.io.canEnq && !io.fromVecExcpMod.busy && amuBuffer.io.canEnqueue
+  enqPtrGenModule.io.allowEnqueue := allowEnqueue && rab.io.canEnq && vtypeBuffer.io.canEnq && !io.fromVecExcpMod.busy && amuBuffer.io.canEnqueue
   enqPtrGenModule.io.hasBlockBackward := hasBlockBackward
   enqPtrGenModule.io.enq := VecInit(io.enq.req.map(req => req.valid && req.bits.firstUop))
   enqPtrVec := enqPtrGenModule.io.out
@@ -1227,7 +1197,6 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
     exceptionGen.io.enq(i).bits.flushPipe := io.enq.req(i).bits.flushPipe
     exceptionGen.io.enq(i).bits.isVset := io.enq.req(i).bits.isVset
     exceptionGen.io.enq(i).bits.isMsettilex := io.enq.req(i).bits.isMsettilex
-    exceptionGen.io.enq(i).bits.isMsettype := io.enq.req(i).bits.isMsettype
     exceptionGen.io.enq(i).bits.needAmuCtrl := io.enq.req(i).bits.needAmuCtrl
     exceptionGen.io.enq(i).bits.replayInst := false.B
     XSError(canEnqueue(i) && io.enq.req(i).bits.replayInst, "enq should not set replayInst")
@@ -1266,7 +1235,6 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
     exc_wb.bits.flushPipe       := wb.bits.flushPipe.getOrElse(false.B)
     exc_wb.bits.isVset          := false.B
     exc_wb.bits.isMsettilex     := false.B
-    exc_wb.bits.isMsettype      := false.B
     exc_wb.bits.needAmuCtrl     := false.B
     exc_wb.bits.replayInst      := wb.bits.replay.getOrElse(false.B)
     exc_wb.bits.singleStep      := false.B
@@ -1798,8 +1766,6 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
     dontTouch(io.commits)
     dontTouch(commitIsVTypeVec)
     dontTouch(walkIsVTypeVec)
-    dontTouch(commitIsMTypeVec)
-    dontTouch(walkIsMTypeVec)
     dontTouch(commitValidThisLine)
     dontTouch(commitReadAddr_next)
     dontTouch(donotNeedWalk)

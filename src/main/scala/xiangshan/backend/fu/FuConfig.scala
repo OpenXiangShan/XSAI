@@ -74,6 +74,7 @@ case class FuConfig (
   trigger       : Boolean = false,
   needSrcFrm    : Boolean = false,
   needSrcVxrm   : Boolean = false,
+  needSrcXmcsr  : Boolean = false,
   writeVType    : Boolean = false,
   writeMType    : Boolean = false,
   immType       : Set[UInt] = Set(),
@@ -170,16 +171,6 @@ case class FuConfig (
   def needVecCtrl: Boolean = {
     import FuType._
     Seq(vipu, vialuF, vimac, vidiv, vfpu, vppu, vfalu, vfma, vfdiv, vfcvt, vldu, vstu).contains(fuType)
-  }
-
-  def needOldMtype: Boolean = {
-    import FuType._
-    Seq(msetmtilexiwi, msetmtilexiwf, msetmtilexfwf, msetmtypeiwi, msetmtypeiwf).contains(fuType)
-  }
-
-  def needMPUCtrl: Boolean = {
-    import FuType._
-    Seq(mma, marith, mmvef).contains(fuType)
   }
 
   def needCriticalErrors: Boolean = Seq(FuType.csr).contains(fuType)
@@ -445,20 +436,6 @@ object FuConfig {
     immType = Set(SelImm.IMM_VSETVLI, SelImm.IMM_VSETIVLI),
   )
 
-  val MSetMtilexRiWiCfg: FuConfig = FuConfig(
-    name = "msetmtilexriwi",
-    fuType = FuType.msetmtilexiwi,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new MSetMtilexRiWi(cfg)(p).suggestName("MSetMtilexRiWi")),
-    srcData = Seq(
-      // src(0): atx
-      Seq(IntData())
-    ),
-    piped = true,
-    writeIntRf = true,
-    latency = CertainLatency(0),
-    immType = Set(SelImm.IMM_MSET),
-  )
-
   val MSetMtilexRiWmfCfg: FuConfig = FuConfig(
     name = "msetmtilexriwmf",
     fuType = FuType.msetmtilexiwf,
@@ -483,37 +460,6 @@ object FuConfig {
     ),
     piped = true,
     writeIntRf = true,
-    writeMxRf = true,
-    latency = CertainLatency(0),
-    immType = Set(SelImm.IMM_MSET),
-  )
-
-  val MSetMtypeRiWiCfg: FuConfig = FuConfig(
-    name = "msetmtyperiwi",
-    fuType = FuType.msetmtypeiwi,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new MSetMtypeRiWi(cfg)(p).suggestName("MSetMtypeRiWi")),
-    srcData = Seq(
-      // src(0): new mtype
-      Seq(IntData()),
-    ),
-    piped = true,
-    writeIntRf = true,
-    writeMType = true,
-    latency = CertainLatency(0),
-    immType = Set(SelImm.IMM_MSET),
-  )
-
-  val MsetMtypeRiWmfCfg: FuConfig = FuConfig(
-    name = "msetmtyperiwmf",
-    fuType = FuType.msetmtypeiwf,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new MSetMtypeRiWmf(cfg)(p).suggestName("MSetMtypeRiWmf")),
-    srcData = Seq(
-      // src(0): new mtype
-      Seq(IntData()),
-    ),
-    piped = true,
-    writeIntRf = true,
-    writeMType = true,
     latency = CertainLatency(0),
     immType = Set(SelImm.IMM_MSET),
   )
@@ -527,7 +473,9 @@ object FuConfig {
     ),
     piped = true,
     needAmuCtrl = true,
+    needSrcXmcsr = true,
     latency = CertainLatency(0),
+    // exceptionOut = Seq(illegalInstr),
     immType = Set(SelImm.IMM_MATRIXREG)
   )
 
@@ -630,7 +578,7 @@ object FuConfig {
     ),
     piped = false, // Todo: check it
     needAmuCtrl = true,
-    exceptionOut = Seq(loadAddrMisaligned, loadAccessFault, loadPageFault, loadGuestPageFault, hardwareError),
+    exceptionOut = Seq(loadAddrMisaligned, loadAccessFault, loadPageFault, loadGuestPageFault, hardwareError, illegalInstr),
     replayInst = true,
     hasLoadError = true,
     // If TLB hits, it will take 3 cycle.
@@ -991,8 +939,7 @@ object FuConfig {
     LduCfg, StaCfg, StdCfg, MouCfg, MoudCfg, VialuCfg, VipuCfg, VlduCfg, VstuCfg, VseglduSeg, VsegstuCfg,
     FaluCfg, FmacCfg, FcvtCfg, FdivCfg,
     VfaluCfg, VfmaCfg, VfcvtCfg, HyldaCfg, HystaCfg,
-    MSetMtilexRiWiCfg, MSetMtilexRiWmfCfg, MSetMtilexRmfWmfCfg,
-    MSetMtypeRiWiCfg, MsetMtypeRiWmfCfg,
+    MSetMtilexRiWmfCfg, MSetMtilexRmfWmfCfg,
     MmaCfg, MarithCfg, MlsCfg,
   )
 

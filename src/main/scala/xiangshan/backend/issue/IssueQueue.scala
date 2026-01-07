@@ -65,10 +65,6 @@ class IssueQueueIO()(implicit p: Parameters, params: IssueBlockParams) extends X
   val vlFromIntIsVlmax = Input(Bool())
   val vlFromVfIsZero = Input(Bool())
   val vlFromVfIsVlmax = Input(Bool())
-  val mxFromIntIsZero = Input(Bool())
-  val mxFromIntIsMxmax = Input(Bool())
-  val mxFromMfIsZero = Input(Bool())
-  val mxFromMfIsMxmax = Input(Bool())
   val og0Cancel = Input(ExuVec())
   val og1Cancel = Input(ExuVec())
   val ldCancel = Vec(backendParams.LdWakeupCnt, Flipped(new LoadCancelIO))
@@ -396,10 +392,6 @@ class IssueQueueImp(override val wrapper: IssueQueue)(implicit p: Parameters, va
     entriesIO.vlFromIntIsVlmax                                  := io.vlFromIntIsVlmax
     entriesIO.vlFromVfIsZero                                    := io.vlFromVfIsZero
     entriesIO.vlFromVfIsVlmax                                   := io.vlFromVfIsVlmax
-    entriesIO.mxFromIntIsZero                                   := io.mxFromIntIsZero
-    entriesIO.mxFromIntIsMxmax                                  := io.mxFromIntIsMxmax
-    entriesIO.mxFromMfIsZero                                    := io.mxFromMfIsZero
-    entriesIO.mxFromMfIsMxmax                                   := io.mxFromMfIsMxmax
     entriesIO.og0Cancel                                         := io.og0Cancel
     entriesIO.og1Cancel                                         := io.og1Cancel
     entriesIO.ldCancel                                          := io.ldCancel
@@ -1095,7 +1087,6 @@ class IssueQueueIntImp(override val wrapper: IssueQueue)(implicit p: Parameters,
     deq.bits.common.sqIdx.foreach(_ := deqEntryVec(i).bits.payload.sqIdx)
     // for i2f
     deq.bits.common.fpu.foreach(_ := deqEntryVec(i).bits.payload.fpu)
-    deq.bits.common.mpu.foreach(_ := deqEntryVec(i).bits.payload.mpu)
   }}
 }
 
@@ -1118,7 +1109,6 @@ class IssueQueueFpImp(override val wrapper: IssueQueue)(implicit p: Parameters, 
     deq.bits.common.vpu.foreach(_ := deqEntryVec(i).bits.payload.vpu)
     deq.bits.common.vpu.foreach(_.vuopIdx := deqEntryVec(i).bits.payload.uopIdx)
     deq.bits.common.vpu.foreach(_.lastUop := deqEntryVec(i).bits.payload.lastUop)
-    deq.bits.common.mpu.foreach(_ := deqEntryVec(i).bits.payload.mpu)
   }}
 }
 
@@ -1130,7 +1120,6 @@ class IssueQueueMfImp(override val wrapper: IssueQueue)(implicit p: Parameters, 
     deq.bits.common.vpu.foreach(_ := deqEntryVec(i).bits.payload.vpu)
     deq.bits.common.vpu.foreach(_.vuopIdx := deqEntryVec(i).bits.payload.uopIdx)
     deq.bits.common.vpu.foreach(_.lastUop := deqEntryVec(i).bits.payload.lastUop)
-    deq.bits.common.mpu.foreach(_ := deqEntryVec(i).bits.payload.mpu)
   }
 }
 

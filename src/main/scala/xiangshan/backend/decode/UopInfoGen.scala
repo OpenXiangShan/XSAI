@@ -239,11 +239,6 @@ class UopInfoGen (implicit p: Parameters) extends XSModule {
     UopSplitType.AMO_CAS_W -> 2.U,
     UopSplitType.AMO_CAS_D -> 2.U,
     UopSplitType.AMO_CAS_Q -> 4.U,
-    UopSplitType.MSETTILEX -> 2.U,
-    UopSplitType.MSETTYPE -> 1.U,
-    UopSplitType.MAT_MEM -> 1.U,
-    UopSplitType.MAT_MUL -> 1.U,
-    UopSplitType.MAT_ARITH -> 1.U,
     UopSplitType.dummy -> 1.U
   ))
 

@@ -225,7 +225,6 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
   private val sew          = vtype.map(_.vsew)
   private val lmul         = vtype.map(_.vlmul)
   private val eew          = uops.map(_.vpu.veew)
-  private val mtype        = uops.map(_.mpu.mtype)
   private val mop          = fuOpType.map(fuOpTypeItem => LSUOpType.getVecLSMop(fuOpTypeItem))
   private val isVlsType    = fuType.map(fuTypeItem => isVls(fuTypeItem))
   private val isSegment    = fuType.map(fuTypeItem => isVsegls(fuTypeItem))
@@ -389,7 +388,7 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
       compressMasksVec(i) & Cat(io.in.map(in =>
         // vector instructions' uopSplitType cannot be UopSplitType.SCA_SIM
         in.bits.uopSplitType =/= UopSplitType.SCA_SIM &&
-        UopSplitType.isVEC(in.bits.uopSplitType) &&
+        !UopSplitType.isAMOCAS(in.bits.uopSplitType) &&
         // vfmv.f.s, vcpop.m, vfirst.m and vmv.x.s don't change vector state
         !Seq(
           (FuType.vfalu, VfaluType.vfmv_f_s), // vfmv.f.s

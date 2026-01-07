@@ -30,7 +30,7 @@ import xiangshan.backend.datapath.DataConfig.{FpData, IntData, V0Data, VAddrData
 import xiangshan.backend.decode.{DecodeStage, FusionDecoder}
 import xiangshan.backend.dispatch.{CoreDispatchTopDownIO}
 import xiangshan.backend.dispatch.NewDispatch
-import xiangshan.backend.fu.matrix.Bundles.{MType, AmuCtrlIO}
+import xiangshan.backend.fu.matrix.Bundles.AmuCtrlIO
 import xiangshan.backend.fu.vector.Bundles.{VType, Vl}
 import xiangshan.backend.fu.wrapper.CSRToDecode
 import xiangshan.backend.rename.{Rename, RenameTableWrapper, SnapshotGenerator}
@@ -399,11 +399,6 @@ class CtrlBlockImp(
   decode.io.fromRob.walkToArchVType := rob.io.toDecode.walkToArchVType
   decode.io.fromRob.commitVType := rob.io.toDecode.commitVType
   decode.io.fromRob.walkVType := rob.io.toDecode.walkVType
-  // mtype commit
-  decode.io.fromRob.isResumeMType := rob.io.toDecode.isResumeMType
-  decode.io.fromRob.walkToArchMType := rob.io.toDecode.walkToArchMType
-  decode.io.fromRob.commitMType := rob.io.toDecode.commitMType
-  decode.io.fromRob.walkMType := rob.io.toDecode.walkMType
 
   decode.io.redirect := s1_s3_redirect.valid || s2_s4_pendingRedirectValid
 
@@ -845,11 +840,6 @@ class CtrlBlockImp(
       }
   }
 
-  // rob to backend
-  io.robio.commitMType := rob.io.toDecode.commitMType
-  // exu block to decode
-  decode.io.msettypeMType := io.toDecode.msettypeMType
-
   io.debugTopDown.fromRob := rob.io.debugTopDown.toCore
   dispatch.io.debugTopDown.fromRob := rob.io.debugTopDown.toDispatch
   dispatch.io.debugTopDown.fromCore := io.debugTopDown.fromCore
@@ -974,11 +964,6 @@ class CtrlBlockIO()(implicit p: Parameters, params: BackendParams) extends XSBun
       val hasVsetvl = Output(Bool())
     }
 
-    val commitMType = new Bundle {
-      val mtype = Output(ValidIO(MType()))
-      val hasMsettype = Output(Bool())
-    }
-
     // store event difftest information
     val storeDebugInfo = Vec(EnsbufferWidth, new Bundle {
       val robidx = Input(new RobPtr)
@@ -989,7 +974,6 @@ class CtrlBlockIO()(implicit p: Parameters, params: BackendParams) extends XSBun
   val toDecode = new Bundle {
     val vsetvlVType = Input(VType())
     val vstart = Input(Vl())
-    val msettypeMType = Input(MType())
   }
 
   val fromVecExcpMod = Input(new Bundle {
