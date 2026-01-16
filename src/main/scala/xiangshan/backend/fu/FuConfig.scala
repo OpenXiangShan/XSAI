@@ -475,7 +475,7 @@ object FuConfig {
     needAmuCtrl = true,
     needSrcXmcsr = true,
     latency = CertainLatency(0),
-    // exceptionOut = Seq(illegalInstr),
+    exceptionOut = Seq(illegalInstr),
     immType = Set(SelImm.IMM_MATRIXREG)
   )
 

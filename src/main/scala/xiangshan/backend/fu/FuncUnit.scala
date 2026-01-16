@@ -262,10 +262,12 @@ trait HasPipelineReg { this: FuncUnit =>
 
   // vstart illegal
   if (cfg.exceptionOut.nonEmpty) {
-    val outVstart = ctrlVec.last.vpu.get.vstart
-    val vstartIllegal = outVstart =/= 0.U
-    io.out.bits.ctrl.exceptionVec.get := 0.U.asTypeOf(io.out.bits.ctrl.exceptionVec.get)
-    io.out.bits.ctrl.exceptionVec.get(illegalInstr) := vstartIllegal
+    ctrlVec.last.vpu.foreach { vpu =>
+      val outVstart = vpu.vstart
+      val vstartIllegal = outVstart =/= 0.U
+      io.out.bits.ctrl.exceptionVec.get := 0.U.asTypeOf(io.out.bits.ctrl.exceptionVec.get)
+      io.out.bits.ctrl.exceptionVec.get(illegalInstr) := vstartIllegal
+    }
   }
 
   def regEnable(i: Int): Bool = validVec(i - 1) && rdyVec(i - 1)
