@@ -250,7 +250,8 @@ class MinimalMatrixConfig(n: Int) extends Config(
           dfilterSize = 48
         ),
         L2CacheParamsOpt = p.L2CacheParamsOpt.map(_.copy(
-          sets = 512
+          sets = 512,
+          enableMCP2 = false
         )),
       )
     }
@@ -494,6 +495,9 @@ class DefaultMatrixConfig(n: Int = 1) extends Config(
         l2tlbParameters = p.l2tlbParameters.copy(
           dfilterSize = 48
         ),
+        L2CacheParamsOpt = Some(p.L2CacheParamsOpt.get.copy(
+          enableMCP2 = false
+        )),
         L2NBanks = 8
       )
     }
