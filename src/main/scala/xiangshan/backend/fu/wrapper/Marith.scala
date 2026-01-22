@@ -22,4 +22,9 @@ class Marith(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUnit(cfg) {
 
   out.ctrl.amuCtrl.get.op   := AmuCtrlIO.arithOp()
   out.ctrl.amuCtrl.get.data := output.asUInt
+  if (env.EnableDifftest) {
+    // It will be filled in ROB.
+    out.ctrl.amuCtrl.get.pc.get := DontCare
+    out.ctrl.amuCtrl.get.coreid.get := DontCare
+  }
 }
