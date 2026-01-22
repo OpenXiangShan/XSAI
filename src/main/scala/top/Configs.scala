@@ -258,6 +258,7 @@ class MinimalMatrixConfig(n: Int) extends Config(
     case MatAccKey => MatAcc.CUTE
     case CuteParamsKey => CuteParams.CUTE_8Tops_128SCP.copy(
       Debug = CuteDebugParams.NoDebug,
+      EnableDifftest = site(DebugOptionsKey).EnableDifftest,
       v3config = Cutev3extParams(
         TaskCtrl_AutoClear = true,
       ),
@@ -504,6 +505,7 @@ class DefaultMatrixConfig(n: Int = 1) extends Config(
     case MatAccKey => MatAcc.CUTE
     case CuteParamsKey => CuteParams.CUTE_8Tops_128SCP.copy(
       Debug = CuteDebugParams.NoDebug,
+      EnableDifftest = site(DebugOptionsKey).EnableDifftest,
       v3config = Cutev3extParams(
         TaskCtrl_AutoClear = true,
       ),

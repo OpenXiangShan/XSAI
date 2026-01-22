@@ -245,6 +245,8 @@ object CUTE extends $file.CUTE.common.CUTEModule with HasChisel {
   def utilityModule: ScalaModule = utility
 
   def coupledL2Module: ScalaModule = coupledL2
+  
+  def difftestModule: ScalaModule = difftest
 
 }
 

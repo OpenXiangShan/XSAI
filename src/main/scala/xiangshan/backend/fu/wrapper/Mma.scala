@@ -85,4 +85,9 @@ class Mma(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUnit(cfg) {
   out.ctrl.amuCtrl.get.data := output.asUInt
   out.ctrl.exceptionVec.get := 0.U.asTypeOf(out.ctrl.exceptionVec.get)
   out.ctrl.exceptionVec.get(ExceptionNO.illegalInstr) := illegal_regidx || illegal_mtilem || illegal_mtilen || illegal_mtilek
+  if (env.EnableDifftest) {
+    // It will be filled in ROB.
+    out.ctrl.amuCtrl.get.pc.get := DontCare
+    out.ctrl.amuCtrl.get.coreid.get := DontCare
+  }
 }

@@ -193,6 +193,11 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
     when (amu_data.orR) {
       entry.writebacked := true.B
       entry.amuCtrl := amu_data.asTypeOf(new AmuCtrlIO)
+      // Set the pc field in amuCtrl when difftest is enabled
+      if (env.EnableDifftest && HasMatrixExtension) {
+        entry.amuCtrl.pc.get := dt_pc.get(i)
+        entry.amuCtrl.coreid.get := io.hartId.get
+      }
     }
   }
 
@@ -307,6 +312,7 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
         difftestAmuCtrl.ls        := mlsio.ls
         difftestAmuCtrl.transpose := mlsio.transpose
         difftestAmuCtrl.types1    := mlsio.isacc
+        difftestAmuCtrl.types2    := mlsio.isA
         difftestAmuCtrl.base      := mlsio.baseAddr
         difftestAmuCtrl.stride    := mlsio.stride
         difftestAmuCtrl.row       := mlsio.row

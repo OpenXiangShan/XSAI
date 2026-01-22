@@ -169,6 +169,9 @@ object Bundles {
     def isArith()   : Bool = op === AmuCtrlIO.arithOp()
     // data: The ctrl signal for op
     val data = UInt(150.W)
+
+    val pc = Option.when(env.EnableDifftest) (UInt(64.W))
+    val coreid = Option.when(env.EnableDifftest) (UInt(hartIdLen.W))
   }
 
   object AmuCtrlIO {

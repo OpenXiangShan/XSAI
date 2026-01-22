@@ -21,4 +21,9 @@ class Mrelease(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUnit(cfg)
   out.res.data := 0.U
   out.ctrl.amuCtrl.get.op   := AmuCtrlIO.releaseOp()
   out.ctrl.amuCtrl.get.data := output.asUInt
+  if (env.EnableDifftest) {
+    // It will be filled in ROB.
+    out.ctrl.amuCtrl.get.pc.get := DontCare
+    out.ctrl.amuCtrl.get.coreid.get := DontCare
+  }
 }

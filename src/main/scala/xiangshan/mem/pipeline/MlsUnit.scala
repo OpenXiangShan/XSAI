@@ -578,6 +578,11 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   s3_out.bits.data             := s3_in.data
   s3_out.bits.amuCtrl.get.op   := AmuCtrlIO.mlsOp()
   s3_out.bits.amuCtrl.get.data := amuCtrl.asUInt
+  if (env.EnableDifftest) {
+    // It will be filled in ROB.
+    s3_out.bits.amuCtrl.get.pc.get := DontCare
+    s3_out.bits.amuCtrl.get.coreid.get := DontCare
+  }
   s3_out.bits.debug.isMMIO     := s3_in.mmio
   s3_out.bits.debug.isNCIO     := false.B
   s3_out.bits.debug.isPerfCnt  := false.B
