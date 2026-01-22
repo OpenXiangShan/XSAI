@@ -22,7 +22,6 @@ class XSCuteTopImpl(wrapper: XSCuteTop) extends LazyModuleImp(wrapper) {
     val matrix_data_in = wrapper.cute_tl.module.io.matrix_data_in.cloneType
   })
   io.ctrl2top <> cute.io.ctrl2top
-  io.mrelease <> cute.io.mrelease
   wrapper.cute_tl.module.io.matrix_data_in <> io.matrix_data_in
   wrapper.cute_tl.module.io.mmu <> cute.io.mmu2llc
   io.mmu2llc := DontCare
