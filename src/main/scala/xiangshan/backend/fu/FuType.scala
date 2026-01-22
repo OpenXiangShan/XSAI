@@ -228,7 +228,7 @@ object FuType extends OHEnumeration {
 
   def isVectorNeedFrm(fuType: UInt): Bool = FuTypeOrR(fuType, vectorNeedFrm)
 
-  def isMArith(fuType: UInt): Bool = FuTypeOrR(fuType, matrixArith)
+  def isMarith(fuType: UInt): Bool = FuTypeOrR(fuType, matrixArith)
 
   def isMls(fuType: UInt): Bool = FuTypeOrR(fuType, matrixMem)
 

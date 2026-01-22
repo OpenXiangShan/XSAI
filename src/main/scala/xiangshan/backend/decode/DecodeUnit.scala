@@ -1181,6 +1181,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   val isMsettilex = FuType.isMsettilex(decodedInst.fuType)
   val isMMA = FuType.isMMA(decodedInst.fuType)
   val isMls = FuType.isMls(decodedInst.fuType)
+  val isMarith = FuType.isMarith(decodedInst.fuType)
 
   when (isCsrrVl) {
     // convert to vsetvl instruction
@@ -1268,6 +1269,12 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
       decodedInst.fuOpType(6, 3),
       Seq(Mtilek_IDX.U, Mtilen_IDX.U, Mtilen_IDX.U, 0.U)
     )
+  }.elsewhen (isMarith) {
+    decodedInst.srcType(0) := SrcType.no
+    decodedInst.srcType(1) := SrcType.no
+    decodedInst.srcType(2) := SrcType.no
+    decodedInst.srcType(3) := SrcType.no
+    decodedInst.srcType(4) := SrcType.no
   }
 
   io.deq.decodedInst := decodedInst
