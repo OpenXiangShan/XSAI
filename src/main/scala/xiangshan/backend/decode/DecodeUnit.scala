@@ -949,7 +949,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
       inst.isOPFVF || inst.isOPFVV
     ) ||
     io.fromCSR.illegalInst.vsIsOff    && FuType.FuTypeOrR(decodedInst.fuType, FuType.vecAll) ||
-    io.fromCSR.illegalInst.msIsOff    && FuType.FuTypeOrR(decodedInst.fuType, FuType.matrixAll) ||
+    // io.fromCSR.illegalInst.msIsOff    && FuType.FuTypeOrR(decodedInst.fuType, FuType.matrixAll) ||
     io.fromCSR.illegalInst.wfi        && FuType.FuTypeOrR(decodedInst.fuType, FuType.csr)   && CSROpType.isWfi(decodedInst.fuOpType) ||
     io.fromCSR.illegalInst.wrs_nto    && FuType.FuTypeOrR(decodedInst.fuType, FuType.csr)   && CSROpType.isWrsNto(decodedInst.fuOpType) ||
     (decodedInst.needFrm.scalaNeedFrm || FuType.isScalaNeedFrm(decodedInst.fuType)) && (((decodedInst.fpu.rm === 5.U) || (decodedInst.fpu.rm === 6.U)) || ((decodedInst.fpu.rm === 7.U) && io.fromCSR.illegalInst.frm)) ||
@@ -1203,7 +1203,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     decodedInst.lsrc(2)    := inst.CSRIDX - CSRs.mtilem.U
     decodedInst.waitForward   := false.B
     decodedInst.blockBackward := false.B
-    decodedInst.exceptionVec(illegalInstr) := io.fromCSR.illegalInst.msIsOff
+    // decodedInst.exceptionVec(illegalInstr) := io.fromCSR.illegalInst.msIsOff
   }.elsewhen (isCsrrVlenb) {
     // convert to addi instruction
     decodedInst.srcType(0) := SrcType.reg
@@ -1227,7 +1227,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     decodedInst.waitForward := false.B
     decodedInst.blockBackward := false.B
     decodedInst.canRobCompress := true.B
-    decodedInst.exceptionVec(illegalInstr) := io.fromCSR.illegalInst.msIsOff
+    // decodedInst.exceptionVec(illegalInstr) := io.fromCSR.illegalInst.msIsOff
   }.elsewhen (isPreW || isPreR || isPreI) {
     decodedInst.selImm := SelImm.IMM_S
     decodedInst.fuType := FuType.ldu.U

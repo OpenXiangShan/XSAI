@@ -547,10 +547,10 @@ class MstatusModule(implicit override val p: Parameters) extends CSRModule("MSta
     reg.VS := ContextStatus.Dirty
   }
 
-  when (robCommit.msDirty || writeMCSR) {
-    assert(reg.MS =/= ContextStatus.Off, "The [m|s]status.MS should not be Off when set dirty, please check decode")
-    reg.MS := ContextStatus.Dirty
-  }
+  // when (robCommit.msDirty || writeMCSR) {
+  //   assert(reg.MS =/= ContextStatus.Off, "The [m|s]status.MS should not be Off when set dirty, please check decode")
+  //   reg.MS := ContextStatus.Dirty
+  // }
   // when MDT is explicitly written by 1, clear MIE
   // only when reg.MDT is zero or wdata.MDT is zero , MIE can be explicitly written by 1
   when (w.wdataFields.MDT && w.wen) {
