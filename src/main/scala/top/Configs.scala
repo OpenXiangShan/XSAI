@@ -258,13 +258,15 @@ class MinimalMatrixConfig(n: Int) extends Config(
       )
     }
     case MatAccKey => MatAcc.CUTE
-    case CuteParamsKey => CuteParams.CUTE_8Tops_128SCP.copy(
-      Debug = CuteDebugParams.NoDebug,
-      EnableDifftest = site(DebugOptionsKey).EnableDifftest,
-      v3config = Cutev3extParams(
-        TaskCtrl_AutoClear = true,
-      ),
-    )
+    case CuteParamsKey =>
+      CuteParams.CUTE_8Tops_128SCP.copy(
+        Debug = CuteDebugParams.NoDebug,
+        EnableDifftest = site(DebugOptionsKey).EnableDifftest,
+        v3config = Cutev3extParams(
+          TaskCtrl_AutoClear = true,
+        ),
+        L2NBanks = site(XSTileKey).head.L2NBanks,
+      )
   })
 )
 
@@ -504,13 +506,15 @@ class DefaultMatrixConfig(n: Int = 1) extends Config(
       )
     }
     case MatAccKey => MatAcc.CUTE
-    case CuteParamsKey => CuteParams.CUTE_8Tops_128SCP.copy(
-      Debug = CuteDebugParams.NoDebug,
-      EnableDifftest = site(DebugOptionsKey).EnableDifftest,
-      v3config = Cutev3extParams(
-        TaskCtrl_AutoClear = true,
-      ),
-    )
+    case CuteParamsKey =>
+      CuteParams.CUTE_8Tops_128SCP.copy(
+        Debug = CuteDebugParams.NoDebug,
+        EnableDifftest = site(DebugOptionsKey).EnableDifftest,
+        v3config = Cutev3extParams(
+          TaskCtrl_AutoClear = true,
+        ),
+        L2NBanks = site(XSTileKey).head.L2NBanks,
+      )
   })
 )
 

@@ -132,9 +132,9 @@ class XSCuteTop(implicit p: Parameters) extends LazyModule {
   lazy val module = new XSCuteTopImpl(this)
 }
 
-class XSCuteIO(implicit p: Parameters) extends Bundle {
+class XSCuteIO(implicit p: Parameters) extends CuteBundle {
   val cute = new CUTETopIO
-  val matrix_data_in = Flipped(Decoupled(new MatrixDataBundle()))
+  val matrix_data_in = Flipped(Vec(L2NBanks, Decoupled(new MatrixDataBundle())))
   val hartId = Input(UInt(8.W))
 }
 
@@ -153,12 +153,16 @@ class XSCuteImp(wrapper: XSCute)(implicit p: Parameters) extends LazyModuleImp(w
     wrapper.cute_tl.module.io.mmu <> cute.io.mmu2llc
 
     val tl_data_in = wrapper.cute_tl.module.io.matrix_data_in
-    tl_data_in.valid := io.matrix_data_in.valid
+    val matrix_data_in_vec = io.matrix_data_in
+    val matrix_data_arb = Module(new Arbiter(matrix_data_in_vec(0).bits.cloneType, matrix_data_in_vec.length))
+    matrix_data_arb.io.in <> matrix_data_in_vec
+
+    tl_data_in.valid := matrix_data_arb.io.out.valid
     tl_data_in.bits := 0.U.asTypeOf(tl_data_in.bits)
     tl_data_in.bits.opcode := TLMessages.AccessAckData
-    tl_data_in.bits.source := io.matrix_data_in.bits.sourceId
-    tl_data_in.bits.data := io.matrix_data_in.bits.data.data
-    io.matrix_data_in.ready := tl_data_in.ready
+    tl_data_in.bits.source := matrix_data_arb.io.out.bits.sourceId
+    tl_data_in.bits.data := matrix_data_arb.io.out.bits.data.data
+    matrix_data_arb.io.out.ready := tl_data_in.ready
 
   // DiffTest: Monitor CUTE write requests to L2 Cache
   if (env.EnableDifftest) {
@@ -208,7 +212,7 @@ class XSCute(implicit p: Parameters) extends LazyModule {
   val cute_tl = LazyModule(new Cute2TL)
   val node = TLAdapterNode()
 
-  node := CuteDebugAdapter("near_cute") := cute_tl.node
+  node := TLWidthWidget(64) := CuteDebugAdapter("near_cute") := cute_tl.node
 
   lazy val module = new XSCuteImp(this)
 }
