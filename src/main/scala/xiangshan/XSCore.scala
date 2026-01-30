@@ -117,8 +117,8 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
     })
     val dft = Option.when(hasDFT)(Input(new SramBroadcastBundle))
     val dft_reset = Option.when(hasDFT)(Input(new DFTResetSignals()))
-    val amuCtrl = Vec(CommitWidth, Decoupled(new AmuCtrlIO))
-    val amuRelease = Flipped(Decoupled(new AmuReleaseIO2XS))
+    val amuCtrl = Option.when(HasMatrixExtension)(Decoupled(new AmuCtrlIO))
+    val amuRelease = Option.when(HasMatrixExtension)(Flipped(Decoupled(new AmuReleaseIO2XS)))
   })
 
   dontTouch(io.l2_flush_done)
@@ -194,7 +194,9 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
   backend.io.mem.sqCanAccept := memBlock.io.mem_to_ooo.lsqio.sqCanAccept
   backend.io.mem.mlsqCanAccept := memBlock.io.mem_to_ooo.lsqio.mlsqCanAccept
   backend.io.fenceio.sbuffer.sbIsEmpty := memBlock.io.mem_to_ooo.sbIsEmpty
-  backend.io.fenceio.amuRelease <> io.amuRelease
+  io.amuRelease.foreach { amuRelease =>
+    backend.io.fenceio.amuRelease <> amuRelease
+  }
 
   backend.io.perf.frontendInfo := frontend.io.frontendInfo
   backend.io.perf.memInfo := memBlock.io.memInfo
@@ -207,9 +209,14 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
 
   backend.io.mem.storeDebugInfo <> memBlock.io.mem_to_ooo.storeDebugInfo
   
-  // top -> AMU
-  io.amuCtrl.zip(backend.io.toAmu).foreach { case (amuIO, amuBackend) =>
-    amuIO <> amuBackend
+  if (HasMatrixExtension) {
+    val amuCtrlArbiter = Module(new Arbiter(new AmuCtrlIO, CommitWidth))
+    amuCtrlArbiter.io.in <> backend.io.toAmu
+    io.amuCtrl.get <> amuCtrlArbiter.io.out
+  } else {
+    backend.io.toAmu.foreach { out =>
+      out.ready := false.B
+    }
   }
 
   // top -> memBlock
