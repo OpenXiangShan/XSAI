@@ -131,13 +131,11 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
     .setAddr(CSRs.vlenb)
 
   val xmcsr = Module(new CSRModule("Xmcsr", new CSRBundle {
-    val XMXRM    = RW(1,  0)
-    val XMSAT    = RW(    2)
-    val XMFFLAGS = RW(7,  3)
-    val XMFRM    = RW(10, 8)
-    val XMSATEN  = RW(11)
-    val VXSAT = RW(   0)
-    val VXRM  = RW(2, 1)
+    val XMXRM    = RW(1,  0).withReset(0.U)
+    val XMSAT    = RW(    2).withReset(0.U)
+    val XMFFLAGS = RW(7,  3).withReset(0.U)
+    val XMFRM    = RW(10, 8).withReset(0.U)
+    val XMSATEN  = RW(11).withReset(0.U)
   }) with HasRobCommitBundle {
     val wAliasXmxrm = IO(Input(new CSRAddrWriteBundle(new CSRBundle {
       val XMXRM = RW(1, 0)
