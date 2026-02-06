@@ -36,6 +36,7 @@ case class BackendParams(
   schdParams : Map[SchedulerType, SchdBlockParams],
   pregParams : Seq[PregParams],
   iqWakeUpParams : Seq[WakeUpConfig],
+  hasMatrixExtension : Boolean,
 ) {
 
   def debugEn(implicit p: Parameters): Boolean = p(DebugOptionsKey).EnableDifftest
@@ -68,10 +69,15 @@ case class BackendParams(
   def vfSchdParams = schdParams.get(VfScheduler())
   def mfSchdParams = schdParams.get(MfScheduler())
   def memSchdParams = schdParams.get(MemScheduler())
-  def allSchdParams: Seq[SchdBlockParams] =
-    (Seq(intSchdParams) :+ fpSchdParams :+ vfSchdParams :+ mfSchdParams :+ memSchdParams)
-    .filter(_.nonEmpty)
-    .map(_.get)
+  def allSchdParams: Seq[SchdBlockParams] = {
+    (
+      if (hasMatrixExtension) {
+        (Seq(intSchdParams) :+ fpSchdParams :+ vfSchdParams :+ mfSchdParams :+ memSchdParams)
+      } else {
+        (Seq(intSchdParams) :+ fpSchdParams :+ vfSchdParams :+ memSchdParams)
+      }
+    ).filter(_.nonEmpty).map(_.get)
+  }
   def allIssueParams: Seq[IssueBlockParams] =
     allSchdParams.map(_.issueBlockParams).flatten
   def allExuParams: Seq[ExeUnitParams] =
@@ -407,7 +413,11 @@ case class BackendParams(
 
   private def isContinuous(portIndices: Seq[Int]): Boolean = {
     val portIndicesSet = portIndices.toSet
-    portIndicesSet.min == 0 && portIndicesSet.max == portIndicesSet.size - 1
+    if (portIndicesSet.isEmpty) {
+      return true
+    } else {
+      return portIndicesSet.min == 0 && portIndicesSet.max == portIndicesSet.size - 1
+    }
   }
 
   def configChecks = {

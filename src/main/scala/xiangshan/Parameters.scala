@@ -70,7 +70,7 @@ case class XSCoreParameters
   HasMExtension: Boolean = true,
   HasCExtension: Boolean = true,
   HasHExtension: Boolean = true,
-  HasMatrixExtension: Boolean = true,
+  HasMatrixExtension: Boolean = false,
   HasDiv: Boolean = true,
   HasICache: Boolean = true,
   HasDCache: Boolean = true,
@@ -433,10 +433,13 @@ case class XSCoreParameters
         ExeUnitParams("ALU3", Seq(AluCfg), Seq(IntWB(port = 3, 0)), Seq(Seq(IntRD(6, 0)), Seq(IntRD(7, 0))), true, 2),
         ExeUnitParams("BJU3", Seq(CsrCfg, FenceCfg, DivCfg), Seq(IntWB(port = 4, 1)), Seq(Seq(IntRD(0, 1)), Seq(IntRD(1, 1)))),
       ), numEntries = IssueQueueSize, numEnq = 2, numComp = IssueQueueCompEntrySize),
-      IssueBlockParams(Seq(
-        ExeUnitParams("MSET0", Seq(MSetMtilexRiWmfCfg), Seq(MxWB(port = intSchdMxWbPort, 0)), Seq(Seq(IntRD(0, 2)))),
-        ExeUnitParams("MRELEASE", Seq(MreleaseCfg), Seq(), Seq(Seq(IntRD(2, 2))))
-      ), numEntries = IssueQueueSize, numEnq = 2, numComp = IssueQueueCompEntrySize),
+    ) ++ (
+      if (HasMatrixExtension) Seq(
+        IssueBlockParams(Seq(
+          ExeUnitParams("MSET0", Seq(MSetMtilexRiWmfCfg), Seq(MxWB(port = intSchdMxWbPort, 0)), Seq(Seq(IntRD(0, 2)))),
+          ExeUnitParams("MRELEASE", Seq(MreleaseCfg), Seq(), Seq(Seq(IntRD(2, 2))))
+        ), numEntries = IssueQueueSize, numEnq = 2, numComp = IssueQueueCompEntrySize),
+      ) else Nil
     ),
       numPregs = intPreg.numEntries,
       numDeqOutside = 0,
@@ -491,20 +494,28 @@ case class XSCoreParameters
 
   val mfSchdParams = {
     implicit val schdType: SchedulerType = MfScheduler()
-    SchdBlockParams(Seq(
-      IssueBlockParams(Seq(
-        ExeUnitParams("MSET1", Seq(MSetMtilexRmfWmfCfg), Seq(IntWB(port = 3, 1)), Seq(Seq(), Seq(), Seq(MxRD(0, 0)))),
-      ), numEntries = 16, numEnq = 2, numComp = 12),
-      IssueBlockParams(Seq(
-        ExeUnitParams("MEX0", Seq(MmaCfg), Seq(), Seq(Seq(), Seq(), Seq(MxRD(0, 1)), Seq(MxRD(1, 0)), Seq(MxRD(2, 0)))),
-        ExeUnitParams("MEX1", Seq(MarithCfg), Seq(), Seq(Seq(), Seq(), Seq(MxRD(1, 1)), Seq(MxRD(2, 1)))),
-      ), numEntries = 16, numEnq = 2, numComp = 12)
-    ),
-      numPregs = mxPreg.numEntries,
-      numDeqOutside = 0,
-      schdType = schdType,
-      rfDataWidth = mxPreg.dataCfg.dataWidth
-    )
+    if (HasMatrixExtension) {
+      SchdBlockParams(Seq(
+        IssueBlockParams(Seq(
+          ExeUnitParams("MSET1", Seq(MSetMtilexRmfWmfCfg), Seq(IntWB(port = 3, 1)), Seq(Seq(), Seq(), Seq(MxRD(0, 0)))),
+        ), numEntries = 16, numEnq = 2, numComp = 12),
+        IssueBlockParams(Seq(
+          ExeUnitParams("MEX0", Seq(MmaCfg), Seq(), Seq(Seq(), Seq(), Seq(MxRD(0, 1)), Seq(MxRD(1, 0)), Seq(MxRD(2, 0)))),
+          ExeUnitParams("MEX1", Seq(MarithCfg), Seq(), Seq(Seq(), Seq(), Seq(MxRD(1, 1)), Seq(MxRD(2, 1)))),
+        ), numEntries = 16, numEnq = 2, numComp = 12)
+      ),
+        numPregs = mxPreg.numEntries,
+        numDeqOutside = 0,
+        schdType = schdType,
+        rfDataWidth = mxPreg.dataCfg.dataWidth
+      )
+    } else {
+      SchdBlockParams(Seq(), numPregs = 0, numDeqOutside = 0, schdType = schdType, rfDataWidth = MxPregParams(
+        numEntries = 0,
+        numRead = None,
+        numWrite = None,
+      ).dataCfg.dataWidth)
+    }
   }
 
   val memSchdParams = {
@@ -533,9 +544,11 @@ case class XSCoreParameters
       IssueBlockParams(Seq(
         ExeUnitParams("VLSU1", Seq(VlduCfg, VstuCfg), Seq(VfWB(5, 0), V0WB(5, 0), VlWB(port = 3, 0)), Seq(Seq(VfRD(9, 0)), Seq(VfRD(10, 0)), Seq(VfRD(11, 0)), Seq(V0RD(3, 0)), Seq(VlRD(3, 0)))),
       ), numEntries = 16, numEnq = 2, numComp = 12),
+    ) ++ (if (HasMatrixExtension) Seq(
       IssueBlockParams(Seq(
         ExeUnitParams("MLSU0", Seq(MlsCfg), Seq(), Seq(Seq(IntRD(8, 1)), Seq(IntRD(9, 1)), Seq(MxRD(3, 0)), Seq(MxRD(4, 0)))),
       ), numEntries = 16, numEnq = 2, numComp = 12),
+    ) else Nil) ++ Seq(
       IssueBlockParams(Seq(
         ExeUnitParams("STD0", Seq(StdCfg, MoudCfg), Seq(), Seq(Seq(IntRD(5, 2), FpRD(9, 0)))),
       ), numEntries = 16, numEnq = 2, numComp = 12),
@@ -556,7 +569,7 @@ case class XSCoreParameters
     Seq(
       WakeUpConfig(
         Seq("ALU0", "ALU1", "ALU2", "ALU3", "LDU0", "LDU1", "LDU2") ->
-        Seq("ALU0", "BJU0", "ALU1", "BJU1", "ALU2", "BJU2", "ALU3", "BJU3", "LDU0", "LDU1", "LDU2", "STA0", "STA1", "STD0", "STD1", "MSET0", "MRELEASE", "MLSU0")
+        (Seq("ALU0", "BJU0", "ALU1", "BJU1", "ALU2", "BJU2", "ALU3", "BJU3", "LDU0", "LDU1", "LDU2", "STA0", "STA1", "STD0", "STD1") ++ (if (HasMatrixExtension) Seq("MSET0", "MRELEASE", "MLSU0") else Nil))
       ),
       // TODO: add load -> fp slow wakeup
       WakeUpConfig(
@@ -590,6 +603,7 @@ case class XSCoreParameters
       fakeIntPreg
     ),
     iqWakeUpParams,
+    HasMatrixExtension,
   )
 
   // Parameters for trace extension.

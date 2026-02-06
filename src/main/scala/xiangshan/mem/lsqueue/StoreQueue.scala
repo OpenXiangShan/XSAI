@@ -53,7 +53,7 @@ object SqPtr {
 class SqEnqIO(implicit p: Parameters) extends MemBlockBundle {
   val canAccept = Output(Bool())
   val lqCanAccept = Input(Bool())
-  val mlsqCanAccept = Input(Bool())
+  val mlsqCanAccept = Option.when(HasMatrixExtension)(Input(Bool()))
   val needAlloc = Vec(LSQEnqWidth, Input(Bool()))
   val req = Vec(LSQEnqWidth, Flipped(ValidIO(new DynInst)))
   val resp = Vec(LSQEnqWidth, Output(new SqPtr))

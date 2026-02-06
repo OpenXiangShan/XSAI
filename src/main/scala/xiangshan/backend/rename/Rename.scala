@@ -63,20 +63,20 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
     val fpReadPorts = Vec(RenameWidth, Vec(3, Input(UInt(PhyRegIdxWidth.W))))
     val vecReadPorts = Vec(RenameWidth, Vec(numVecRatPorts, Input(UInt(PhyRegIdxWidth.W))))
     val v0ReadPorts = Vec(RenameWidth, Vec(1, Input(UInt(PhyRegIdxWidth.W))))
-    val mxReadPorts = Vec(RenameWidth, Vec(3, Input(UInt(PhyRegIdxWidth.W))))
+    val mxReadPorts = OptionWrapper(HasMatrixExtension, Vec(RenameWidth, Vec(3, Input(UInt(PhyRegIdxWidth.W)))))
     val vlReadPorts = Vec(RenameWidth, Vec(1, Input(UInt(PhyRegIdxWidth.W))))
     val intRenamePorts = Vec(RenameWidth, Output(new RatWritePort(log2Ceil(IntLogicRegs))))
     val fpRenamePorts = Vec(RenameWidth, Output(new RatWritePort(log2Ceil(FpLogicRegs))))
     val vecRenamePorts = Vec(RenameWidth, Output(new RatWritePort(log2Ceil(VecLogicRegs))))
     val v0RenamePorts = Vec(RenameWidth, Output(new RatWritePort(log2Ceil(V0LogicRegs))))
-    val mxRenamePorts = Vec(RenameWidth, Output(new RatWritePort(log2Ceil(MxLogicRegs))))
+    val mxRenamePorts = OptionWrapper(HasMatrixExtension, Vec(RenameWidth, Output(new RatWritePort(log2Ceil(MxLogicRegs)))))
     val vlRenamePorts = Vec(RenameWidth, Output(new RatWritePort(log2Ceil(VlLogicRegs))))
     // from rename table
     val int_old_pdest = Vec(RabCommitWidth, Input(UInt(PhyRegIdxWidth.W)))
     val fp_old_pdest = Vec(RabCommitWidth, Input(UInt(PhyRegIdxWidth.W)))
     val vec_old_pdest = Vec(RabCommitWidth, Input(UInt(PhyRegIdxWidth.W)))
     val v0_old_pdest = Vec(RabCommitWidth, Input(UInt(PhyRegIdxWidth.W)))
-    val mx_old_pdest = Vec(RabCommitWidth, Input(UInt(PhyRegIdxWidth.W)))
+    val mx_old_pdest = OptionWrapper(HasMatrixExtension, Vec(RabCommitWidth, Input(UInt(PhyRegIdxWidth.W))))
     val vl_old_pdest = Vec(RabCommitWidth, Input(UInt(PhyRegIdxWidth.W)))
     val int_need_free = Vec(RabCommitWidth, Input(Bool()))
     // to dispatch1
@@ -112,7 +112,7 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
   val fpFreeList = Module(new StdFreeList(FpPhyRegs - FpLogicRegs, FpLogicRegs, Reg_F))
   val vecFreeList = Module(new StdFreeList(VfPhyRegs - VecLogicRegs, VecLogicRegs, Reg_V, 31))
   val v0FreeList = Module(new StdFreeList(V0PhyRegs - V0LogicRegs, V0LogicRegs, Reg_V0, 1))
-  val mxFreeList = Module(new StdFreeList(MxPhyRegs - MxLogicRegs, MxLogicRegs, Reg_Mx, 3))
+  val mxFreeList = OptionWrapper(HasMatrixExtension, Module(new StdFreeList(MxPhyRegs - MxLogicRegs, MxLogicRegs, Reg_Mx, 3)))
   val vlFreeList = Module(new StdFreeList(VlPhyRegs - VlLogicRegs, VlLogicRegs, Reg_Vl, 1))
 
   intFreeList.io.commit    <> io.rabCommits
@@ -125,8 +125,8 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
   v0FreeList.io.debug_rat.foreach(_ <> io.debug_v0_rat.get)
   vlFreeList.io.commit <> io.rabCommits
   vlFreeList.io.debug_rat.foreach(_ <> io.debug_vl_rat.get)
-  mxFreeList.io.commit <> io.rabCommits
-  mxFreeList.io.debug_rat.foreach(_ <> io.debug_mx_rat.get)
+  mxFreeList.foreach(_.io.commit <> io.rabCommits)
+  mxFreeList.foreach(_.io.debug_rat.foreach(_ <> io.debug_mx_rat.get))
 
   // decide if given instruction needs allocating a new physical register (CfCtrl: from decode; RobCommitInfo: from rob)
   def needDestReg[T <: DecodedInst](reg_t: RegType, x: T): Bool = reg_t match {
@@ -134,7 +134,7 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
     case Reg_F => x.fpWen
     case Reg_V => x.vecWen
     case Reg_V0 => x.v0Wen
-    case Reg_Mx => x.mxWen
+    case Reg_Mx => x.mxWen.getOrElse(false.B)
     case Reg_Vl => x.vlWen
   }
   def needDestRegCommit[T <: RabCommitInfo](reg_t: RegType, x: T): Bool = {
@@ -143,7 +143,7 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
       case Reg_F => x.fpWen
       case Reg_V => x.vecWen
       case Reg_V0 => x.v0Wen
-      case Reg_Mx => x.mxWen
+      case Reg_Mx => x.mxWen.getOrElse(false.B)
       case Reg_Vl => x.vlWen
     }
   }
@@ -153,27 +153,46 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
       case Reg_F => x.fpWen
       case Reg_V => x.vecWen
       case Reg_V0 => x.v0Wen
-      case Reg_Mx => x.mxWen
+      case Reg_Mx => x.mxWen.getOrElse(false.B)
       case Reg_Vl => x.vlWen
     }
   }
 
   // connect [redirect + walk] ports for fp & vec & int free list
-  Seq(fpFreeList, vecFreeList, intFreeList, v0FreeList, mxFreeList, vlFreeList).foreach { case fl =>
+  Seq(fpFreeList, vecFreeList, intFreeList, v0FreeList, vlFreeList).foreach { case fl =>
     fl.io.redirect := io.redirect.valid
     fl.io.walk := io.rabCommits.isWalk
   }
+  if (HasMatrixExtension) {
+    mxFreeList.get.io.redirect := io.redirect.valid
+    mxFreeList.get.io.walk := io.rabCommits.isWalk
+  }
+
   // only when all free list and dispatch1 has enough space can we do allocation
   // when isWalk, freelist can definitely allocate
-  intFreeList.io.doAllocate    := fpFreeList.io.canAllocate  && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate  && vlFreeList.io.canAllocate && mxFreeList.io.canAllocate && dispatchCanAcc || io.rabCommits.isWalk
-  fpFreeList.io.doAllocate     := intFreeList.io.canAllocate && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate  && vlFreeList.io.canAllocate && mxFreeList.io.canAllocate && dispatchCanAcc || io.rabCommits.isWalk
-  vecFreeList.io.doAllocate    := intFreeList.io.canAllocate && fpFreeList.io.canAllocate  && v0FreeList.io.canAllocate  && vlFreeList.io.canAllocate && mxFreeList.io.canAllocate && dispatchCanAcc || io.rabCommits.isWalk
-  v0FreeList.io.doAllocate     := intFreeList.io.canAllocate && fpFreeList.io.canAllocate  && vecFreeList.io.canAllocate && vlFreeList.io.canAllocate && mxFreeList.io.canAllocate && dispatchCanAcc || io.rabCommits.isWalk
-  mxFreeList.io.doAllocate     := intFreeList.io.canAllocate && fpFreeList.io.canAllocate  && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate && vlFreeList.io.canAllocate && dispatchCanAcc || io.rabCommits.isWalk
-  vlFreeList.io.doAllocate     := intFreeList.io.canAllocate && fpFreeList.io.canAllocate  && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate && mxFreeList.io.canAllocate && dispatchCanAcc || io.rabCommits.isWalk
+  val mxFreeList_io_canAllocate = (
+    if (HasMatrixExtension) {
+      mxFreeList.get.io.canAllocate
+    } else {
+      true.B
+    }
+  )
+  val mxFreeList_io_doAllocate = (
+    if (HasMatrixExtension) {
+      mxFreeList.get.io.doAllocate
+    } else {
+      false.B
+    }
+  )
+  intFreeList.io.doAllocate    := fpFreeList.io.canAllocate  && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate  && vlFreeList.io.canAllocate && mxFreeList_io_canAllocate && dispatchCanAcc || io.rabCommits.isWalk
+  fpFreeList.io.doAllocate     := intFreeList.io.canAllocate && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate  && vlFreeList.io.canAllocate && mxFreeList_io_canAllocate && dispatchCanAcc || io.rabCommits.isWalk
+  vecFreeList.io.doAllocate    := intFreeList.io.canAllocate && fpFreeList.io.canAllocate  && v0FreeList.io.canAllocate  && vlFreeList.io.canAllocate && mxFreeList_io_canAllocate && dispatchCanAcc || io.rabCommits.isWalk
+  v0FreeList.io.doAllocate     := intFreeList.io.canAllocate && fpFreeList.io.canAllocate  && vecFreeList.io.canAllocate && vlFreeList.io.canAllocate && mxFreeList_io_canAllocate && dispatchCanAcc || io.rabCommits.isWalk
+  mxFreeList.foreach(_.io.doAllocate     := intFreeList.io.canAllocate && fpFreeList.io.canAllocate  && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate && vlFreeList.io.canAllocate && dispatchCanAcc || io.rabCommits.isWalk)
+  vlFreeList.io.doAllocate     := intFreeList.io.canAllocate && fpFreeList.io.canAllocate  && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate && mxFreeList_io_canAllocate && dispatchCanAcc || io.rabCommits.isWalk
 
   //           dispatch1 ready ++ float point free list ready ++ int free list ready ++ vec free list ready     ++ not walk
-  val canOut = dispatchCanAcc && fpFreeList.io.canAllocate && intFreeList.io.canAllocate && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate && mxFreeList.io.canAllocate && vlFreeList.io.canAllocate && !io.rabCommits.isWalk
+  val canOut = dispatchCanAcc && fpFreeList.io.canAllocate && intFreeList.io.canAllocate && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate && mxFreeList_io_canAllocate && vlFreeList.io.canAllocate && !io.rabCommits.isWalk
 
   compressUnit.io.in.zip(io.in).foreach{ case(sink, source) =>
     sink.valid := source.valid && !io.singleStep
@@ -202,7 +221,7 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
     uop.debugInfo     := DontCare
     uop.lqIdx         := DontCare
     uop.sqIdx         := DontCare
-    uop.mlsqIdx       := DontCare
+    uop.mlsqIdx.foreach(_ := DontCare)
     uop.waitForRobIdx := DontCare
     uop.singleStep    := DontCare
     uop.snapshot      := DontCare
@@ -353,8 +372,8 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
     v0FreeList.io.walkReq(i) := walkNeedV0Dest(i)
     vlFreeList.io.allocateReq(i) := needVlDest(i)
     vlFreeList.io.walkReq(i) := walkNeedVlDest(i)
-    mxFreeList.io.allocateReq(i) := needMxDest(i)
-    mxFreeList.io.walkReq(i) := walkNeedMxDest(i)
+    mxFreeList.foreach(_.io.allocateReq(i) := needMxDest(i))
+    mxFreeList.foreach(_.io.walkReq(i) := walkNeedMxDest(i))
     intFreeList.io.allocateReq(i) := needIntDest(i) && !isMove(i)
     intFreeList.io.walkReq(i) := walkNeedIntDest(i) && !walkIsMove(i)
 
@@ -398,23 +417,31 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
         ).map(x => FuTypeOrR(in.bits.fuType, x._1) && in.bits.fuOpType === x._2).reduce(_ || _)
       ).reverse)
     ).orR
-    uops(i).dirtyMs := (
+    uops(i).dirtyMs.foreach(_ := (
       compressMasksVec(i) & Cat(io.in.map(in =>
-        in.bits.mxWen ||
+        in.bits.mxWen.getOrElse(false.B) ||
         // mma/matrix load/mzero instructions dirty matrix state
         // matrix store doesn't dirty matrix state
         FuTypeOrR(in.bits.fuType, FuType.mma) ||
         FuTypeOrR(in.bits.fuType, FuType.marith) ||
         (FuTypeOrR(in.bits.fuType, FuType.mls) && MldstOpType.isLoad(in.bits.fuOpType))
         ).reverse)
-    ).orR
+    ).orR)
     uops(i).debug_sim_trig.foreach(_ := (compressMasksVec(i) & Cat(io.in.map(_.bits.instr === XSDebugDecode.SIM_TRIG).reverse)).orR)
     // psrc0,psrc1,psrc2 don't require v0ReadPorts because their srcType can distinguish whether they are V0 or not
-    uops(i).psrc(0) := Mux1H(Cat(uops(i).srcType(0)(4), uops(i).srcType(0)(2, 0)), Seq(io.intReadPorts(i)(0), io.fpReadPorts(i)(0), io.vecReadPorts(i)(0), io.mxReadPorts(i)(0)))
-    uops(i).psrc(1) := Mux1H(uops(i).srcType(1)(2, 0), Seq(io.intReadPorts(i)(1), io.fpReadPorts(i)(1), io.vecReadPorts(i)(1)))
-    uops(i).psrc(2) := Mux1H(Cat(uops(i).srcType(2)(4), uops(i).srcType(2)(2, 1)), Seq(io.fpReadPorts(i)(2), io.vecReadPorts(i)(2), io.mxReadPorts(i)(0)))
-    uops(i).psrc(3) := Mux1H(uops(i).srcType(3)(4, 3), Seq(io.v0ReadPorts(i)(0), io.mxReadPorts(i)(1)))
-    uops(i).psrc(4) := Mux(uops(i).srcType(4)(4), io.mxReadPorts(i)(2), io.vlReadPorts(i)(0))
+    if (HasMatrixExtension) {
+      uops(i).psrc(0) := Mux1H(Cat(uops(i).srcType(0)(4), uops(i).srcType(0)(2, 0)), Seq(io.intReadPorts(i)(0), io.fpReadPorts(i)(0), io.vecReadPorts(i)(0), io.mxReadPorts.get(i)(0)))
+      uops(i).psrc(1) := Mux1H(uops(i).srcType(1)(2, 0), Seq(io.intReadPorts(i)(1), io.fpReadPorts(i)(1), io.vecReadPorts(i)(1)))
+      uops(i).psrc(2) := Mux1H(Cat(uops(i).srcType(2)(4), uops(i).srcType(2)(2, 1)), Seq(io.fpReadPorts(i)(2), io.vecReadPorts(i)(2), io.mxReadPorts.get(i)(0)))
+      uops(i).psrc(3) := Mux1H(uops(i).srcType(3)(4, 3), Seq(io.v0ReadPorts(i)(0), io.mxReadPorts.get(i)(1)))
+      uops(i).psrc(4) := Mux(uops(i).srcType(4)(4), io.mxReadPorts.get(i)(2), io.vlReadPorts(i)(0))
+    } else {
+      uops(i).psrc(0) := Mux1H(uops(i).srcType(0)(2, 0), Seq(io.intReadPorts(i)(0), io.fpReadPorts(i)(0), io.vecReadPorts(i)(0)))
+      uops(i).psrc(1) := Mux1H(uops(i).srcType(1)(2, 0), Seq(io.intReadPorts(i)(1), io.fpReadPorts(i)(1), io.vecReadPorts(i)(1)))
+      uops(i).psrc(2) := Mux1H(uops(i).srcType(2)(2, 1), Seq(io.fpReadPorts(i)(2), io.vecReadPorts(i)(2)))
+      uops(i).psrc(3) := io.v0ReadPorts(i)(0)
+      uops(i).psrc(4) := io.vlReadPorts(i)(0)
+    }
 
     // int psrc2 should be bypassed from next instruction if it is fused
     if (i < RenameWidth - 1) {
@@ -428,14 +455,24 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
     uops(i).isMove := isMove(i)
 
     // update pdest
-    uops(i).pdest := MuxCase(0.U, Seq(
-      needIntDest(i)    ->  intFreeList.io.allocatePhyReg(i),
-      needFpDest(i)     ->  fpFreeList.io.allocatePhyReg(i),
-      needVecDest(i)    ->  vecFreeList.io.allocatePhyReg(i),
-      needV0Dest(i)     ->  v0FreeList.io.allocatePhyReg(i),
-      needVlDest(i)     ->  vlFreeList.io.allocatePhyReg(i),
-      needMxDest(i)     ->  mxFreeList.io.allocatePhyReg(i)
-    ))
+    if (HasMatrixExtension) {
+      uops(i).pdest := MuxCase(0.U, Seq(
+        needIntDest(i)    ->  intFreeList.io.allocatePhyReg(i),
+        needFpDest(i)     ->  fpFreeList.io.allocatePhyReg(i),
+        needVecDest(i)    ->  vecFreeList.io.allocatePhyReg(i),
+        needV0Dest(i)     ->  v0FreeList.io.allocatePhyReg(i),
+        needVlDest(i)     ->  vlFreeList.io.allocatePhyReg(i),
+        needMxDest(i)     ->  mxFreeList.get.io.allocatePhyReg(i)
+      ))
+    } else {
+      uops(i).pdest := MuxCase(0.U, Seq(
+        needIntDest(i)    ->  intFreeList.io.allocatePhyReg(i),
+        needFpDest(i)     ->  fpFreeList.io.allocatePhyReg(i),
+        needVecDest(i)    ->  vecFreeList.io.allocatePhyReg(i),
+        needV0Dest(i)     ->  v0FreeList.io.allocatePhyReg(i),
+        needVlDest(i)     ->  vlFreeList.io.allocatePhyReg(i),
+      ))
+    }
 
     // Assign performance counters
     uops(i).debugInfo.renameTime := GTimer()
@@ -443,7 +480,7 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
     io.out(i).valid := io.in(i).valid && intFreeList.io.canAllocate && 
                        fpFreeList.io.canAllocate && vecFreeList.io.canAllocate && 
                        v0FreeList.io.canAllocate && vlFreeList.io.canAllocate &&
-                       mxFreeList.io.canAllocate && !io.rabCommits.isWalk
+                       mxFreeList_io_canAllocate && !io.rabCommits.isWalk
     io.out(i).bits := uops(i)
     // dirty code
     if (i == 0) {
@@ -481,7 +518,7 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
     vecSpecWen(i) := needVecDest(i) && vecFreeList.io.canAllocate && vecFreeList.io.doAllocate && !io.rabCommits.isWalk && !io.redirect.valid
     v0SpecWen(i) := needV0Dest(i) && v0FreeList.io.canAllocate && v0FreeList.io.doAllocate && !io.rabCommits.isWalk && !io.redirect.valid
     vlSpecWen(i) := needVlDest(i) && vlFreeList.io.canAllocate && vlFreeList.io.doAllocate && !io.rabCommits.isWalk && !io.redirect.valid
-    mxSpecWen(i) := needMxDest(i) && mxFreeList.io.canAllocate && mxFreeList.io.doAllocate && !io.rabCommits.isWalk && !io.redirect.valid
+    mxSpecWen(i) := needMxDest(i) && mxFreeList_io_canAllocate && mxFreeList_io_doAllocate && !io.rabCommits.isWalk && !io.redirect.valid
 
     if (i < RabCommitWidth) {
       walkIntSpecWen(i) := walkNeedIntDest(i) && !io.redirect.valid
@@ -647,13 +684,13 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
   fpFreeList.io.snpt := io.snpt
   vecFreeList.io.snpt := io.snpt
   v0FreeList.io.snpt := io.snpt
-  mxFreeList.io.snpt := io.snpt
+  mxFreeList.foreach(_.io.snpt := io.snpt)
   vlFreeList.io.snpt := io.snpt
   intFreeList.io.snpt.snptEnq := genSnapshot
   fpFreeList.io.snpt.snptEnq := genSnapshot
   vecFreeList.io.snpt.snptEnq := genSnapshot
   v0FreeList.io.snpt.snptEnq := genSnapshot
-  mxFreeList.io.snpt.snptEnq := genSnapshot
+  mxFreeList.foreach(_.io.snpt.snptEnq := genSnapshot)
   vlFreeList.io.snpt.snptEnq := genSnapshot
 
   /**
@@ -681,9 +718,11 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
     io.v0RenamePorts(i).addr := uops(i).ldest(log2Ceil(V0LogicRegs) - 1, 0)
     io.v0RenamePorts(i).data := v0FreeList.io.allocatePhyReg(i)
 
-    io.mxRenamePorts(i).wen := mxSpecWen(i)
-    io.mxRenamePorts(i).addr := uops(i).ldest(log2Ceil(MxLogicRegs) - 1, 0)
-    io.mxRenamePorts(i).data := mxFreeList.io.allocatePhyReg(i)
+    if (HasMatrixExtension) {
+      io.mxRenamePorts.get(i).wen := mxSpecWen(i)
+      io.mxRenamePorts.get(i).addr := uops(i).ldest(log2Ceil(MxLogicRegs) - 1, 0)
+      io.mxRenamePorts.get(i).data := mxFreeList.get.io.allocatePhyReg(i)
+    }
 
     io.vlRenamePorts(i).wen := vlSpecWen(i)
     io.vlRenamePorts(i).addr := uops(i).ldest(log2Ceil(VlLogicRegs) - 1, 0)
@@ -698,8 +737,8 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
     vecFreeList.io.freePhyReg(i) := io.vec_old_pdest(i)
     v0FreeList.io.freeReq(i) := GatedValidRegNext(commitValid && needDestRegCommit(Reg_V0, io.rabCommits.info(i)))
     v0FreeList.io.freePhyReg(i) := io.v0_old_pdest(i)
-    mxFreeList.io.freeReq(i) := GatedValidRegNext(commitValid && needDestRegCommit(Reg_Mx, io.rabCommits.info(i)))
-    mxFreeList.io.freePhyReg(i) := io.mx_old_pdest(i)
+    mxFreeList.foreach(_.io.freeReq(i) := GatedValidRegNext(commitValid && needDestRegCommit(Reg_Mx, io.rabCommits.info(i))))
+    mxFreeList.foreach(_.io.freePhyReg(i) := io.mx_old_pdest.get(i))
     vlFreeList.io.freeReq(i) := GatedValidRegNext(commitValid && needDestRegCommit(Reg_Vl, io.rabCommits.info(i)))
     vlFreeList.io.freePhyReg(i) := io.vl_old_pdest(i)
   }
@@ -737,18 +776,18 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
   XSPerfAccumulate("other_recovery_stall", otherRecStall)
   // freelist stall
   val notRecStall = !io.out.head.valid && !recStall
-  val intFlStall = notRecStall && inHeadValid && fpFreeList.io.canAllocate && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate && mxFreeList.io.canAllocate && vlFreeList.io.canAllocate && !intFreeList.io.canAllocate
-  val fpFlStall = notRecStall && inHeadValid && intFreeList.io.canAllocate && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate && mxFreeList.io.canAllocate && vlFreeList.io.canAllocate && !fpFreeList.io.canAllocate
-  val vecFlStall = notRecStall && inHeadValid && intFreeList.io.canAllocate && fpFreeList.io.canAllocate && v0FreeList.io.canAllocate && mxFreeList.io.canAllocate && vlFreeList.io.canAllocate && !vecFreeList.io.canAllocate
-  val v0FlStall = notRecStall && inHeadValid && intFreeList.io.canAllocate && fpFreeList.io.canAllocate && vecFreeList.io.canAllocate && mxFreeList.io.canAllocate && vlFreeList.io.canAllocate && !v0FreeList.io.canAllocate
-  val mxFlStall = notRecStall && inHeadValid && intFreeList.io.canAllocate && fpFreeList.io.canAllocate && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate && vlFreeList.io.canAllocate && !mxFreeList.io.canAllocate
-  val vlFlStall = notRecStall && inHeadValid && intFreeList.io.canAllocate && fpFreeList.io.canAllocate && vecFreeList.io.canAllocate && mxFreeList.io.canAllocate && v0FreeList.io.canAllocate && !vlFreeList.io.canAllocate
+  val intFlStall = notRecStall && inHeadValid && fpFreeList.io.canAllocate && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate && mxFreeList_io_canAllocate && vlFreeList.io.canAllocate && !intFreeList.io.canAllocate
+  val fpFlStall = notRecStall && inHeadValid && intFreeList.io.canAllocate && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate && mxFreeList_io_canAllocate && vlFreeList.io.canAllocate && !fpFreeList.io.canAllocate
+  val vecFlStall = notRecStall && inHeadValid && intFreeList.io.canAllocate && fpFreeList.io.canAllocate && v0FreeList.io.canAllocate && mxFreeList_io_canAllocate && vlFreeList.io.canAllocate && !vecFreeList.io.canAllocate
+  val v0FlStall = notRecStall && inHeadValid && intFreeList.io.canAllocate && fpFreeList.io.canAllocate && vecFreeList.io.canAllocate && mxFreeList_io_canAllocate && vlFreeList.io.canAllocate && !v0FreeList.io.canAllocate
+  val mxFlStall = notRecStall && inHeadValid && intFreeList.io.canAllocate && fpFreeList.io.canAllocate && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate && vlFreeList.io.canAllocate && !mxFreeList_io_canAllocate
+  val vlFlStall = notRecStall && inHeadValid && intFreeList.io.canAllocate && fpFreeList.io.canAllocate && vecFreeList.io.canAllocate && mxFreeList_io_canAllocate && v0FreeList.io.canAllocate && !vlFreeList.io.canAllocate
   val multiFlStall = notRecStall && inHeadValid && (PopCount(Cat(
     !intFreeList.io.canAllocate,
     !fpFreeList.io.canAllocate,
     !vecFreeList.io.canAllocate,
     !v0FreeList.io.canAllocate,
-    !mxFreeList.io.canAllocate,
+    !mxFreeList_io_canAllocate,
     !vlFreeList.io.canAllocate,
   )) > 1.U)
   // other stall
@@ -798,7 +837,7 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
   private val stallForVecFL     = inHeadValid && !io.rabCommits.isWalk && dispatchCanAcc && intFreeList.io.canAllocate && fpFreeList.io.canAllocate && v0FreeList.io.canAllocate && vlFreeList.io.canAllocate && !vecFreeList.io.canAllocate
   private val stallForV0FL      = inHeadValid && !io.rabCommits.isWalk && dispatchCanAcc && intFreeList.io.canAllocate && fpFreeList.io.canAllocate && vecFreeList.io.canAllocate && vlFreeList.io.canAllocate && !v0FreeList.io.canAllocate
   private val stallForVlFL      = inHeadValid && !io.rabCommits.isWalk && dispatchCanAcc && intFreeList.io.canAllocate && fpFreeList.io.canAllocate && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate && !vlFreeList.io.canAllocate
-  private val stallForMxFL      = inHeadValid && !io.rabCommits.isWalk && dispatchCanAcc && intFreeList.io.canAllocate && fpFreeList.io.canAllocate && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate && !mxFreeList.io.canAllocate
+  private val stallForMxFL      = inHeadValid && !io.rabCommits.isWalk && dispatchCanAcc && intFreeList.io.canAllocate && fpFreeList.io.canAllocate && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate && !mxFreeList_io_canAllocate
   XSPerfAccumulate("stall_cycle",          inHeadStall)
   XSPerfAccumulate("stall_cycle_walk",     stallForWalk)
   XSPerfAccumulate("stall_cycle_dispatch", stallForDispatch)
@@ -829,14 +868,14 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
     ("rename_stall_cycle_vec     ", inHeadValid && !io.rabCommits.isWalk && dispatchCanAcc && intFreeList.io.canAllocate && fpFreeList.io.canAllocate && v0FreeList.io.canAllocate && vlFreeList.io.canAllocate && !vecFreeList.io.canAllocate),
     ("rename_stall_cycle_v0      ", inHeadValid && !io.rabCommits.isWalk && dispatchCanAcc && intFreeList.io.canAllocate && fpFreeList.io.canAllocate && vecFreeList.io.canAllocate && vlFreeList.io.canAllocate && !v0FreeList.io.canAllocate),
     ("rename_stall_cycle_vl      ", inHeadValid && !io.rabCommits.isWalk && dispatchCanAcc && intFreeList.io.canAllocate && fpFreeList.io.canAllocate && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate && !vlFreeList.io.canAllocate),
-    ("rename_stall_cycle_mx      ", inHeadValid && !io.rabCommits.isWalk && dispatchCanAcc && intFreeList.io.canAllocate && fpFreeList.io.canAllocate && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate && !mxFreeList.io.canAllocate),
+    ("rename_stall_cycle_mx      ", inHeadValid && !io.rabCommits.isWalk && dispatchCanAcc && intFreeList.io.canAllocate && fpFreeList.io.canAllocate && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate && !mxFreeList_io_canAllocate),
   )
   val intFlPerf = intFreeList.getPerfEvents
   val fpFlPerf = fpFreeList.getPerfEvents
   val vecFlPerf = vecFreeList.getPerfEvents
   val v0FlPerf = v0FreeList.getPerfEvents
-  val mxFlPerf = mxFreeList.getPerfEvents
+  val mxFlPerf = OptionWrapper(HasMatrixExtension, mxFreeList.get.getPerfEvents)
   val vlFlPerf = vlFreeList.getPerfEvents
-  val perfEvents = renamePerf ++ intFlPerf ++ fpFlPerf ++ vecFlPerf ++ v0FlPerf ++ mxFlPerf ++ vlFlPerf
+  val perfEvents = renamePerf ++ intFlPerf ++ fpFlPerf ++ vecFlPerf ++ v0FlPerf ++ mxFlPerf.getOrElse(Seq()) ++ vlFlPerf
   generatePerfEvent()
 }

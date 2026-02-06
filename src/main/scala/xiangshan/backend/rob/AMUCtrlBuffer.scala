@@ -108,7 +108,7 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
       io.enq(i).valid := robImp.io.enq.req(i).valid && robImp.canEnqueue(i) && !robImp.io.redirect.valid
       io.enq(i).reqValid := robImp.io.enq.req(i).valid
       io.enq(i).allocPtr := robImp.allocatePtrVec(i)
-      io.enq(i).needAMU := robImp.io.enq.req(i).bits.needAmuCtrl
+      io.enq(i).needAMU := robImp.io.enq.req(i).bits.needAmuCtrl.get
 
       if (env.EnableDifftest && HasMatrixExtension) {
         io.enq(i).pc.get := robImp.io.enq.req(i).bits.pc
@@ -124,7 +124,7 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
     io.redirect.all := robImp.redirectAll
     io.redirect.begin := robImp.redirectBegin
     io.redirect.end := robImp.redirectEnd
-    robImp.io.amuCtrl <> io.toAMU
+    robImp.io.amuCtrl.get <> io.toAMU
     if (env.EnableDifftest && HasMatrixExtension) {
       io.hartId.get := robImp.io.hartId
     }

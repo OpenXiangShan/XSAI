@@ -155,13 +155,13 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
   backend.io.mem.lsqEnqIO <> memBlock.io.ooo_to_mem.enqLsq
   backend.io.mem.sqDeq := memBlock.io.mem_to_ooo.sqDeq
   backend.io.mem.lqDeq := memBlock.io.mem_to_ooo.lqDeq
-  backend.io.mem.mlsqDeq := memBlock.io.mem_to_ooo.mlsqDeq
+  backend.io.mem.mlsqDeq.foreach(_ := memBlock.io.mem_to_ooo.mlsqDeq.get)
   backend.io.mem.sqDeqPtr := memBlock.io.mem_to_ooo.sqDeqPtr
   backend.io.mem.lqDeqPtr := memBlock.io.mem_to_ooo.lqDeqPtr
-  backend.io.mem.mlsqDeqPtr := memBlock.io.mem_to_ooo.mlsqDeqPtr
+  backend.io.mem.mlsqDeqPtr.foreach(_ := memBlock.io.mem_to_ooo.mlsqDeqPtr.get)
   backend.io.mem.lqCancelCnt := memBlock.io.mem_to_ooo.lqCancelCnt
   backend.io.mem.sqCancelCnt := memBlock.io.mem_to_ooo.sqCancelCnt
-  backend.io.mem.mlsqCancelCnt := memBlock.io.mem_to_ooo.mlsqCancelCnt
+  backend.io.mem.mlsqCancelCnt.foreach(_ := memBlock.io.mem_to_ooo.mlsqCancelCnt.get)
   backend.io.mem.otherFastWakeup := memBlock.io.mem_to_ooo.otherFastWakeup
   backend.io.mem.stIssuePtr := memBlock.io.mem_to_ooo.stIssuePtr
   backend.io.mem.ldaIqFeedback := memBlock.io.mem_to_ooo.ldaIqFeedback
@@ -169,7 +169,7 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
   backend.io.mem.hyuIqFeedback := memBlock.io.mem_to_ooo.hyuIqFeedback
   backend.io.mem.vstuIqFeedback := memBlock.io.mem_to_ooo.vstuIqFeedback
   backend.io.mem.vlduIqFeedback := memBlock.io.mem_to_ooo.vlduIqFeedback
-  backend.io.mem.mlsIqFeedback := memBlock.io.mem_to_ooo.mlsIqFeedback
+  backend.io.mem.mlsIqFeedback.foreach(_ := memBlock.io.mem_to_ooo.mlsIqFeedback.get)
   backend.io.mem.ldCancel := memBlock.io.mem_to_ooo.ldCancel
   backend.io.mem.wakeup := memBlock.io.mem_to_ooo.wakeup
   backend.io.mem.writebackLda <> memBlock.io.mem_to_ooo.writebackLda
@@ -178,7 +178,7 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
   backend.io.mem.writebackHyuSta <> memBlock.io.mem_to_ooo.writebackHyuSta
   backend.io.mem.writebackStd <> memBlock.io.mem_to_ooo.writebackStd
   backend.io.mem.writebackVldu <> memBlock.io.mem_to_ooo.writebackVldu
-  backend.io.mem.writebackMls <> memBlock.io.mem_to_ooo.writebackMls
+  backend.io.mem.writebackMls.foreach(_ <> memBlock.io.mem_to_ooo.writebackMls.get)
   backend.io.mem.robLsqIO.mmio := memBlock.io.mem_to_ooo.lsqio.mmio
   backend.io.mem.robLsqIO.uop := memBlock.io.mem_to_ooo.lsqio.uop
 
@@ -192,10 +192,10 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
   backend.io.mem.lsTopdownInfo := memBlock.io.mem_to_ooo.lsTopdownInfo
   backend.io.mem.lqCanAccept := memBlock.io.mem_to_ooo.lsqio.lqCanAccept
   backend.io.mem.sqCanAccept := memBlock.io.mem_to_ooo.lsqio.sqCanAccept
-  backend.io.mem.mlsqCanAccept := memBlock.io.mem_to_ooo.lsqio.mlsqCanAccept
+  backend.io.mem.mlsqCanAccept.foreach(_ := memBlock.io.mem_to_ooo.lsqio.mlsqCanAccept.get)
   backend.io.fenceio.sbuffer.sbIsEmpty := memBlock.io.mem_to_ooo.sbIsEmpty
   io.amuRelease.foreach { amuRelease =>
-    backend.io.fenceio.amuRelease <> amuRelease
+    backend.io.fenceio.amuRelease.get <> amuRelease
   }
 
   backend.io.perf.frontendInfo := frontend.io.frontendInfo
@@ -211,12 +211,8 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
   
   if (HasMatrixExtension) {
     val amuCtrlArbiter = Module(new Arbiter(new AmuCtrlIO, CommitWidth))
-    amuCtrlArbiter.io.in <> backend.io.toAmu
+    amuCtrlArbiter.io.in <> backend.io.toAmu.get
     io.amuCtrl.get <> amuCtrlArbiter.io.out
-  } else {
-    backend.io.toAmu.foreach { out =>
-      out.ready := false.B
-    }
   }
 
   // top -> memBlock
@@ -238,7 +234,7 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
   memBlock.io.ooo_to_mem.issueHya <> backend.io.mem.issueHylda
   backend.io.mem.issueHysta.foreach(_.ready := false.B) // this fake port should not be used
   memBlock.io.ooo_to_mem.issueVldu <> backend.io.mem.issueVldu
-  memBlock.io.ooo_to_mem.issueMlsu <> backend.io.mem.issueMls
+  memBlock.io.ooo_to_mem.issueMlsu.foreach(_ <> backend.io.mem.issueMls.get)
 
   // By default, instructions do not have exceptions when they enter the function units.
   memBlock.io.ooo_to_mem.issueUops.map(_.bits.uop.clearExceptions())

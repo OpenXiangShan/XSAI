@@ -24,6 +24,7 @@ import utility.HasCircularQueuePtrHelper
 import utility.ParallelPriorityMux
 import utility.GatedValidRegNext
 import utility.XSError
+import utils.OptionWrapper
 import xiangshan._
 
 abstract class RegType
@@ -234,15 +235,15 @@ class RenameTableWrapper(implicit p: Parameters) extends XSModule {
     val v0RenamePorts = Vec(RenameWidth, Input(new RatWritePort(V0LogicRegs)))
     val vlReadPorts = Vec(RenameWidth, new RatReadPort(VlLogicRegs))
     val vlRenamePorts = Vec(RenameWidth, Input(new RatWritePort(VlLogicRegs)))
-    val mxReadPorts = Vec(RenameWidth, Vec(3, new RatReadPort(MxLogicRegs)))
-    val mxRenamePorts = Vec(RenameWidth, Input(new RatWritePort(MxLogicRegs)))
+    val mxReadPorts = OptionWrapper(HasMatrixExtension, Vec(RenameWidth, Vec(3, new RatReadPort(MxLogicRegs))))
+    val mxRenamePorts = OptionWrapper(HasMatrixExtension, Vec(RenameWidth, Input(new RatWritePort(MxLogicRegs))))
 
     val int_old_pdest = Vec(RabCommitWidth, Output(UInt(PhyRegIdxWidth.W)))
     val fp_old_pdest = Vec(RabCommitWidth, Output(UInt(PhyRegIdxWidth.W)))
     val vec_old_pdest = Vec(RabCommitWidth, Output(UInt(PhyRegIdxWidth.W)))
     val v0_old_pdest = Vec(RabCommitWidth, Output(UInt(PhyRegIdxWidth.W)))
     val vl_old_pdest = Vec(RabCommitWidth, Output(UInt(PhyRegIdxWidth.W)))
-    val mx_old_pdest = Vec(RabCommitWidth, Output(UInt(PhyRegIdxWidth.W)))
+    val mx_old_pdest = OptionWrapper(HasMatrixExtension, Vec(RabCommitWidth, Output(UInt(PhyRegIdxWidth.W))))
     val int_need_free = Vec(RabCommitWidth, Output(Bool()))
     val snpt = Input(new SnapshotPort)
 
@@ -264,7 +265,7 @@ class RenameTableWrapper(implicit p: Parameters) extends XSModule {
   val vecRat = Module(new RenameTable(Reg_V))
   val v0Rat  = Module(new RenameTable(Reg_V0))
   val vlRat  = Module(new RenameTable(Reg_Vl))
-  val mxRat = Module(new RenameTable(Reg_Mx))
+  val mxRat = OptionWrapper(HasMatrixExtension, Module(new RenameTable(Reg_Mx)))
 
   io.debug_int_rat .foreach(_ := intRat.io.debug_rdata.get)
   if (env.AlwaysBasicDiff || env.EnableDifftest) {
@@ -463,38 +464,54 @@ class RenameTableWrapper(implicit p: Parameters) extends XSModule {
   }
 
   // debug read ports for difftest
-  io.debug_mx_rat.foreach(_ := mxRat.io.debug_rdata.get)
-  io.diff_mx_rat.foreach(_ := mxRat.io.diff_rdata.get)
-  mxRat.io.readPorts <> io.mxReadPorts.flatten
-  mxRat.io.redirect := io.redirect
-  mxRat.io.snpt := io.snpt
-  io.mx_old_pdest := mxRat.io.old_pdest
+  if (HasMatrixExtension) {
+    io.debug_mx_rat.foreach(_ := mxRat.get.io.debug_rdata.get)
+    io.diff_mx_rat.foreach(_ := mxRat.get.io.diff_rdata.get)
+  } else {
+    io.debug_mx_rat.get.foreach(_ := 0.U)
+    io.diff_mx_rat.get.foreach(_ := 0.U)
+  }
+  mxRat.foreach(_.io.readPorts <> io.mxReadPorts.get.flatten)
+  mxRat.foreach(_.io.redirect := io.redirect)
+  mxRat.foreach(_.io.snpt := io.snpt)
+  io.mx_old_pdest.foreach(_ := mxRat.get.io.old_pdest)
 
-  if (backendParams.debugEn) {
-    dontTouch(mxRat.io)
+  if (backendParams.debugEn && HasMatrixExtension) {
+    dontTouch(mxRat.get.io)
   }
-  for ((arch, i) <- mxRat.io.archWritePorts.zipWithIndex) {
-    arch.wen := io.rabCommits.isCommit && io.rabCommits.commitValid(i) && io.rabCommits.info(i).mxWen
-    arch.addr := io.rabCommits.info(i).ldest
-    arch.data := io.rabCommits.info(i).pdest
-  }
-  for ((spec, i) <- mxRat.io.specWritePorts.zipWithIndex) {
-    spec.wen := io.rabCommits.isWalk && io.rabCommits.walkValid(i) && io.rabCommits.info(i).mxWen
-    spec.addr := io.rabCommits.info(i).ldest
-    spec.data := io.rabCommits.info(i).pdest
-  }
-  for ((spec, rename) <- mxRat.io.specWritePorts.zip(io.mxRenamePorts)) {
-    when(rename.wen) {
-      spec.wen := true.B
-      spec.addr := rename.addr
-      spec.data := rename.data
+  if (HasMatrixExtension) {
+    for ((arch, i) <- mxRat.get.io.archWritePorts.zipWithIndex) {
+      arch.wen := (
+          io.rabCommits.isCommit && io.rabCommits.commitValid(i)
+        && io.rabCommits.info(i).mxWen.getOrElse(false.B)
+      )
+      arch.addr := io.rabCommits.info(i).ldest
+      arch.data := io.rabCommits.info(i).pdest
     }
-  }
-  if (backendParams.basicDebugEn) {
-    for ((diff, i) <- mxRat.io.diffWritePorts.get.zipWithIndex) {
-      diff.wen := io.diffCommits.get.isCommit && io.diffCommits.get.commitValid(i) && io.diffCommits.get.info(i).mxWen
-      diff.addr := io.diffCommits.get.info(i).ldest
-      diff.data := io.diffCommits.get.info(i).pdest
+    for ((spec, i) <- mxRat.get.io.specWritePorts.zipWithIndex) {
+      spec.wen := (
+          io.rabCommits.isWalk && io.rabCommits.walkValid(i)
+        && io.rabCommits.info(i).mxWen.getOrElse(false.B)
+      )
+      spec.addr := io.rabCommits.info(i).ldest
+      spec.data := io.rabCommits.info(i).pdest
+    }
+    for ((spec, rename) <- mxRat.get.io.specWritePorts.zip(io.mxRenamePorts.get)) {
+      when(rename.wen) {
+        spec.wen := true.B
+        spec.addr := rename.addr
+        spec.data := rename.data
+      }
+    }
+    if (backendParams.basicDebugEn) {
+      for ((diff, i) <- mxRat.get.io.diffWritePorts.get.zipWithIndex) {
+        diff.wen := (
+            io.diffCommits.get.isCommit && io.diffCommits.get.commitValid(i)
+          && io.diffCommits.get.info(i).mxWen.getOrElse(false.B)
+        )
+        diff.addr := io.diffCommits.get.info(i).ldest
+        diff.data := io.diffCommits.get.info(i).pdest
+      }
     }
   }
 }

@@ -254,7 +254,7 @@ class PerfDebugInfo(implicit p: Parameters) extends XSBundle {
 class LSIdx(implicit p: Parameters) extends XSBundle {
   val lqIdx = new LqPtr
   val sqIdx = new SqPtr
-  val mlsqIdx = new MlsqPtr
+  val mlsqIdx = Option.when(HasMatrixExtension)(new MlsqPtr)
 }
 
 // CfCtrl -> MicroOp at Rename Stage
@@ -433,7 +433,7 @@ class RabCommitInfo(implicit p: Parameters) extends XSBundle {
   val vecWen = Bool()
   val v0Wen = Bool()
   val vlWen = Bool()
-  val mxWen = Bool()
+  val mxWen = OptionWrapper(HasMatrixExtension, Bool())
   val isMove = Bool()
 }
 
@@ -468,7 +468,7 @@ class RSFeedback(isVector: Boolean = false)(implicit p: Parameters) extends XSBu
   val dataInvalidSqIdx = new SqPtr
   val sqIdx = new SqPtr
   val lqIdx = new LqPtr
-  val mlsqIdx = new MlsqPtr
+  val mlsqIdx = Option.when(HasMatrixExtension)(new MlsqPtr)
 }
 
 class MemRSFeedbackIO(isVector: Boolean = false)(implicit p: Parameters) extends XSBundle {

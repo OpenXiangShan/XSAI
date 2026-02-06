@@ -72,7 +72,7 @@ class StdFreeList(freeListSize: Int, numLogicRegs: Int, regType: RegType, realNu
       case Reg_V => info.vecWen
       case Reg_V0 => info.v0Wen
       case Reg_Vl => info.vlWen
-      case Reg_Mx => info.mxWen
+      case Reg_Mx => info.mxWen.getOrElse(false.B)
     })
   }
   val numArchAllocate = PopCount(archAlloc)

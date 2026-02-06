@@ -254,7 +254,7 @@ class MlsQueueReplay(implicit p: Parameters) extends XSModule
    */
   val OldestSelectStride = 4
   val oldestPtrExt = (0 until OldestSelectStride).map(i => io.mlsWbPtr + i.U)
-  val s0_oldestMatchMaskVec = (0 until MlsQueueReplaySize).map(i => (0 until OldestSelectStride).map(j => s0_loadNormalReplaySelMask(i) && uop(i).mlsqIdx === oldestPtrExt(j)))
+  val s0_oldestMatchMaskVec = (0 until MlsQueueReplaySize).map(i => (0 until OldestSelectStride).map(j => s0_loadNormalReplaySelMask(i) && uop(i).mlsqIdx.get === oldestPtrExt(j)))
   val s0_remOldsetMatchMaskVec = (0 until MlsPipelineWidth).map(rem => getRemSeq(s0_oldestMatchMaskVec.map(_.take(1)))(rem))
   val s0_remOlderMatchMaskVec = (0 until MlsPipelineWidth).map(rem => getRemSeq(s0_oldestMatchMaskVec.map(_.drop(1)))(rem))
   val s0_remOldestSelVec = VecInit(Seq.tabulate(MlsPipelineWidth)(rem => {

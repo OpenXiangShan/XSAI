@@ -46,7 +46,7 @@ class RfReadPortWithConfig(val rfReadDataCfg: DataConfig, addrWidth: Int) extend
   def readVf : Boolean = VecRegSrcDataSet .contains(rfReadDataCfg)
 }
 
-class RfWritePortWithConfig(val rfWriteDataCfg: DataConfig, addrWidth: Int) extends Bundle {
+class RfWritePortWithConfig(val rfWriteDataCfg: DataConfig, addrWidth: Int)(implicit p: Parameters) extends XSBundle {
   val wen = Input(Bool())
   val addr = Input(UInt(addrWidth.W))
   val data = Input(UInt(rfWriteDataCfg.dataWidth.W))
@@ -54,7 +54,7 @@ class RfWritePortWithConfig(val rfWriteDataCfg: DataConfig, addrWidth: Int) exte
   val fpWen = Input(Bool())
   val vecWen = Input(Bool())
   val v0Wen = Input(Bool())
-  val mxWen = Input(Bool())
+  val mxWen = OptionWrapper(HasMatrixExtension, Input(Bool()))
   val vlWen = Input(Bool())
   def writeInt: Boolean = rfWriteDataCfg.isInstanceOf[IntData]
   def writeFp : Boolean = rfWriteDataCfg.isInstanceOf[FpData]

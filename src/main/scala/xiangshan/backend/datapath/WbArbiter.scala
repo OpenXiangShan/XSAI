@@ -4,6 +4,7 @@ import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 import utility.XSError
+import utils.OptionWrapper
 import xiangshan.backend.BackendParams
 import xiangshan.backend.Bundles.{ExuOutput, WriteBackBundle}
 import xiangshan.backend.datapath.DataConfig._
@@ -94,7 +95,7 @@ class WbDataPathIO()(implicit p: Parameters, params: BackendParams) extends XSBu
 
   val fromVfExu: MixedVec[MixedVec[DecoupledIO[ExuOutput]]] = Flipped(params.vfSchdParams.get.genExuOutputDecoupledBundle)
 
-  val fromMfExu: MixedVec[MixedVec[DecoupledIO[ExuOutput]]] = Flipped(params.mfSchdParams.get.genExuOutputDecoupledBundle)
+  val fromMfExu: Option[MixedVec[MixedVec[DecoupledIO[ExuOutput]]]] = OptionWrapper(HasMatrixExtension, Flipped(params.mfSchdParams.get.genExuOutputDecoupledBundle))
 
   val fromMemExu: MixedVec[MixedVec[DecoupledIO[ExuOutput]]] = Flipped(params.memSchdParams.get.genExuOutputDecoupledBundle)
 
@@ -114,8 +115,8 @@ class WbDataPathIO()(implicit p: Parameters, params: BackendParams) extends XSBu
   val toV0Preg = Flipped(MixedVec(Vec(params.numPregWb(V0Data()),
     new RfWritePortWithConfig(params.v0PregParams.dataCfg, params.v0PregParams.addrWidth))))
 
-  val toMxPreg = Flipped(MixedVec(Vec(params.numPregWb(MxData()),
-    new RfWritePortWithConfig(params.mxPregParams.dataCfg, params.mxPregParams.addrWidth))))
+  val toMxPreg = OptionWrapper(HasMatrixExtension, Flipped(MixedVec(Vec(params.numPregWb(MxData()),
+    new RfWritePortWithConfig(params.mxPregParams.dataCfg, params.mxPregParams.addrWidth)))))
 
   val toVlPreg = Flipped(MixedVec(Vec(params.numPregWb(VlData()),
     new RfWritePortWithConfig(params.vlPregParams.dataCfg, params.vlPregParams.addrWidth))))
@@ -129,7 +130,7 @@ class WbDataPath(params: BackendParams)(implicit p: Parameters) extends XSModule
   val io = IO(new WbDataPathIO()(p, params))
 
   // split
-  val fromExuPre = collection.mutable.Seq() ++ (io.fromIntExu ++ io.fromFpExu ++ io.fromVfExu ++ io.fromMfExu ++ io.fromMemExu).flatten
+  val fromExuPre = collection.mutable.Seq() ++ (io.fromIntExu ++ io.fromFpExu ++ io.fromVfExu ++ io.fromMfExu.getOrElse(Nil) ++ io.fromMemExu).flatten
   val fromExuVld: Seq[DecoupledIO[ExuOutput]] = fromExuPre.filter(_.bits.params.hasVLoadFu).toSeq
   val vldMgu: Seq[VldMergeUnit] = fromExuVld.map(x => Module(new VldMergeUnit(x.bits.params)))
   vldMgu.zip(fromExuVld).foreach{ case (mgu, exu) =>
@@ -275,42 +276,66 @@ class WbDataPath(params: BackendParams)(implicit p: Parameters) extends XSModule
     s"IntExu(${io.fromIntExu.flatten.count(_.bits.params.writeIntRf)}) " +
     s"FpExu(${io.fromFpExu.flatten.count(_.bits.params.writeIntRf)}) " +
     s"VfExu(${io.fromVfExu.flatten.count(_.bits.params.writeIntRf)}) " +
-    s"MfExu(${io.fromMfExu.flatten.count(_.bits.params.writeIntRf)}) " +
+    (if (HasMatrixExtension) {
+      s"MfExu(${io.fromMfExu.get.flatten.count(_.bits.params.writeIntRf)}) "
+    } else {
+      ""
+    }) +
     s"MemExu(${io.fromMemExu.flatten.count(_.bits.params.writeIntRf)})"
   )
   println(s"[WbDataPath] write fp preg: " +
     s"IntExu(${io.fromIntExu.flatten.count(_.bits.params.writeFpRf)}) " +
     s"FpExu(${io.fromFpExu.flatten.count(_.bits.params.writeFpRf)}) " +
     s"VfExu(${io.fromVfExu.flatten.count(_.bits.params.writeFpRf)}) " +
-    s"MfExu(${io.fromMfExu.flatten.count(_.bits.params.writeFpRf)}) " +
+    (if (HasMatrixExtension) {
+      s"MfExu(${io.fromMfExu.get.flatten.count(_.bits.params.writeFpRf)}) "
+    } else {
+      ""
+    }) +
     s"MemExu(${io.fromMemExu.flatten.count(_.bits.params.writeFpRf)})"
   )
   println(s"[WbDataPath] write vf preg: " +
     s"IntExu(${io.fromIntExu.flatten.count(_.bits.params.writeVfRf)}) " +
     s"FpExu(${io.fromFpExu.flatten.count(_.bits.params.writeVfRf)}) " +
     s"VfExu(${io.fromVfExu.flatten.count(_.bits.params.writeVfRf)}) " +
-    s"MfExu(${io.fromMfExu.flatten.count(_.bits.params.writeVfRf)}) " +
+    (if (HasMatrixExtension) {
+      s"MfExu(${io.fromMfExu.get.flatten.count(_.bits.params.writeVfRf)}) "
+    } else {
+      ""
+    }) +
     s"MemExu(${io.fromMemExu.flatten.count(_.bits.params.writeVfRf)})"
   )
   println(s"[WbDataPath] write v0 preg: " +
     s"IntExu(${io.fromIntExu.flatten.count(_.bits.params.writeV0Rf)}) " +
     s"FpExu(${io.fromFpExu.flatten.count(_.bits.params.writeV0Rf)}) " +
     s"VfExu(${io.fromVfExu.flatten.count(_.bits.params.writeV0Rf)}) " +
-    s"MfExu(${io.fromMfExu.flatten.count(_.bits.params.writeV0Rf)}) " +
+    (if (HasMatrixExtension) {
+      s"MfExu(${io.fromMfExu.get.flatten.count(_.bits.params.writeV0Rf)}) "
+    } else {
+      ""
+    }) +
     s"MemExu(${io.fromMemExu.flatten.count(_.bits.params.writeV0Rf)})"
   )
   println(s"[WbDataPath] write mx preg: " +
     s"IntExu(${io.fromIntExu.flatten.count(_.bits.params.writeMxRf)}) " +
     s"FpExu(${io.fromFpExu.flatten.count(_.bits.params.writeMxRf)}) " +
     s"VfExu(${io.fromVfExu.flatten.count(_.bits.params.writeMxRf)}) " +
-    s"MfExu(${io.fromMfExu.flatten.count(_.bits.params.writeMxRf)}) " +
+    (if (HasMatrixExtension) {
+      s"MfExu(${io.fromMfExu.get.flatten.count(_.bits.params.writeMxRf)}) "
+    } else {
+      ""
+    }) +
     s"MemExu(${io.fromMemExu.flatten.count(_.bits.params.writeMxRf)})"
   )
   println(s"[WbDataPath] write vl preg: " +
     s"IntExu(${io.fromIntExu.flatten.count(_.bits.params.writeVlRf)}) " +
     s"FpExu(${io.fromFpExu.flatten.count(_.bits.params.writeVlRf)}) " +
     s"VfExu(${io.fromVfExu.flatten.count(_.bits.params.writeVlRf)}) " +
-    s"MfExu(${io.fromMfExu.flatten.count(_.bits.params.writeVlRf)}) " +
+    (if (HasMatrixExtension) {
+      s"MfExu(${io.fromMfExu.get.flatten.count(_.bits.params.writeVlRf)}) "
+    } else {
+      ""
+    }) +
     s"MemExu(${io.fromMemExu.flatten.count(_.bits.params.writeVlRf)})"
   )
 
@@ -319,13 +344,15 @@ class WbDataPath(params: BackendParams)(implicit p: Parameters) extends XSModule
   private val fpWbArbiter = Module(new RealWBCollideChecker(params.getFpWbArbiterParams))
   private val vfWbArbiter = Module(new RealWBCollideChecker(params.getVfWbArbiterParams))
   private val v0WbArbiter = Module(new RealWBCollideChecker(params.getV0WbArbiterParams))
-  private val mxWbArbiter = Module(new RealWBCollideChecker(params.getMxWbArbiterParams))
+  private val mxWbArbiter = OptionWrapper(HasMatrixExtension, Module(new RealWBCollideChecker(params.getMxWbArbiterParams)))
   private val vlWbArbiter = Module(new RealWBCollideChecker(params.getVlWbArbiterParams))
   println(s"[WbDataPath] int preg write back port num: ${intWbArbiter.io.out.size}, active port: ${intWbArbiter.io.inGroup.keys.toSeq.sorted}")
   println(s"[WbDataPath] fp preg write back port num: ${fpWbArbiter.io.out.size}, active port: ${fpWbArbiter.io.inGroup.keys.toSeq.sorted}")
   println(s"[WbDataPath] vf preg write back port num: ${vfWbArbiter.io.out.size}, active port: ${vfWbArbiter.io.inGroup.keys.toSeq.sorted}")
   println(s"[WbDataPath] v0 preg write back port num: ${v0WbArbiter.io.out.size}, active port: ${v0WbArbiter.io.inGroup.keys.toSeq.sorted}")
-  println(s"[WbDataPath] mx preg write back port num: ${mxWbArbiter.io.out.size}, active port: ${mxWbArbiter.io.inGroup.keys.toSeq.sorted}")
+  if (HasMatrixExtension) {
+    println(s"[WbDataPath] mx preg write back port num: ${mxWbArbiter.get.io.out.size}, active port: ${mxWbArbiter.get.io.inGroup.keys.toSeq.sorted}")
+  }
   println(s"[WbDataPath] vl preg write back port num: ${vlWbArbiter.io.out.size}, active port: ${vlWbArbiter.io.inGroup.keys.toSeq.sorted}")
 
   // module assign
@@ -365,14 +392,16 @@ class WbDataPath(params: BackendParams)(implicit p: Parameters) extends XSModule
   }
   private val v0WbArbiterOut = v0WbArbiter.io.out
 
-  mxWbArbiter.io.flush <> io.flush
-  require(mxWbArbiter.io.in.size == mxArbiterInputsWireY.size, s"mxWbArbiter input size: ${mxWbArbiter.io.in.size}, all mx wb size: ${mxArbiterInputsWireY.size}")
-  mxWbArbiter.io.in.zip(mxArbiterInputsWireY).foreach { case (arbiterIn, in) =>
-    arbiterIn.valid := in.valid && (in.bits.mxWen.getOrElse(false.B))
-    in.ready := arbiterIn.ready
-    arbiterIn.bits.fromExuOutput(in.bits, "mx")
+  if (HasMatrixExtension) {
+    mxWbArbiter.get.io.flush <> io.flush
+    require(mxWbArbiter.get.io.in.size == mxArbiterInputsWireY.size, s"mxWbArbiter input size: ${mxWbArbiter.get.io.in.size}, all mx wb size: ${mxArbiterInputsWireY.size}")
+    mxWbArbiter.get.io.in.zip(mxArbiterInputsWireY).foreach { case (arbiterIn, in) =>
+      arbiterIn.valid := in.valid && (in.bits.mxWen.getOrElse(false.B))
+      in.ready := arbiterIn.ready
+      arbiterIn.bits.fromExuOutput(in.bits, "mx")
+    }
   }
-  private val mxWbArbiterOut = mxWbArbiter.io.out
+  private val mxWbArbiterOut = OptionWrapper(HasMatrixExtension, mxWbArbiter.get.io.out)
 
   vlWbArbiter.io.flush <> io.flush
   require(vlWbArbiter.io.in.size == vlArbiterInputsWireY.size, s"vlWbArbiter input size: ${vlWbArbiter.io.in.size}, all vl wb size: ${vlArbiterInputsWireY.size}")
@@ -390,8 +419,8 @@ class WbDataPath(params: BackendParams)(implicit p: Parameters) extends XSModule
   private val fpExuWBs = WireInit(MixedVecInit(fpExuInputs))
   private val vfExuInputs = io.fromVfExu.flatten.toSeq
   private val vfExuWBs = WireInit(MixedVecInit(vfExuInputs))
-  private val mfExuInputs = io.fromMfExu.flatten.toSeq
-  private val mfExuWBs = WireInit(MixedVecInit(mfExuInputs))
+  private val mfExuInputs = OptionWrapper(HasMatrixExtension, io.fromMfExu.get.flatten.toSeq)
+  private val mfExuWBs = OptionWrapper(HasMatrixExtension, WireInit(MixedVecInit(mfExuInputs.get)))
   private val memExuInputs = io.fromMemExu.flatten.toSeq
   private val memExuWBs = WireInit(MixedVecInit(memExuInputs))
 
@@ -399,7 +428,9 @@ class WbDataPath(params: BackendParams)(implicit p: Parameters) extends XSModule
   (intExuWBs zip intExuInputs).foreach { case (wb, input) => wb.valid := input.fire }
   (fpExuWBs zip fpExuInputs).foreach { case (wb, input) => wb.valid := input.fire }
   (vfExuWBs zip vfExuInputs).foreach { case (wb, input) => wb.valid := input.fire }
-  (mfExuWBs zip mfExuInputs).foreach { case (wb, input) => wb.valid := input.fire }
+  if (HasMatrixExtension) {
+    (mfExuWBs.get zip mfExuInputs.get).foreach { case (wb, input) => wb.valid := input.fire }
+  }
   (memExuWBs zip memExuInputs).foreach { case (wb, input) => wb.valid := input.fire }
 
   // io assign
@@ -407,16 +438,17 @@ class WbDataPath(params: BackendParams)(implicit p: Parameters) extends XSModule
   private val toFpPreg: MixedVec[RfWritePortWithConfig] = MixedVecInit(fpWbArbiterOut.map(x => x.bits.asFpRfWriteBundle(x.fire)).toSeq)
   private val toVfPreg: MixedVec[RfWritePortWithConfig] = MixedVecInit(vfWbArbiterOut.map(x => x.bits.asVfRfWriteBundle(x.fire)).toSeq)
   private val toV0Preg: MixedVec[RfWritePortWithConfig] = MixedVecInit(v0WbArbiterOut.map(x => x.bits.asV0RfWriteBundle(x.fire)).toSeq)
-  private val toMxPreg: MixedVec[RfWritePortWithConfig] = MixedVecInit(mxWbArbiterOut.map(x => x.bits.asMxRfWriteBundle(x.fire)).toSeq)
+  private val toMxPreg: Option[MixedVec[RfWritePortWithConfig]] = OptionWrapper(HasMatrixExtension,
+    MixedVecInit(mxWbArbiterOut.get.map(x => x.bits.asMxRfWriteBundle(x.fire)).toSeq))
   private val toVlPreg: MixedVec[RfWritePortWithConfig] = MixedVecInit(vlWbArbiterOut.map(x => x.bits.asVlRfWriteBundle(x.fire)).toSeq)
 
-  private val wb2Ctrl = intExuWBs ++ fpExuWBs ++ vfExuWBs ++ mfExuWBs ++ memExuWBs
+  private val wb2Ctrl = intExuWBs ++ fpExuWBs ++ vfExuWBs ++ mfExuWBs.getOrElse(Nil) ++ memExuWBs
 
   io.toIntPreg := toIntPreg
   io.toFpPreg := toFpPreg
   io.toVfPreg := toVfPreg
   io.toV0Preg := toV0Preg
-  io.toMxPreg := toMxPreg
+  io.toMxPreg.foreach(_ := toMxPreg.get)
   io.toVlPreg := toVlPreg
   io.toCtrlBlock.writeback.zip(wb2Ctrl).foreach { case (sink, source) =>
     sink.valid := source.valid

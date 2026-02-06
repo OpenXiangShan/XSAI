@@ -510,7 +510,7 @@ class CtrlBlockImp(
   decode.io.vecRat <> rat.io.vecReadPorts
   decode.io.v0Rat <> rat.io.v0ReadPorts
   decode.io.vlRat <> rat.io.vlReadPorts
-  decode.io.mxRat <> rat.io.mxReadPorts
+  decode.io.mxRat.foreach(_ <> rat.io.mxReadPorts.get)
   decode.io.fusion := 0.U.asTypeOf(decode.io.fusion) // Todo
   decode.io.stallReason.in <> io.frontend.stallReason
 
@@ -639,7 +639,7 @@ class CtrlBlockImp(
   rat.io.fpRenamePorts := rename.io.fpRenamePorts
   rat.io.vecRenamePorts := rename.io.vecRenamePorts
   rat.io.v0RenamePorts := rename.io.v0RenamePorts
-  rat.io.mxRenamePorts := rename.io.mxRenamePorts
+  rat.io.mxRenamePorts.foreach(_ := rename.io.mxRenamePorts.get)
   rat.io.vlRenamePorts := rename.io.vlRenamePorts
 
   rename.io.redirect := s1_s3_redirect
@@ -657,14 +657,14 @@ class CtrlBlockImp(
   rename.io.fpReadPorts := VecInit(rat.io.fpReadPorts.map(x => VecInit(x.map(_.data))))
   rename.io.vecReadPorts := VecInit(rat.io.vecReadPorts.map(x => VecInit(x.map(_.data))))
   rename.io.v0ReadPorts := VecInit(rat.io.v0ReadPorts.map(x => VecInit(x.data)))
-  rename.io.mxReadPorts := VecInit(rat.io.mxReadPorts.map(x => VecInit(x.map(_.data))))
+  rename.io.mxReadPorts.foreach(_ := VecInit(rat.io.mxReadPorts.get.map(x => VecInit(x.map(_.data)))))
   rename.io.vlReadPorts := VecInit(rat.io.vlReadPorts.map(x => VecInit(x.data)))
   rename.io.int_need_free := rat.io.int_need_free
   rename.io.int_old_pdest := rat.io.int_old_pdest
   rename.io.fp_old_pdest := rat.io.fp_old_pdest
   rename.io.vec_old_pdest := rat.io.vec_old_pdest
   rename.io.v0_old_pdest := rat.io.v0_old_pdest
-  rename.io.mx_old_pdest := rat.io.mx_old_pdest
+  rename.io.mx_old_pdest.foreach(_ := rat.io.mx_old_pdest.get)
   rename.io.vl_old_pdest := rat.io.vl_old_pdest
   rename.io.debug_int_rat.foreach(_ := rat.io.debug_int_rat.get)
   rename.io.debug_fp_rat.foreach(_ := rat.io.debug_fp_rat.get)
@@ -715,16 +715,16 @@ class CtrlBlockImp(
   dispatch.io.stallReason <> rename.io.stallReason.out
   dispatch.io.lqCanAccept := io.lqCanAccept
   dispatch.io.sqCanAccept := io.sqCanAccept
-  dispatch.io.mlsqCanAccept := io.mlsqCanAccept
+  dispatch.io.mlsqCanAccept.foreach(_ := io.mlsqCanAccept.get)
   dispatch.io.fromMem.lcommit := io.fromMemToDispatch.lcommit
   dispatch.io.fromMem.scommit := io.fromMemToDispatch.scommit
-  dispatch.io.fromMem.mcommit := io.fromMemToDispatch.mcommit
+  dispatch.io.fromMem.mcommit.foreach(_ := io.fromMemToDispatch.mcommit.get)
   dispatch.io.fromMem.lqDeqPtr := io.fromMemToDispatch.lqDeqPtr
   dispatch.io.fromMem.sqDeqPtr := io.fromMemToDispatch.sqDeqPtr
-  dispatch.io.fromMem.mlsqDeqPtr := io.fromMemToDispatch.mlsqDeqPtr
+  dispatch.io.fromMem.mlsqDeqPtr.foreach(_ := io.fromMemToDispatch.mlsqDeqPtr.get)
   dispatch.io.fromMem.lqCancelCnt := io.fromMemToDispatch.lqCancelCnt
   dispatch.io.fromMem.sqCancelCnt := io.fromMemToDispatch.sqCancelCnt
-  dispatch.io.fromMem.mlsqCancelCnt := io.fromMemToDispatch.mlsqCancelCnt
+  dispatch.io.fromMem.mlsqCancelCnt.foreach(_ := io.fromMemToDispatch.mlsqCancelCnt.get)
   io.toMem.lsqEnqIO <> dispatch.io.toMem.lsqEnqIO
   dispatch.io.wakeUpAll.wakeUpInt := io.toDispatch.wakeUpInt
   dispatch.io.wakeUpAll.wakeUpFp  := io.toDispatch.wakeUpFp
@@ -737,7 +737,7 @@ class CtrlBlockImp(
   dispatch.io.wbPregsFp := io.toDispatch.wbPregsFp
   dispatch.io.wbPregsVec := io.toDispatch.wbPregsVec
   dispatch.io.wbPregsV0 := io.toDispatch.wbPregsV0
-  dispatch.io.wbPregsMx := io.toDispatch.wbPregsMx
+  dispatch.io.wbPregsMx.foreach(_ := io.toDispatch.wbPregsMx.get)
   dispatch.io.wbPregsVl := io.toDispatch.wbPregsVl
   dispatch.io.vlWriteBackInfo := io.toDispatch.vlWriteBackInfo
   dispatch.io.robHeadNotReady := rob.io.headNotReady
@@ -774,7 +774,7 @@ class CtrlBlockImp(
   rob.io.wfi_enable := decode.io.csrCtrl.wfi_enable
 
   io.toTop.cpuHalt := DelayN(rob.io.cpu_halt, 5)
-  io.toAmu <> rob.io.amuCtrl
+  io.toAmu.foreach(_ <> rob.io.amuCtrl.get)
 
   io.robio.csr.perfinfo.retiredInstr <> RegNext(rob.io.csr.perfinfo.retiredInstr)
   io.robio.exception := rob.io.exception
@@ -865,7 +865,7 @@ class CtrlBlockIO()(implicit p: Parameters, params: BackendParams) extends XSBun
     val cpuHalt = Output(Bool())
   }
 
-  val toAmu = Vec(CommitWidth, Decoupled(new AmuCtrlIO))
+  val toAmu = OptionWrapper(HasMatrixExtension, Vec(CommitWidth, Decoupled(new AmuCtrlIO)))
 
   val frontend = Flipped(new FrontendToCtrlIO())
   val fromCSR = new Bundle{
@@ -889,14 +889,14 @@ class CtrlBlockIO()(implicit p: Parameters, params: BackendParams) extends XSBun
   val fromMemToDispatch = new Bundle {
     val lcommit = Input(UInt(log2Up(CommitWidth + 1).W))
     val scommit = Input(UInt(log2Ceil(EnsbufferWidth + 1).W)) // connected to `memBlock.io.sqDeq` instead of ROB
-    val mcommit = Input(UInt(log2Up(CommitWidth + 1).W))
+    val mcommit = OptionWrapper(HasMatrixExtension, Input(UInt(log2Up(CommitWidth + 1).W)))
     val lqDeqPtr = Input(new LqPtr)
     val sqDeqPtr = Input(new SqPtr)
-    val mlsqDeqPtr = Input(new MlsqPtr)
+    val mlsqDeqPtr = OptionWrapper(HasMatrixExtension, Input(new MlsqPtr))
     // from lsq
     val lqCancelCnt = Input(UInt(log2Up(VirtualLoadQueueSize + 1).W))
     val sqCancelCnt = Input(UInt(log2Up(StoreQueueSize + 1).W))
-    val mlsqCancelCnt = Input(UInt(log2Up(MlsQueueSize + 1).W))
+    val mlsqCancelCnt = OptionWrapper(HasMatrixExtension, Input(UInt(log2Up(MlsQueueSize + 1).W)))
   }
   //toMem
   val toMem = new Bundle {
@@ -907,7 +907,7 @@ class CtrlBlockIO()(implicit p: Parameters, params: BackendParams) extends XSBun
     val wakeUpInt = Flipped(backendParams.intSchdParams.get.genIQWakeUpOutValidBundle)
     val wakeUpFp  = Flipped(backendParams.fpSchdParams.get.genIQWakeUpOutValidBundle)
     val wakeUpVec = Flipped(backendParams.vfSchdParams.get.genIQWakeUpOutValidBundle)
-    val wakeUpMatrix = Flipped(backendParams.mfSchdParams.get.genIQWakeUpOutValidBundle)
+    val wakeUpMatrix = OptionWrapper(HasMatrixExtension, Flipped(backendParams.mfSchdParams.get.genIQWakeUpOutValidBundle))
     val wakeUpMem = Flipped(backendParams.memSchdParams.get.genIQWakeUpOutValidBundle)
     val allIssueParams = backendParams.allIssueParams.filter(_.StdCnt == 0)
     val allExuParams = allIssueParams.map(_.exuBlockParams).flatten
@@ -920,7 +920,8 @@ class CtrlBlockIO()(implicit p: Parameters, params: BackendParams) extends XSBun
     val wbPregsFp = Vec(backendParams.numPregWb(FpData()), Flipped(ValidIO(UInt(PhyRegIdxWidth.W))))
     val wbPregsVec = Vec(backendParams.numPregWb(VecData()), Flipped(ValidIO(UInt(PhyRegIdxWidth.W))))
     val wbPregsV0 = Vec(backendParams.numPregWb(V0Data()), Flipped(ValidIO(UInt(PhyRegIdxWidth.W))))
-    val wbPregsMx = Vec(backendParams.numPregWb(MxData()), Flipped(ValidIO(UInt(PhyRegIdxWidth.W))))
+    val wbPregsMx = OptionWrapper(HasMatrixExtension,
+      Vec(backendParams.numPregWb(MxData()), Flipped(ValidIO(UInt(PhyRegIdxWidth.W)))))
     val wbPregsVl = Vec(backendParams.numPregWb(VlData()), Flipped(ValidIO(UInt(PhyRegIdxWidth.W))))
     val vlWriteBackInfo = new Bundle {
       val vlFromIntIsZero  = Input(Bool())
@@ -1001,7 +1002,7 @@ class CtrlBlockIO()(implicit p: Parameters, params: BackendParams) extends XSBun
 
   val sqCanAccept = Input(Bool())
   val lqCanAccept = Input(Bool())
-  val mlsqCanAccept = Input(Bool())
+  val mlsqCanAccept = OptionWrapper(HasMatrixExtension, Input(Bool()))
 
   val debugTopDown = new Bundle {
     val fromRob = new RobCoreTopDownIO

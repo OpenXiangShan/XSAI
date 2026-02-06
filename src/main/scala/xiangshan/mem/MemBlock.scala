@@ -125,8 +125,8 @@ class ooo_to_mem(implicit p: Parameters) extends MemBlockBundle {
   val issueStd = MixedVec(Seq.fill(StdCnt)(Flipped(DecoupledIO(new MemExuInput))))
   val issueHya = MixedVec(Seq.fill(HyuCnt)(Flipped(DecoupledIO(new MemExuInput))))
   val issueVldu = MixedVec(Seq.fill(VlduCnt)(Flipped(DecoupledIO(new MemExuInput(isVector=true)))))
-  val issueMlsu = MixedVec(Seq.fill(MlsCnt)(Flipped(DecoupledIO(new MemExuInput(isMatrix=true)))))
-  def issueUops = issueLda ++ issueSta ++ issueStd ++ issueHya ++ issueVldu ++ issueMlsu
+  val issueMlsu = OptionWrapper(HasMatrixExtension, MixedVec(Seq.fill(MlsCnt)(Flipped(DecoupledIO(new MemExuInput(isMatrix=true))))))
+  def issueUops = issueLda ++ issueSta ++ issueStd ++ issueHya ++ issueVldu ++ issueMlsu.getOrElse(Seq())
 }
 
 class mem_to_ooo(implicit p: Parameters) extends MemBlockBundle {
@@ -135,14 +135,14 @@ class mem_to_ooo(implicit p: Parameters) extends MemBlockBundle {
   val otherFastWakeup = Vec(LdWakeupCnt, ValidIO(new DynInst))
   val lqCancelCnt = Output(UInt(log2Up(VirtualLoadQueueSize + 1).W))
   val sqCancelCnt = Output(UInt(log2Up(StoreQueueSize + 1).W))
-  val mlsqCancelCnt = Output(UInt(log2Up(MlsQueueSize + 1).W))
+  val mlsqCancelCnt = Option.when(HasMatrixExtension)(Output(UInt(log2Up(MlsQueueSize + 1).W)))
   val sqDeq = Output(UInt(log2Ceil(EnsbufferWidth + 1).W))
   val lqDeq = Output(UInt(log2Up(CommitWidth + 1).W))
-  val mlsqDeq = Output(UInt(log2Up(CommitWidth + 1).W))
+  val mlsqDeq = Option.when(HasMatrixExtension)(Output(UInt(log2Up(CommitWidth + 1).W)))
   // used by VLSU issue queue, the vector store would wait all store before it, and the vector load would wait all load
   val sqDeqPtr = Output(new SqPtr)
   val lqDeqPtr = Output(new LqPtr)
-  val mlsqDeqPtr = Output(new MlsqPtr)
+  val mlsqDeqPtr = Option.when(HasMatrixExtension)(Output(new MlsqPtr))
   val stIn = Vec(StAddrCnt, ValidIO(new MemExuInput))
   val stIssuePtr = Output(new SqPtr())
 
@@ -161,7 +161,7 @@ class mem_to_ooo(implicit p: Parameters) extends MemBlockBundle {
     val uop = Output(Vec(LoadPipelineWidth, new DynInst))
     val lqCanAccept = Output(Bool())
     val sqCanAccept = Output(Bool())
-    val mlsqCanAccept = Output(Bool())
+    val mlsqCanAccept = Option.when(HasMatrixExtension)(Output(Bool()))
   }
 
   val storeDebugInfo = Vec(EnsbufferWidth, new Bundle {
@@ -175,13 +175,13 @@ class mem_to_ooo(implicit p: Parameters) extends MemBlockBundle {
   val writebackHyuLda = Vec(HyuCnt, DecoupledIO(new MemExuOutput))
   val writebackHyuSta = Vec(HyuCnt, DecoupledIO(new MemExuOutput))
   val writebackVldu = Vec(VlduCnt, DecoupledIO(new MemExuOutput(isVector = true)))
-  val writebackMls = Vec(MlsCnt, DecoupledIO(new MemExuOutput(isMatrix = true)))
+  val writebackMls = OptionWrapper(HasMatrixExtension, Vec(MlsCnt, DecoupledIO(new MemExuOutput(isMatrix = true))))
   def writeBack: Seq[DecoupledIO[MemExuOutput]] = {
     writebackSta ++
       writebackHyuLda ++ writebackHyuSta ++
       writebackLda ++
       writebackVldu ++
-      writebackMls ++
+      writebackMls.getOrElse(Seq()) ++
       writebackStd
   }
 
@@ -190,7 +190,7 @@ class mem_to_ooo(implicit p: Parameters) extends MemBlockBundle {
   val hyuIqFeedback = Vec(HyuCnt, new MemRSFeedbackIO)
   val vstuIqFeedback = Vec(VstuCnt, new MemRSFeedbackIO(isVector = true))
   val vlduIqFeedback = Vec(VlduCnt, new MemRSFeedbackIO(isVector = true))
-  val mlsIqFeedback = Vec(MlsCnt, new MemRSFeedbackIO)
+  val mlsIqFeedback = OptionWrapper(HasMatrixExtension, Vec(MlsCnt, new MemRSFeedbackIO))
   val ldCancel = Vec(backendParams.LdWakeupCnt, new LoadCancelIO)
   val wakeup = Vec(backendParams.LdWakeupCnt, Valid(new DynInst))
 
@@ -560,7 +560,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
   }
   io.mem_to_ooo.writebackHyuLda <> hybridUnits.map(_.io.ldout)
   io.mem_to_ooo.writebackHyuSta <> hybridUnits.map(_.io.stout)
-  io.mem_to_ooo.writebackMls <> mlsUnits.map(_.io.lsout)
+  io.mem_to_ooo.writebackMls.foreach(_ <> mlsUnits.map(_.io.lsout))
 
   io.mem_to_ooo.otherFastWakeup := DontCare
   io.mem_to_ooo.otherFastWakeup.drop(HyuCnt).take(LduCnt).zip(loadUnits.map(_.io.fast_uop)).foreach{case(a,b)=> a := b}
@@ -1202,15 +1202,17 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
   }
 
   for (i <- 0 until MlsCnt) {
+    assert(HasMatrixExtension)
+
     mlsUnits(i).io.redirect <> redirect
     mlsUnits(i).io.csrCtrl <> csrCtrl
 
     // get input from dispatch
-    mlsUnits(i).io.lsin <> io.ooo_to_mem.issueMlsu(i)
+    mlsUnits(i).io.lsin <> io.ooo_to_mem.issueMlsu.get(i)
 
     // TODO: check whether we need to connect feedbackFast
-    mlsUnits(i).io.feedback_slow <> io.mem_to_ooo.mlsIqFeedback(i).feedbackSlow
-    mlsUnits(i).io.feedback_fast <> io.mem_to_ooo.mlsIqFeedback(i).feedbackFast
+    mlsUnits(i).io.feedback_slow <> io.mem_to_ooo.mlsIqFeedback.get(i).feedbackSlow
+    mlsUnits(i).io.feedback_fast <> io.mem_to_ooo.mlsIqFeedback.get(i).feedbackFast
 
     mlsUnits(i).io.tlb <> dtlb_ld.head.requestor(LduCnt + HyuCnt + i)
     mlsUnits(i).io.pmp <> pmp_check.drop(LduCnt + HyuCnt)(i).resp
@@ -1220,7 +1222,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
       tlbreplay_reg(LduCnt + HyuCnt + i) || dtlb_ld0_tlbreplay_reg(LduCnt + HyuCnt + i)
 
     mlsUnits(i).io.replay <> lsq.io.mls_replay(i)
-    mlsUnits(i).io.mlsq_rep_full <> lsq.io.mlsq_rep_full
+    mlsUnits(i).io.mlsq_rep_full <> lsq.io.mlsq_rep_full.get
 
     lsq.io.mlsu.mlsin(i) <> mlsUnits(i).io.lsq.lsin
   }
@@ -1490,7 +1492,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
   io.mem_to_ooo.memoryViolation := oldestRedirect
   io.mem_to_ooo.lsqio.lqCanAccept  := lsq.io.lqCanAccept
   io.mem_to_ooo.lsqio.sqCanAccept  := lsq.io.sqCanAccept
-  io.mem_to_ooo.lsqio.mlsqCanAccept := lsq.io.mlsqCanAccept
+  io.mem_to_ooo.lsqio.mlsqCanAccept.foreach(_ := lsq.io.mlsqCanAccept.get)
 
   // lsq.io.uncache        <> uncache.io.lsq
   val s_idle :: s_scalar_uncache :: s_vector_uncache :: Nil = Enum(3)
@@ -1560,14 +1562,14 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
   lsq.io.release        := dcache.io.lsu.release
   lsq.io.lqCancelCnt <> io.mem_to_ooo.lqCancelCnt
   lsq.io.sqCancelCnt <> io.mem_to_ooo.sqCancelCnt
-  lsq.io.mlsqCancelCnt <> io.mem_to_ooo.mlsqCancelCnt
+  lsq.io.mlsqCancelCnt.foreach(_ <> io.mem_to_ooo.mlsqCancelCnt.get)
   lsq.io.lqDeq <> io.mem_to_ooo.lqDeq
   lsq.io.sqDeq <> io.mem_to_ooo.sqDeq
-  lsq.io.mlsqDeq <> io.mem_to_ooo.mlsqDeq
+  lsq.io.mlsqDeq.foreach(_ <> io.mem_to_ooo.mlsqDeq.get)
   // Todo: assign these
   io.mem_to_ooo.sqDeqPtr := lsq.io.sqDeqPtr
   io.mem_to_ooo.lqDeqPtr := lsq.io.lqDeqPtr
-  io.mem_to_ooo.mlsqDeqPtr := lsq.io.mlsqDeqPtr
+  io.mem_to_ooo.mlsqDeqPtr.foreach(_ := lsq.io.mlsqDeqPtr.get)
   lsq.io.tl_d_channel <> dcache.io.lsu.tl_d_channel
 
   // LSQ to store buffer

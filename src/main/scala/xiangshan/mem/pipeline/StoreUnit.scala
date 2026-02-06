@@ -360,7 +360,7 @@ class StoreUnit(implicit p: Parameters) extends XSModule
   s1_feedback.bits.dataInvalidSqIdx := DontCare
   s1_feedback.bits.sqIdx            := s1_out.uop.sqIdx
   s1_feedback.bits.lqIdx            := s1_out.uop.lqIdx
-  s1_feedback.bits.mlsqIdx          := s1_out.uop.mlsqIdx
+  s1_feedback.bits.mlsqIdx.foreach(_ := s1_out.uop.mlsqIdx.get)
 
   XSDebug(s1_feedback.valid,
     "S1 Store: tlbHit: %d robIdx: %d\n",

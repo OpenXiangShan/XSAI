@@ -126,8 +126,8 @@ class VirtualMlsQueue(implicit p: Parameters) extends XSModule
   io.mlsqEmpty := RegNext(validCount === 0.U)
 
   io.enq.canAccept := allowEnqueue
-  val enqLowBound = io.enq.req.map(_.bits.mlsqIdx)
-  val enqUpBound  = io.enq.req.map(x => x.bits.mlsqIdx + x.bits.numLsElem)
+  val enqLowBound = io.enq.req.map(_.bits.mlsqIdx.get)
+  val enqUpBound  = io.enq.req.map(x => x.bits.mlsqIdx.get + x.bits.numLsElem)
   val enqCrossLoop = enqLowBound.zip(enqUpBound).map{case (low, up) => low.flag =/= up.flag}
 
   for (i <- 0 until VirtualMlsQueueSize) {
@@ -150,7 +150,7 @@ class VirtualMlsQueue(implicit p: Parameters) extends XSModule
 
   for (i <- 0 until io.enq.req.length) {
     val mlsqIdx = enqPtrExt(0) + validVLoadOffsetRShift.take(i + 1).reduce(_ + _)
-    val index = io.enq.req(i).bits.mlsqIdx
+    val index = io.enq.req(i).bits.mlsqIdx.get
     // XSError(canEnqueue(i) && !enqCancel(i) && (!io.enq.canAccept || !io.enq.sqCanAccept), s"must accept $i\n")
     XSError(canEnqueue(i) && !enqCancel(i) && index.value =/= mlsqIdx.value, s"must be the same entry $i\n")
     io.enq.resp(i) := mlsqIdx
@@ -187,7 +187,7 @@ class VirtualMlsQueue(implicit p: Parameters) extends XSModule
     //   most lq status need to be updated immediately after load writeback to lq
     //   flag bits in lq needs to be updated accurately
     io.lsin(i).ready := true.B
-    val loadWbIndex = io.lsin(i).bits.uop.mlsqIdx.value
+    val loadWbIndex = io.lsin(i).bits.uop.mlsqIdx.get.value
 
     when (io.lsin(i).valid) {
       val hasExceptions = ExceptionNO.selectByFu(io.lsin(i).bits.uop.exceptionVec, MlsCfg).asUInt.orR
@@ -200,7 +200,7 @@ class VirtualMlsQueue(implicit p: Parameters) extends XSModule
 
       XSInfo(!need_rep && need_valid,
         "matrix load/store hit write to lq idx %d pc 0x%x vaddr %x paddr %x mask %x forwardData %x forwardMask: %x mmio %x\n",
-        io.lsin(i).bits.uop.mlsqIdx.asUInt,
+        io.lsin(i).bits.uop.mlsqIdx.get.asUInt,
         io.lsin(i).bits.uop.pc,
         io.lsin(i).bits.vaddr,
         io.lsin(i).bits.paddr,

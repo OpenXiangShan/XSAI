@@ -9,6 +9,7 @@ import xiangshan.backend.BackendParams
 import xiangshan.backend.datapath.DataConfig._
 import xiangshan.backend.datapath.RdConfig._
 import xiangshan.backend.regfile.PregParams
+import xiangshan.XSModule
 import utility._
 
 case class RFRdArbParams(
@@ -39,7 +40,7 @@ class RFReadArbiterIO(params: RFRdArbParams)(implicit p: Parameters) extends Bun
   val out = Vec(params.portMax + 1, Valid(new RFArbiterBundle(pregWidth)))
 }
 
-abstract class RFReadArbiterBase(val params: RFRdArbParams)(implicit p: Parameters) extends Module {
+abstract class RFReadArbiterBase(val params: RFRdArbParams)(implicit p: Parameters) extends XSModule {
   protected def portRange: Range
 
   val io = IO(new RFReadArbiterIO(params))
@@ -157,5 +158,11 @@ class MxRFReadArbiter(
 )(implicit
   p: Parameters
 ) extends RFReadArbiterBase(RFRdArbParams(backendParams.getRdCfgs[MxRD], backendParams.mxPregParams)) {
-  override protected def portRange: Range = 0 to backendParams.getRdPortIndices(MxData()).max
+  override protected def portRange: Range = {
+    if (HasMatrixExtension) {
+      0 to backendParams.getRdPortIndices(MxData()).max
+    } else {
+      0 to 0
+    }
+  }
 }
