@@ -480,7 +480,7 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   io.feedback_fast.bits.dataInvalidSqIdx := DontCare
   io.feedback_fast.bits.lqIdx            := s2_in.uop.lqIdx
   io.feedback_fast.bits.sqIdx            := s2_in.uop.sqIdx
-  io.feedback_fast.bits.mlsqIdx          := s2_in.uop.mlsqIdx
+  io.feedback_fast.bits.mlsqIdx.foreach(_ := s2_in.uop.mlsqIdx.get)
 
   val s1_ld_left_fire = s1_valid && !s1_kill && s2_ready && s1_ld_flow
   val s2_ld_valid_dup = RegInit(0.U(6.W))
@@ -610,7 +610,7 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   io.feedback_slow.bits.dataInvalidSqIdx := DontCare
   io.feedback_slow.bits.lqIdx            := s3_in.uop.lqIdx
   io.feedback_slow.bits.sqIdx            := s3_in.uop.sqIdx
-  io.feedback_slow.bits.mlsqIdx          := s3_in.uop.mlsqIdx
+  io.feedback_slow.bits.mlsqIdx.foreach(_ := s3_in.uop.mlsqIdx.get)
 
   io.lsout.bits      := s3_out.bits
   io.lsout.valid     := s3_out.valid && !s3_out.bits.uop.robIdx.needFlush(io.redirect)

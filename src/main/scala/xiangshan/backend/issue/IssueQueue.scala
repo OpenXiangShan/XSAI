@@ -132,8 +132,8 @@ class IssueQueueImp(override val wrapper: IssueQueue)(implicit p: Parameters, va
   val v0WbBusyTableRead = params.exuBlockParams.map { case x => Option.when(x.v0LatencyCertain)(Module(new FuBusyTableRead(x.v0FuLatencyMap))) }
   val vlWbBusyTableWrite = params.exuBlockParams.map { case x => Option.when(x.vlLatencyCertain)(Module(new FuBusyTableWrite(x.vlFuLatencyMap))) }
   val vlWbBusyTableRead = params.exuBlockParams.map { case x => Option.when(x.vlLatencyCertain)(Module(new FuBusyTableRead(x.vlFuLatencyMap))) }
-  val mxWbBusyTableWrite = params.exuBlockParams.map { case x => Option.when(x.mxLatencyCertain)(Module(new FuBusyTableWrite(x.mxFuLatencyMap))) }
-  val mxWbBusyTableRead = params.exuBlockParams.map { case x => Option.when(x.mxLatencyCertain)(Module(new FuBusyTableRead(x.mxFuLatencyMap))) }
+  val mxWbBusyTableWrite = params.exuBlockParams.map { case x => Option.when(x.mxLatencyCertain && HasMatrixExtension)(Module(new FuBusyTableWrite(x.mxFuLatencyMap))) }
+  val mxWbBusyTableRead = params.exuBlockParams.map { case x => Option.when(x.mxLatencyCertain && HasMatrixExtension)(Module(new FuBusyTableRead(x.mxFuLatencyMap))) }
 
   class WakeupQueueFlush extends Bundle {
     val redirect = ValidIO(new Redirect)
@@ -810,7 +810,7 @@ class IssueQueueImp(override val wrapper: IssueQueue)(implicit p: Parameters, va
     deq.bits.common.vecWen.foreach(_ := deqEntryVec(i).bits.payload.vecWen)
     deq.bits.common.v0Wen.foreach(_ := deqEntryVec(i).bits.payload.v0Wen)
     deq.bits.common.vlWen.foreach(_ := deqEntryVec(i).bits.payload.vlWen)
-    deq.bits.common.mxWen.foreach(_ := deqEntryVec(i).bits.payload.mxWen)
+    deq.bits.common.mxWen.foreach(_ := deqEntryVec(i).bits.payload.mxWen.getOrElse(false.B))
     deq.bits.common.flushPipe.foreach(_ := deqEntryVec(i).bits.payload.flushPipe)
     deq.bits.common.pdest := deqEntryVec(i).bits.payload.pdest
     deq.bits.common.robIdx := deqEntryVec(i).bits.status.robIdx
@@ -877,7 +877,7 @@ class IssueQueueImp(override val wrapper: IssueQueue)(implicit p: Parameters, va
       wakeup.bits.vecWen := (if (wakeUpQueues(i).get.io.deq.bits.vecWen.nonEmpty) wakeUpQueues(i).get.io.deq.valid && wakeUpQueues(i).get.io.deq.bits.vecWen.get else false.B)
       wakeup.bits.v0Wen  := (if (wakeUpQueues(i).get.io.deq.bits.v0Wen .nonEmpty) wakeUpQueues(i).get.io.deq.valid && wakeUpQueues(i).get.io.deq.bits.v0Wen.get else false.B)
       wakeup.bits.vlWen  := (if (wakeUpQueues(i).get.io.deq.bits.vlWen .nonEmpty) wakeUpQueues(i).get.io.deq.valid && wakeUpQueues(i).get.io.deq.bits.vlWen.get else false.B)
-      wakeup.bits.mxWen  := (if (wakeUpQueues(i).get.io.deq.bits.mxWen .nonEmpty) wakeUpQueues(i).get.io.deq.valid && wakeUpQueues(i).get.io.deq.bits.mxWen.get else false.B)
+      wakeup.bits.mxWen.foreach(_ := (if (wakeUpQueues(i).get.io.deq.bits.mxWen .nonEmpty) wakeUpQueues(i).get.io.deq.valid && wakeUpQueues(i).get.io.deq.bits.mxWen.get else false.B))
     }
 
     if(wakeUpQueues(i).nonEmpty && wakeup.bits.pdestCopy.nonEmpty){
@@ -1162,7 +1162,7 @@ class IssueQueueMemAddrImp(override val wrapper: IssueQueue)(implicit p: Paramet
     slowResp.bits.robIdx := memIO.feedbackIO(i).feedbackSlow.bits.robIdx
     slowResp.bits.sqIdx.foreach( _ := memIO.feedbackIO(i).feedbackSlow.bits.sqIdx)
     slowResp.bits.lqIdx.foreach( _ := memIO.feedbackIO(i).feedbackSlow.bits.lqIdx)
-    slowResp.bits.mlsqIdx.foreach( _ := memIO.feedbackIO(i).feedbackSlow.bits.mlsqIdx)
+    slowResp.bits.mlsqIdx.foreach( _ := memIO.feedbackIO(i).feedbackSlow.bits.mlsqIdx.get)
     slowResp.bits.resp   := Mux(memIO.feedbackIO(i).feedbackSlow.bits.hit, RespType.success, RespType.block)
     slowResp.bits.fuType := DontCare
   }
@@ -1172,7 +1172,7 @@ class IssueQueueMemAddrImp(override val wrapper: IssueQueue)(implicit p: Paramet
     fastResp.bits.robIdx := memIO.feedbackIO(i).feedbackFast.bits.robIdx
     fastResp.bits.sqIdx.foreach( _ := memIO.feedbackIO(i).feedbackFast.bits.sqIdx)
     fastResp.bits.lqIdx.foreach( _ := memIO.feedbackIO(i).feedbackFast.bits.lqIdx)
-    fastResp.bits.mlsqIdx.foreach( _ := memIO.feedbackIO(i).feedbackFast.bits.mlsqIdx)
+    fastResp.bits.mlsqIdx.foreach( _ := memIO.feedbackIO(i).feedbackFast.bits.mlsqIdx.get)
     fastResp.bits.resp   := Mux(memIO.feedbackIO(i).feedbackFast.bits.hit, RespType.success, RespType.block)
     fastResp.bits.fuType := DontCare
   }
@@ -1192,7 +1192,7 @@ class IssueQueueMemAddrImp(override val wrapper: IssueQueue)(implicit p: Paramet
       wakeup.bits.vecWen := (if (params.writeVecRf) RegNext(uop.bits.vecWen && uop.fire) else false.B)
       wakeup.bits.v0Wen  := (if (params.writeV0Rf)  RegNext(uop.bits.v0Wen  && uop.fire) else false.B)
       wakeup.bits.vlWen  := (if (params.writeVlRf)  RegNext(uop.bits.vlWen  && uop.fire) else false.B)
-      wakeup.bits.mxWen  := (if (params.writeMxRf)  RegNext(uop.bits.mxWen && uop.fire) else false.B)
+      wakeup.bits.mxWen.foreach(_ := (if (params.writeMxRf)  RegNext(uop.bits.mxWen.getOrElse(false.B) && uop.fire) else false.B))
       wakeup.bits.pdest  := RegNext(uop.bits.pdest)
       wakeup.bits.rcDest.foreach(_ := io.replaceRCIdx.get(i))
       wakeup.bits.loadDependency.foreach(_ := 0.U) // this is correct for load only
@@ -1202,7 +1202,7 @@ class IssueQueueMemAddrImp(override val wrapper: IssueQueue)(implicit p: Paramet
       wakeup.bits.vecWenCopy.foreach(_.foreach(_ := (if (params.writeVecRf) RegNext(uop.bits.vecWen && uop.fire) else false.B)))
       wakeup.bits.v0WenCopy .foreach(_.foreach(_ := (if (params.writeV0Rf)  RegNext(uop.bits.v0Wen  && uop.fire) else false.B)))
       wakeup.bits.vlWenCopy .foreach(_.foreach(_ := (if (params.writeVlRf)  RegNext(uop.bits.vlWen  && uop.fire) else false.B)))
-      wakeup.bits.mxWenCopy .foreach(_.foreach(_ := (if (params.writeMxRf)  RegNext(uop.bits.mxWen  && uop.fire) else false.B)))
+      wakeup.bits.mxWenCopy .foreach(_.foreach(_ := (if (params.writeMxRf)  RegNext(uop.bits.mxWen.getOrElse(false.B) && uop.fire) else false.B)))
       wakeup.bits.pdestCopy .foreach(_.foreach(_ := RegNext(uop.bits.pdest)))
       wakeup.bits.loadDependencyCopy.foreach(x => x := 0.U.asTypeOf(x)) // this is correct for load only
 
@@ -1220,7 +1220,7 @@ class IssueQueueMemAddrImp(override val wrapper: IssueQueue)(implicit p: Paramet
     deq.bits.common.ssid.foreach(_ := deqEntryVec(i).bits.payload.ssid)
     deq.bits.common.sqIdx.get := deqEntryVec(i).bits.payload.sqIdx
     deq.bits.common.lqIdx.get := deqEntryVec(i).bits.payload.lqIdx
-    deq.bits.common.mlsqIdx.get := deqEntryVec(i).bits.payload.mlsqIdx
+    deq.bits.common.mlsqIdx.foreach(_ := deqEntryVec(i).bits.payload.mlsqIdx.get)
     deq.bits.common.ftqIdx.foreach(_ := deqEntryVec(i).bits.payload.ftqPtr)
     deq.bits.common.ftqOffset.foreach(_ := deqEntryVec(i).bits.payload.ftqOffset)
   }
@@ -1242,7 +1242,7 @@ class IssueQueueVecMemImp(override val wrapper: IssueQueue)(implicit p: Paramete
     entries.io.enq(i).bits.status match { case enqData =>
       enqData.vecMem.get.sqIdx := s0_enqBits(i).sqIdx
       enqData.vecMem.get.lqIdx := s0_enqBits(i).lqIdx
-      enqData.vecMem.get.mlsqIdx := s0_enqBits(i).mlsqIdx
+      enqData.vecMem.get.mlsqIdx.foreach(_ := s0_enqBits(i).mlsqIdx.get)
       // MemAddrIQ also handle vector insts
       enqData.vecMem.get.numLsElem := s0_enqBits(i).numLsElem
 
@@ -1278,7 +1278,7 @@ class IssueQueueVecMemImp(override val wrapper: IssueQueue)(implicit p: Paramete
   deqBeforeDly.zipWithIndex.foreach { case (deq, i) =>
     deq.bits.common.sqIdx.foreach(_ := deqEntryVec(i).bits.status.vecMem.get.sqIdx)
     deq.bits.common.lqIdx.foreach(_ := deqEntryVec(i).bits.status.vecMem.get.lqIdx)
-    deq.bits.common.mlsqIdx.foreach(_ := deqEntryVec(i).bits.status.vecMem.get.mlsqIdx)
+    deq.bits.common.mlsqIdx.foreach(_ := deqEntryVec(i).bits.status.vecMem.get.mlsqIdx.get)
     deq.bits.common.numLsElem.foreach(_ := deqEntryVec(i).bits.status.vecMem.get.numLsElem)
     if (params.isVecLduIQ) {
       deq.bits.common.ftqIdx.get := deqEntryVec(i).bits.payload.ftqPtr

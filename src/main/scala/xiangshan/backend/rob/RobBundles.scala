@@ -55,17 +55,17 @@ object RobBundles extends HasCircularQueuePtrHelper {
     val rfWen = Bool()
     val wflags = Bool()
     val dirtyVs = Bool()
-    val dirtyMs = Bool()
+    val dirtyMs = OptionWrapper(HasMatrixExtension, Bool())
     val commitType = CommitType()
     val ftqIdx = new FtqPtr
     val ftqOffset = UInt(log2Up(PredictWidth).W)
     val isRVC = Bool()
     val isVset = Bool()
-    val isMsettilex = Bool()
+    val isMsettilex = OptionWrapper(HasMatrixExtension, Bool())
     val isHls = Bool()
     val instrSize = UInt(log2Ceil(RenameWidth + 1).W)
-    val needAmuCtrl = Bool()
-    val amuCtrl = new AmuCtrlIO
+    val needAmuCtrl = OptionWrapper(HasMatrixExtension, Bool())
+    val amuCtrl = OptionWrapper(HasMatrixExtension, new AmuCtrlIO)
     // data end
     
     // trace
@@ -106,9 +106,9 @@ object RobBundles extends HasCircularQueuePtrHelper {
     val vxsat = Bool()
     val isRVC = Bool()
     val isVset = Bool()
-    val isMsettilex = Bool()
-    val needAmuCtrl = Bool()
-    val amuCtrl = new AmuCtrlIO // TODO: It's too big. Can we optimize it?
+    val isMsettilex = OptionWrapper(HasMatrixExtension, Bool())
+    val needAmuCtrl = OptionWrapper(HasMatrixExtension, Bool())
+    val amuCtrl = OptionWrapper(HasMatrixExtension, new AmuCtrlIO) // TODO: It's too big. Can we optimize it?
     val isHls = Bool()
     val isVls = Bool()
     val vls = Bool()
@@ -132,7 +132,7 @@ object RobBundles extends HasCircularQueuePtrHelper {
     // debug_end
     val dirtyFs = Bool()
     val dirtyVs = Bool()
-    val dirtyMs = Bool()
+    val dirtyMs = OptionWrapper(HasMatrixExtension, Bool())
   }
 
   def connectEnq(robEntry: RobEntryBundle, robEnq: DynInst): Unit = {
@@ -142,15 +142,15 @@ object RobBundles extends HasCircularQueuePtrHelper {
     robEntry.ftqOffset := robEnq.ftqOffset
     robEntry.isRVC := robEnq.preDecodeInfo.isRVC
     robEntry.isVset := robEnq.isVset
-    robEntry.isMsettilex := robEnq.isMsettilex
+    robEntry.isMsettilex.foreach(_ := robEnq.isMsettilex.get)
     robEntry.isHls := robEnq.isHls
     robEntry.instrSize := robEnq.instrSize
     robEntry.rfWen := robEnq.rfWen
     robEntry.fpWen := robEnq.dirtyFs
     robEntry.dirtyVs := robEnq.dirtyVs
-    robEntry.dirtyMs := robEnq.dirtyMs
-    robEntry.needAmuCtrl := robEnq.needAmuCtrl
-    robEntry.amuCtrl := 0.U.asTypeOf(robEntry.amuCtrl) // it will be filled at writeback
+    robEntry.dirtyMs.foreach(_ := robEnq.dirtyMs.get)
+    robEntry.needAmuCtrl.foreach(_ := robEnq.needAmuCtrl.get)
+    robEntry.amuCtrl.foreach(_ := 0.U.asTypeOf(robEntry.amuCtrl.get))
     // flushPipe needFlush but not exception
     robEntry.needFlush := robEnq.hasException || robEnq.flushPipe
     // trace
@@ -175,9 +175,9 @@ object RobBundles extends HasCircularQueuePtrHelper {
     robCommitEntry.vxsat := robEntry.vxsat
     robCommitEntry.isRVC := robEntry.isRVC
     robCommitEntry.isVset := robEntry.isVset
-    robCommitEntry.isMsettilex := robEntry.isMsettilex
-    robCommitEntry.needAmuCtrl := robEntry.needAmuCtrl
-    robCommitEntry.amuCtrl := robEntry.amuCtrl
+    robCommitEntry.isMsettilex.foreach(_ := robEntry.isMsettilex.get)
+    robCommitEntry.needAmuCtrl.foreach(_ := robEntry.needAmuCtrl.get)
+    robCommitEntry.amuCtrl.foreach(_ := 0.U.asTypeOf(robEntry.amuCtrl.get))
     robCommitEntry.isHls := robEntry.isHls
     robCommitEntry.isVls := robEntry.vls
     robCommitEntry.vls := robEntry.vls
@@ -188,7 +188,7 @@ object RobBundles extends HasCircularQueuePtrHelper {
     robCommitEntry.instrSize := robEntry.instrSize
     robCommitEntry.dirtyFs := robEntry.fpWen || robEntry.wflags
     robCommitEntry.dirtyVs := robEntry.dirtyVs
-    robCommitEntry.dirtyMs := robEntry.dirtyMs
+    robCommitEntry.dirtyMs.foreach(_ := robEntry.dirtyMs.get)
     robCommitEntry.needFlush := robEntry.needFlush
     robCommitEntry.traceBlockInPipe := robEntry.traceBlockInPipe
     robCommitEntry.debug_pc.foreach(_ := robEntry.debug_pc.get)
@@ -309,8 +309,8 @@ class RobExceptionInfo(implicit p: Parameters) extends XSBundle {
   val isFetchMalAddr = Bool()
   val flushPipe = Bool()
   val isVset = Bool()
-  val isMsettilex = Bool()
-  val needAmuCtrl = Bool()
+  val isMsettilex = OptionWrapper(HasMatrixExtension, Bool())
+  val needAmuCtrl = OptionWrapper(HasMatrixExtension, Bool())
   val replayInst = Bool() // redirect to that inst itself
   val singleStep = Bool() // TODO add frontend hit beneath
   val crossPageIPFFix = Bool()

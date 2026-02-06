@@ -109,25 +109,25 @@ class LsqWrapper(implicit p: Parameters) extends XSModule with HasDCacheParamete
     val vecmmioStout = DecoupledIO(new MemExuOutput(isVector = true)) // vec writeback uncached store
     val sqEmpty = Output(Bool())
     val lq_rep_full = Output(Bool())
-    val mlsq_rep_full = Output(Bool())
+    val mlsq_rep_full = Option.when(HasMatrixExtension)(Output(Bool()))
     val sqFull = Output(Bool())
     val lqFull = Output(Bool())
-    val mlsqFull = Output(Bool())
+    val mlsqFull = Option.when(HasMatrixExtension)(Output(Bool()))
     val sqCancelCnt = Output(UInt(log2Up(StoreQueueSize+1).W))
     val lqCancelCnt = Output(UInt(log2Up(VirtualLoadQueueSize+1).W))
-    val mlsqCancelCnt = Output(UInt(log2Up(MlsQueueSize+1).W))
+    val mlsqCancelCnt = Option.when(HasMatrixExtension)(Output(UInt(log2Up(MlsQueueSize+1).W)))
     val lqDeq = Output(UInt(log2Up(CommitWidth + 1).W))
     val sqDeq = Output(UInt(log2Ceil(EnsbufferWidth + 1).W))
-    val mlsqDeq = Output(UInt(log2Up(CommitWidth + 1).W))
+    val mlsqDeq = Option.when(HasMatrixExtension)(Output(UInt(log2Up(CommitWidth + 1).W)))
     val lqCanAccept = Output(Bool())
     val sqCanAccept = Output(Bool())
-    val mlsqCanAccept = Output(Bool())
+    val mlsqCanAccept = Option.when(HasMatrixExtension)(Output(Bool()))
     val lqDeqPtr = Output(new LqPtr)
     val sqDeqPtr = Output(new SqPtr)
     val sqCommitPtr = Output(new SqPtr)
     val sqCommitUopIdx = Output(UopIdx())
     val sqCommitRobIdx = Output(new RobPtr)
-    val mlsqDeqPtr = Output(new MlsqPtr)
+    val mlsqDeqPtr = Option.when(HasMatrixExtension)(Output(new MlsqPtr))
     val exceptionAddr = new ExceptionAddrIO
     val loadMisalignFull = Input(Bool())
     val misalignAllowSpec = Input(Bool())
@@ -139,7 +139,7 @@ class LsqWrapper(implicit p: Parameters) extends XSModule with HasDCacheParamete
     val flushSbuffer = new SbufferFlushBundle
     val force_write = Output(Bool())
     val lqEmpty = Output(Bool())
-    val mlsqEmpty = Output(Bool())
+    val mlsqEmpty = Option.when(HasMatrixExtension)(Output(Bool()))
     val rarValidCount = Output(UInt())
     val wfi = Flipped(new WfiReqBundle)
     // top-down
@@ -151,7 +151,7 @@ class LsqWrapper(implicit p: Parameters) extends XSModule with HasDCacheParamete
 
   val loadQueue = Module(new LoadQueue)
   val storeQueue = Module(new StoreQueue)
-  val mlsQueue = Module(new MlsQueue)
+  val mlsQueue = Option.when(HasMatrixExtension)(Module(new MlsQueue))
 
   storeQueue.io.hartId := io.hartId
   storeQueue.io.uncacheOutstanding := io.uncacheOutstanding
@@ -166,22 +166,28 @@ class LsqWrapper(implicit p: Parameters) extends XSModule with HasDCacheParamete
   // io.enq logic
   // LSQ: send out canAccept when both load queue and store queue are ready
   // Dispatch: send instructions to LSQ only when they are ready
-  io.enq.canAccept := loadQueue.io.enq.canAccept && storeQueue.io.enq.canAccept && mlsQueue.io.enq.canAccept
+  io.enq.canAccept := (
+       loadQueue.io.enq.canAccept
+    && storeQueue.io.enq.canAccept
+    && Option.when(HasMatrixExtension)(mlsQueue.get.io.enq.canAccept).getOrElse(true.B)
+  )
   io.lqCanAccept := loadQueue.io.enq.canAccept
   io.sqCanAccept := storeQueue.io.enq.canAccept
-  io.mlsqCanAccept := mlsQueue.io.enq.canAccept
   loadQueue.io.enq.sqCanAccept := storeQueue.io.enq.canAccept
-  loadQueue.io.enq.mlsqCanAccept := mlsQueue.io.enq.canAccept
   storeQueue.io.enq.lqCanAccept := loadQueue.io.enq.canAccept
-  storeQueue.io.enq.mlsqCanAccept := mlsQueue.io.enq.canAccept
-  mlsQueue.io.enq.lqCanAccept := loadQueue.io.enq.canAccept
-  mlsQueue.io.enq.sqCanAccept := storeQueue.io.enq.canAccept
   io.lqDeqPtr := loadQueue.io.lqDeqPtr
   io.sqDeqPtr := storeQueue.io.sqDeqPtr
+  if (HasMatrixExtension) {
+    io.mlsqCanAccept.get := mlsQueue.get.io.enq.canAccept
+    loadQueue.io.enq.mlsqCanAccept.get := mlsQueue.get.io.enq.canAccept
+    storeQueue.io.enq.mlsqCanAccept.get := mlsQueue.get.io.enq.canAccept
+    mlsQueue.get.io.enq.lqCanAccept := loadQueue.io.enq.canAccept
+    mlsQueue.get.io.enq.sqCanAccept := storeQueue.io.enq.canAccept
+    io.mlsqDeqPtr.get := mlsQueue.get.io.mlsqDeqPtr
+  }
   io.sqCommitRobIdx := storeQueue.io.sqCommitRobIdx
   io.sqCommitUopIdx := storeQueue.io.sqCommitUopIdx
   io.sqCommitPtr    := storeQueue.io.sqCommitPtr
-  io.mlsqDeqPtr := mlsQueue.io.mlsqDeqPtr
   io.rarValidCount := loadQueue.io.rarValidCount
   for (i <- io.enq.req.indices) {
     loadQueue.io.enq.needAlloc(i)      := io.enq.needAlloc(i)(0)
@@ -194,14 +200,17 @@ class LsqWrapper(implicit p: Parameters) extends XSModule with HasDCacheParamete
     storeQueue.io.enq.req(i).bits       := io.enq.req(i).bits
     storeQueue.io.enq.req(i).bits.lqIdx := loadQueue.io.enq.resp(i)
 
-    mlsQueue.io.enq.needAlloc(i)        := io.enq.needAlloc(i)(2)
-    mlsQueue.io.enq.req(i).valid        := io.enq.needAlloc(i)(2) && io.enq.req(i).valid
-    mlsQueue.io.enq.req(i).bits         := io.enq.req(i).bits
-    mlsQueue.io.enq.req(i).bits.lqIdx   := mlsQueue.io.enq.resp(i)
-
     io.enq.resp(i).lqIdx  := loadQueue.io.enq.resp(i)
     io.enq.resp(i).sqIdx  := storeQueue.io.enq.resp(i)
-    io.enq.resp(i).mlsqIdx := mlsQueue.io.enq.resp(i)
+    
+    if (HasMatrixExtension) {
+      mlsQueue.get.io.enq.needAlloc(i)        := io.enq.needAlloc(i)(2)
+      mlsQueue.get.io.enq.req(i).valid        := io.enq.needAlloc(i)(2) && io.enq.req(i).valid
+      mlsQueue.get.io.enq.req(i).bits         := io.enq.req(i).bits
+      mlsQueue.get.io.enq.req(i).bits.lqIdx   := mlsQueue.get.io.enq.resp(i)
+
+      io.enq.resp(i).mlsqIdx.get := mlsQueue.get.io.enq.resp(i)
+    }
   }
 
   // store queue wiring
@@ -263,17 +272,19 @@ class LsqWrapper(implicit p: Parameters) extends XSModule with HasDCacheParamete
   loadQueue.io.l2_hint             <> io.l2_hint
   loadQueue.io.tlb_hint            <> io.tlb_hint
   loadQueue.io.lqEmpty             <> io.lqEmpty
-
-  mlsQueue.io.mlsu                  <> io.mlsu
-  mlsQueue.io.redirect              <> io.brqRedirect
-  mlsQueue.io.mlsqFull              <> io.mlsqFull
-  mlsQueue.io.mlsqEmpty             <> io.mlsqEmpty
-  mlsQueue.io.mlsqDeq               <> io.mlsqDeq
-  mlsQueue.io.mlsqCancelCnt         <> io.mlsqCancelCnt
-  mlsQueue.io.replay                <> io.mls_replay
-  mlsQueue.io.tlb_hint              <> io.tlb_hint
-  mlsQueue.io.tlbReplayDelayCycleCtrl := tlbReplayDelayCycleCtrl
-  mlsQueue.io.mlsq_rep_full         <> io.mlsq_rep_full
+  
+  if (HasMatrixExtension) {
+    mlsQueue.get.io.mlsu                  <> io.mlsu
+    mlsQueue.get.io.redirect              <> io.brqRedirect
+    mlsQueue.get.io.mlsqFull              <> io.mlsqFull.get
+    mlsQueue.get.io.mlsqEmpty             <> io.mlsqEmpty.get
+    mlsQueue.get.io.mlsqDeq               <> io.mlsqDeq.get
+    mlsQueue.get.io.mlsqCancelCnt         <> io.mlsqCancelCnt.get
+    mlsQueue.get.io.replay                <> io.mls_replay
+    mlsQueue.get.io.tlb_hint              <> io.tlb_hint
+    mlsQueue.get.io.tlbReplayDelayCycleCtrl := tlbReplayDelayCycleCtrl
+    mlsQueue.get.io.mlsq_rep_full         <> io.mlsq_rep_full.get
+  }
   // TODO: Implement me!
 
   // rob commits for lsq is delayed for two cycles, which causes the delayed update for deqPtr in lq/sq
@@ -374,23 +385,24 @@ class LsqEnqCtrl(implicit p: Parameters) extends XSModule
     // from `memBlock.io.sqDeq`
     val scommit = Input(UInt(log2Ceil(EnsbufferWidth + 1).W))
     // from `memBlock.io.mlsqDeq`
-    val mcommit = Input(UInt(log2Up(CommitWidth + 1).W)) // TODO: determine the width
+    // TODO: determine the width
+    val mcommit = Option.when(HasMatrixExtension)(Input(UInt(log2Up(CommitWidth + 1).W)))
     // from/tp lsq
     val lqCancelCnt = Input(UInt(log2Up(VirtualLoadQueueSize + 1).W))
     val sqCancelCnt = Input(UInt(log2Up(StoreQueueSize + 1).W))
-    val mlsqCancelCnt = Input(UInt(log2Up(MlsQueueSize + 1).W))
+    val mlsqCancelCnt = Option.when(HasMatrixExtension)(Input(UInt(log2Up(MlsQueueSize + 1).W)))
     val lqFreeCount = Output(UInt(log2Up(VirtualLoadQueueSize + 1).W))
     val sqFreeCount = Output(UInt(log2Up(StoreQueueSize + 1).W))
-    val mlsqFreeCount = Output(UInt(log2Up(MlsQueueSize + 1).W))
+    val mlsqFreeCount = Option.when(HasMatrixExtension)(Output(UInt(log2Up(MlsQueueSize + 1).W)))
     val enqLsq = Flipped(new LsqEnqIO)
   })
 
   val lqPtr = RegInit(0.U.asTypeOf(new LqPtr))
   val sqPtr = RegInit(0.U.asTypeOf(new SqPtr))
-  val mlsqPtr = RegInit(0.U.asTypeOf(new MlsqPtr))
+  val mlsqPtr = Option.when(HasMatrixExtension)(RegInit(0.U.asTypeOf(new MlsqPtr)))
   val lqCounter = RegInit(VirtualLoadQueueSize.U(log2Up(VirtualLoadQueueSize + 1).W))
   val sqCounter = RegInit(StoreQueueSize.U(log2Up(StoreQueueSize + 1).W))
-  val mlsqCounter = RegInit(MlsQueueSize.U(log2Up(MlsQueueSize + 1).W))
+  val mlsqCounter = Option.when(HasMatrixExtension)(RegInit(MlsQueueSize.U(log2Up(MlsQueueSize + 1).W)))
   val canAccept = RegInit(false.B)
 
   val blockVec = io.enq.iqAccept.map(!_) :+ true.B
@@ -412,11 +424,11 @@ class LsqEnqCtrl(implicit p: Parameters) extends XSModule
   }
   val lqAllocNumber = PriorityMux(blockVec.zip(loadFlowPopCount))
   val sqAllocNumber = PriorityMux(blockVec.zip(storeFlowPopCount))
-  val mlsqAllocNumber = PriorityMux(blockVec.zip(mlsFlowPopCount))
+  val mlsqAllocNumber = Option.when(HasMatrixExtension)(PriorityMux(blockVec.zip(mlsFlowPopCount)))
 
   io.lqFreeCount  := lqCounter
   io.sqFreeCount  := sqCounter
-  io.mlsqFreeCount := mlsqCounter
+  io.mlsqFreeCount.foreach(_ := mlsqCounter.get)
   // How to update ptr and counter:
   // (1) by default, updated according to enq/commit
   // (2) when redirect and dispatch queue is empty, update according to lsq
@@ -426,25 +438,25 @@ class LsqEnqCtrl(implicit p: Parameters) extends XSModule
   val t3_update = RegNext(t2_update)
   val t3_lqCancelCnt = GatedRegNext(io.lqCancelCnt)
   val t3_sqCancelCnt = GatedRegNext(io.sqCancelCnt)
-  val t3_mlsqCancelCnt = GatedRegNext(io.mlsqCancelCnt)
+  val t3_mlsqCancelCnt = Option.when(HasMatrixExtension)(GatedRegNext(io.mlsqCancelCnt.get))
   when (t3_update) {
     lqPtr := lqPtr - t3_lqCancelCnt
     lqCounter := lqCounter + io.lcommit + t3_lqCancelCnt
     sqPtr := sqPtr - t3_sqCancelCnt
     sqCounter := sqCounter + io.scommit + t3_sqCancelCnt
-    mlsqPtr := mlsqPtr - t3_mlsqCancelCnt
-    mlsqCounter := mlsqCounter + io.mcommit + t3_mlsqCancelCnt
+    mlsqPtr.foreach(_ := mlsqPtr.get - t3_mlsqCancelCnt.get)
+    mlsqCounter.foreach(_ := mlsqCounter.get + io.mcommit.get + t3_mlsqCancelCnt.get)
   }.elsewhen (!io.redirect.valid && io.enq.canAccept) {
     lqPtr := lqPtr + lqAllocNumber
     lqCounter := lqCounter + io.lcommit - lqAllocNumber
     sqPtr := sqPtr + sqAllocNumber
     sqCounter := sqCounter + io.scommit - sqAllocNumber
-    mlsqPtr := mlsqPtr + mlsqAllocNumber
-    mlsqCounter := mlsqCounter + io.mcommit - mlsqAllocNumber
+    mlsqPtr.foreach(_ := mlsqPtr.get + mlsqAllocNumber.get)
+    mlsqCounter.foreach(_ := mlsqCounter.get + io.mcommit.get - mlsqAllocNumber.get)
   }.otherwise {
     lqCounter := lqCounter + io.lcommit
     sqCounter := sqCounter + io.scommit
-    mlsqCounter := mlsqCounter + io.mcommit
+    mlsqCounter.foreach(_ := mlsqCounter.get + io.mcommit.get)
   }
 
 
@@ -455,22 +467,28 @@ class LsqEnqCtrl(implicit p: Parameters) extends XSModule
   val maxAllocate = lqMaxAllocate max sqMaxAllocate
   val ldCanAccept = lqCounter >= lqAllocNumber +& lqMaxAllocate.U
   val sqCanAccept = sqCounter >= sqAllocNumber +& sqMaxAllocate.U
-  val mlsqCanAccept = mlsqCounter >= mlsqAllocNumber +& mlsqMaxAllocate.U
+  val mlsqCanAccept = Option.when(HasMatrixExtension)(mlsqCounter.get >= mlsqAllocNumber.get +& mlsqMaxAllocate.U)
   // It is possible that t3_update and enq are true at the same clock cycle.
   // For example, if redirect.valid lasts more than one clock cycle,
   // after the last redirect, new instructions may enter but previously redirect has not been resolved (updated according to the cancel count from LSQ).
   // To solve the issue easily, we block enqueue when t3_update, which is RegNext(t2_update).
-  io.enq.canAccept := RegNext(ldCanAccept && sqCanAccept && mlsqCanAccept && !t2_update)
+  io.enq.canAccept := RegNext(
+       ldCanAccept && sqCanAccept
+    && mlsqCanAccept.getOrElse(true.B)
+    && !t2_update
+  )
   val lqOffset = Wire(Vec(io.enq.resp.length, UInt(lqPtr.value.getWidth.W)))
   val sqOffset = Wire(Vec(io.enq.resp.length, UInt(sqPtr.value.getWidth.W)))
-  val mlsqOffset = Wire(Vec(io.enq.resp.length, UInt(mlsqPtr.value.getWidth.W)))
+  val mlsqOffset = Option.when(HasMatrixExtension)(Wire(Vec(io.enq.resp.length, UInt(mlsqPtr.get.value.getWidth.W))))
   for ((resp, i) <- io.enq.resp.zipWithIndex) {
     lqOffset(i) := loadFlowPopCount(i)
     resp.lqIdx := lqPtr + lqOffset(i)
     sqOffset(i) := storeFlowPopCount(i)
     resp.sqIdx := sqPtr + sqOffset(i)
-    mlsqOffset(i) := mlsFlowPopCount(i)
-    resp.mlsqIdx := mlsqPtr + mlsqOffset(i)
+    if (HasMatrixExtension) {
+      mlsqOffset.get(i) := mlsFlowPopCount(i)
+      resp.mlsqIdx.get := mlsqPtr.get + mlsqOffset.get(i)
+    }
   }
 
   io.enqLsq.needAlloc := RegNext(io.enq.needAlloc)
@@ -481,7 +499,7 @@ class LsqEnqCtrl(implicit p: Parameters) extends XSModule
     toLsq.bits := RegEnable(enq.bits, do_enq)
     toLsq.bits.lqIdx := RegEnable(resp.lqIdx, do_enq)
     toLsq.bits.sqIdx := RegEnable(resp.sqIdx, do_enq)
-    toLsq.bits.mlsqIdx := RegEnable(resp.mlsqIdx, do_enq)
+    toLsq.bits.mlsqIdx.foreach(_ := RegEnable(resp.mlsqIdx.get, do_enq))
   }
 
 }

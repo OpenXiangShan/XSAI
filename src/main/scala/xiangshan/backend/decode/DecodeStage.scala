@@ -52,7 +52,7 @@ class DecodeStageIO(implicit p: Parameters) extends XSBundle {
   val vecRat = Vec(RenameWidth, Vec(numVecRatPorts, Flipped(new RatReadPort(VecLogicRegs))))
   val v0Rat = Vec(RenameWidth, Flipped(new RatReadPort(V0LogicRegs)))
   val vlRat = Vec(RenameWidth, Flipped(new RatReadPort(VlLogicRegs)))
-  val mxRat = Vec(RenameWidth, Vec(3, Flipped(new RatReadPort(MxLogicRegs))))
+  val mxRat = OptionWrapper(HasMatrixExtension, Vec(RenameWidth, Vec(3, Flipped(new RatReadPort(MxLogicRegs)))))
   // csr control
   val csrCtrl = Input(new CustomCSRCtrlIO)
   val fromCSR = Input(new CSRToDecode)
@@ -255,7 +255,7 @@ class DecodeStage(implicit p: Parameters) extends XSModule
 
   io.out.map(x =>
     when(x.valid){
-      assert(PopCount(VecInit(x.bits.rfWen, x.bits.fpWen, x.bits.vecWen, x.bits.v0Wen, x.bits.vlWen, x.bits.mxWen)) < 2.U,
+      assert(PopCount(VecInit(x.bits.rfWen, x.bits.fpWen, x.bits.vecWen, x.bits.v0Wen, x.bits.vlWen, x.bits.mxWen.getOrElse(false.B))) < 2.U,
         "DecodeOut: can't wirte two regfile in one uop/instruction")
     }
   )
@@ -289,10 +289,12 @@ class DecodeStage(implicit p: Parameters) extends XSModule
     io.vlRat(i).addr := Vl_IDX.U // vl
     io.vlRat(i).hold := !io.out(i).ready
 
-    io.mxRat(i)(0).addr := io.out(i).bits.lsrc(2)
-    io.mxRat(i)(1).addr := io.out(i).bits.lsrc(3)
-    io.mxRat(i)(2).addr := io.out(i).bits.lsrc(4)
-    io.mxRat(i).foreach(_.hold := !io.out(i).ready)
+    if (HasMatrixExtension) {
+      io.mxRat.get(i)(0).addr := io.out(i).bits.lsrc(2)
+      io.mxRat.get(i)(1).addr := io.out(i).bits.lsrc(3)
+      io.mxRat.get(i)(2).addr := io.out(i).bits.lsrc(4)
+      io.mxRat.get(i).foreach(_.hold := !io.out(i).ready)
+    }
   }
 
   /** whether valid input requests from frontend exists */

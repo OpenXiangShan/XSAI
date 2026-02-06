@@ -246,6 +246,11 @@ class XSTile()(implicit p: Parameters) extends LazyModule
 
       cute.module.io.hartId := io.hartId
     }
+
+    if (!HasMatrixExtension) {
+      l2top.module.io.matrixDataOut512L2 := DontCare
+      l2top.module.io.matrixDataOut512L2.foreach(_.ready := false.B)
+    }
   }
 
   lazy val module = new XSTileImp(this)

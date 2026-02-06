@@ -20,18 +20,19 @@ class WbFuBusyTable(bp: BackendParams)(implicit  p: Parameters) extends LazyModu
   lazy val module = new WbFuBusyTableImp(this)
 }
 
-class WbFuBusyTableImp(override val wrapper: WbFuBusyTable)(implicit  p: Parameters, params: BackendParams) extends LazyModuleImp(wrapper) {
+class WbFuBusyTableImp(override val wrapper: WbFuBusyTable)(implicit  p: Parameters, params: BackendParams) extends LazyModuleImp(wrapper) 
+  with HasXSParameter {
   val io = IO(new WbFuBusyTableIO)
 
   private val intSchdBusyTable = io.in.intSchdBusyTable
   private val fpSchdBusyTable = io.in.fpSchdBusyTable
   private val vfSchdBusyTable = io.in.vfSchdBusyTable
-  private val mfSchdBusyTable = io.in.mfSchdBusyTable
+  private val mfSchdBusyTable = io.in.mfSchdBusyTable.getOrElse(Nil)
   private val memSchdBusyTable = io.in.memSchdBusyTable
   private val intRespRead = io.out.intRespRead
   private val fpRespRead = io.out.fpRespRead
   private val vfRespRead = io.out.vfRespRead
-  private val mfRespRead = io.out.mfRespRead
+  private val mfRespRead = io.out.mfRespRead.getOrElse(Nil)
   private val memRespRead = io.out.memRespRead
   private val intAllWbConflictFlag = io.out.wbConflictRead.flatten.flatten.map(_.intConflict)
   private val fpAllWbConflictFlag = io.out.wbConflictRead.flatten.flatten.map(_.fpConflict)
@@ -166,14 +167,18 @@ class WbFuBusyTableImp(override val wrapper: WbFuBusyTable)(implicit  p: Paramet
   readRes(vfAllRespRead, vfWbBusyTable, VfWB())
   readRes(v0AllRespRead, v0WbBusyTable, V0WB())
   readRes(vlAllRespRead, vlWbBusyTable, VlWB())
-  readRes(mxAllRespRead, mxWbBusyTable, MxWB())
+  if (HasMatrixExtension) {
+    readRes(mxAllRespRead, mxWbBusyTable, MxWB())
+  }
   //read wbPort conflict to dataPath
   readRes(intAllWbConflictFlag, intConflict, IntWB())
   readRes(fpAllWbConflictFlag, fpConflict, FpWB())
   readRes(vfAllWbConflictFlag, vfConflict, VfWB())
   readRes(v0AllWbConflictFlag, v0Conflict, V0WB())
   readRes(vlAllWbConflictFlag, vlConflict, VlWB())
-  readRes(mxAllWbConflictFlag, mxConflict, MxWB())
+  if (HasMatrixExtension) {
+    readRes(mxAllWbConflictFlag, mxConflict, MxWB())
+  }
 }
 
 class WbFuBusyTableIO(implicit p: Parameters, params: BackendParams) extends XSBundle {
@@ -181,14 +186,14 @@ class WbFuBusyTableIO(implicit p: Parameters, params: BackendParams) extends XSB
     val intSchdBusyTable = MixedVec(params.intSchdParams.get.issueBlockParams.map(x => Input(x.genWbFuBusyTableWriteBundle)))
     val fpSchdBusyTable = MixedVec(params.fpSchdParams.get.issueBlockParams.map(x => Input(x.genWbFuBusyTableWriteBundle)))
     val vfSchdBusyTable = MixedVec(params.vfSchdParams.get.issueBlockParams.map(x => Input(x.genWbFuBusyTableWriteBundle)))
-    val mfSchdBusyTable = MixedVec(params.mfSchdParams.get.issueBlockParams.map(x => Input(x.genWbFuBusyTableWriteBundle)))
+    val mfSchdBusyTable = OptionWrapper(HasMatrixExtension, MixedVec(params.mfSchdParams.get.issueBlockParams.map(x => Input(x.genWbFuBusyTableWriteBundle))))
     val memSchdBusyTable = MixedVec(params.memSchdParams.get.issueBlockParams.map(x => Input(x.genWbFuBusyTableWriteBundle)))
   }
   val out = new Bundle {
     val intRespRead = MixedVec(params.intSchdParams.get.issueBlockParams.map(x => Output(x.genWbFuBusyTableReadBundle)))
     val fpRespRead = MixedVec(params.fpSchdParams.get.issueBlockParams.map(x => Output(x.genWbFuBusyTableReadBundle)))
     val vfRespRead = MixedVec(params.vfSchdParams.get.issueBlockParams.map(x => Output(x.genWbFuBusyTableReadBundle)))
-    val mfRespRead = MixedVec(params.mfSchdParams.get.issueBlockParams.map(x => Output(x.genWbFuBusyTableReadBundle)))
+    val mfRespRead = OptionWrapper(HasMatrixExtension, MixedVec(params.mfSchdParams.get.issueBlockParams.map(x => Output(x.genWbFuBusyTableReadBundle))))
     val memRespRead = MixedVec(params.memSchdParams.get.issueBlockParams.map(x => Output(x.genWbFuBusyTableReadBundle)))
     val wbConflictRead = MixedVec(params.allSchdParams.map(x => MixedVec(x.issueBlockParams.map(x => Output(x.genWbConflictBundle())))))
   }

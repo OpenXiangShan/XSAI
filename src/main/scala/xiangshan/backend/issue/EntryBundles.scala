@@ -59,10 +59,10 @@ object EntryBundles extends HasCircularQueuePtrHelper {
     val regCacheIdx           = Option.when(params.needReadRegCache)(UInt(RegCacheIdxWidth.W))
   }
 
-  class StatusVecMemPart(implicit p:Parameters, params: IssueBlockParams) extends Bundle {
+  class StatusVecMemPart(implicit p:Parameters, params: IssueBlockParams) extends XSBundle {
     val sqIdx                 = new SqPtr
     val lqIdx                 = new LqPtr
-    val mlsqIdx               = new MlsqPtr
+    val mlsqIdx               = Option.when(HasMatrixExtension)(new MlsqPtr)
     val numLsElem             = NumLsElem()
   }
 

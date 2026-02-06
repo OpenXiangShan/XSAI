@@ -99,7 +99,7 @@ object Bundles {
     val vecWen          = Bool()
     val v0Wen           = Bool()
     val vlWen           = Bool()
-    val mxWen           = Bool()
+    val mxWen           = OptionWrapper(HasMatrixExtension, Bool())
     val isXSTrap        = Bool()
     val waitForward     = Bool() // no speculate execution
     val blockBackward   = Bool()
@@ -201,7 +201,7 @@ object Bundles {
     val vecWen          = Bool()
     val v0Wen           = Bool()
     val vlWen           = Bool()
-    val mxWen       = Bool()
+    val mxWen           = OptionWrapper(HasMatrixExtension, Bool())
     val isXSTrap        = Bool()
     val waitForward     = Bool() // no speculate execution
     val blockBackward   = Bool()
@@ -217,8 +217,8 @@ object Bundles {
     val isDropAmocasSta = Bool()
     val uopIdx          = UopIdx()
     val isVset          = Bool()
-    val isMsettilex     = Bool()
-    val needAmuCtrl     = Bool()
+    val isMsettilex     = OptionWrapper(HasMatrixExtension, Bool())
+    val needAmuCtrl     = OptionWrapper(HasMatrixExtension, Bool())
     val firstUop        = Bool()
     val lastUop         = Bool()
     val numUops         = UInt(log2Up(MaxUopSize).W) // rob need this
@@ -236,7 +236,7 @@ object Bundles {
     val instrSize       = UInt(log2Ceil(RenameWidth + 1).W)
     val dirtyFs         = Bool()
     val dirtyVs         = Bool()
-    val dirtyMs         = Bool()
+    val dirtyMs         = OptionWrapper(HasMatrixExtension, Bool())
     val traceBlockInPipe = new TracePipe(IretireWidthInPipe)
 
     val eliminatedMove  = Bool()
@@ -256,7 +256,7 @@ object Bundles {
     // Todo
     val lqIdx = new LqPtr
     val sqIdx = new SqPtr
-    val mlsqIdx = new MlsqPtr
+    val mlsqIdx = OptionWrapper(HasMatrixExtension, new MlsqPtr)
     // debug module
     val singleStep      = Bool()
     // schedule
@@ -302,7 +302,7 @@ object Bundles {
       this
     }
 
-    def needWriteRf: Bool = rfWen || fpWen || vecWen || v0Wen || vlWen || mxWen
+    def needWriteRf: Bool = rfWen || fpWen || vecWen || v0Wen || vlWen || mxWen.getOrElse(false.B)
   }
 
   trait BundleSource {
@@ -321,7 +321,7 @@ object Bundles {
     val vecWen = Bool()
     val v0Wen = Bool()
     val vlWen = Bool()
-    val mxWen = Bool()
+    val mxWen = OptionWrapper(HasMatrixExtension, Bool())
     val pdest = UInt(pregIdxWidth.W)
 
     /**
@@ -335,7 +335,7 @@ object Bundles {
           SrcType.isFp(srcType) && this.fpWen ||
             SrcType.isXp(srcType) && this.rfWen ||
             SrcType.isVp(srcType) && this.vecWen ||
-            SrcType.isMx(srcType) && this.mxWen
+            SrcType.isMx(srcType) && this.mxWen.getOrElse(false.B)
           ) && valid
       }
     }
@@ -357,7 +357,7 @@ object Bundles {
       val (thatPsrc, srcType) = successor
       val pdestMatch = pdest === thatPsrc
       pdestMatch && (
-        SrcType.isMx(srcType) && this.mxWen
+        SrcType.isMx(srcType) && this.mxWen.getOrElse(false.B)
       ) && valid
     }
     def wakeUpFromIQ(successor: Seq[(UInt, UInt)]): Seq[Bool] = {
@@ -367,7 +367,7 @@ object Bundles {
           SrcType.isFp(srcType) && this.fpWen ||
             SrcType.isXp(srcType) && this.rfWen ||
             SrcType.isVp(srcType) && this.vecWen ||
-            SrcType.isMx(srcType) && this.mxWen
+            SrcType.isMx(srcType) && this.mxWen.getOrElse(false.B)
           )
       }
     }
@@ -389,7 +389,7 @@ object Bundles {
       val (thatPsrc, srcType) = successor
       val pdestMatch = pdest === thatPsrc
       pdestMatch && (
-        SrcType.isMx(srcType) && this.mxWen
+        SrcType.isMx(srcType) && this.mxWen.getOrElse(false.B)
       )
     }
 
@@ -436,7 +436,7 @@ object Bundles {
       this.vecWen := exuInput.vecWen.getOrElse(false.B)
       this.v0Wen := exuInput.v0Wen.getOrElse(false.B)
       this.vlWen := exuInput.vlWen.getOrElse(false.B)
-      this.mxWen := exuInput.mxWen.getOrElse(false.B)
+      this.mxWen.foreach(_ := exuInput.mxWen.getOrElse(false.B))
       this.pdest := exuInput.pdest
     }
   }
@@ -586,13 +586,13 @@ object Bundles {
     val vfWbBusyTable = OptionWrapper(vfCertainLat, UInt((vfLat + 1).W))
     val v0WbBusyTable = OptionWrapper(v0CertainLat, UInt((v0Lat + 1).W))
     val vlWbBusyTable = OptionWrapper(vlCertainLat, UInt((vlLat + 1).W))
-    val mxWbBusyTable = OptionWrapper(mxCertainLat, UInt((mxLat + 1).W))
+    val mxWbBusyTable = OptionWrapper(mxCertainLat && HasMatrixExtension, UInt((mxLat + 1).W))
     val intDeqRespSet = OptionWrapper(intCertainLat, UInt((intLat + 1).W))
     val fpDeqRespSet = OptionWrapper(fpCertainLat, UInt((fpLat + 1).W))
     val vfDeqRespSet = OptionWrapper(vfCertainLat, UInt((vfLat + 1).W))
     val v0DeqRespSet = OptionWrapper(v0CertainLat, UInt((v0Lat + 1).W))
     val vlDeqRespSet = OptionWrapper(vlCertainLat, UInt((vlLat + 1).W))
-    val mxDeqRespSet = OptionWrapper(mxCertainLat, UInt((mxLat + 1).W))
+    val mxDeqRespSet = OptionWrapper(mxCertainLat && HasMatrixExtension, UInt((mxLat + 1).W))
   }
 
   class WbFuBusyTableReadBundle(val params: ExeUnitParams)(implicit p: Parameters) extends XSBundle {
@@ -614,7 +614,7 @@ object Bundles {
     val vfWbBusyTable = OptionWrapper(vfCertainLat, UInt((vfLat + 1).W))
     val v0WbBusyTable = OptionWrapper(v0CertainLat, UInt((v0Lat + 1).W))
     val vlWbBusyTable = OptionWrapper(vlCertainLat, UInt((vlLat + 1).W))
-    val mxWbBusyTable = OptionWrapper(mxCertainLat, UInt((mxLat + 1).W))
+    val mxWbBusyTable = OptionWrapper(mxCertainLat && HasMatrixExtension, UInt((mxLat + 1).W))
   }
 
   class WbConflictBundle(val params: ExeUnitParams)(implicit p: Parameters) extends XSBundle {
@@ -630,7 +630,7 @@ object Bundles {
     val vfConflict = OptionWrapper(vfCertainLat, Bool())
     val v0Conflict = OptionWrapper(v0CertainLat, Bool())
     val vlConflict = OptionWrapper(vlCertainLat, Bool())
-    val mxConflict = OptionWrapper(mxCertainLat, Bool())
+    val mxConflict = OptionWrapper(mxCertainLat && HasMatrixExtension, Bool())
   }
 
   class ImmInfo extends Bundle {
@@ -687,7 +687,7 @@ object Bundles {
 
     val sqIdx = if (params.hasMemAddrFu || params.hasStdFu) Some(new SqPtr) else None
     val lqIdx = if (params.hasMemAddrFu) Some(new LqPtr) else None
-    val mlsqIdx = if (params.hasMemAddrFu) Some(new MlsqPtr) else None
+    val mlsqIdx = if (params.hasMemAddrFu && HasMatrixExtension) Some(new MlsqPtr) else None
     val dataSources = Vec(params.numRegSrc, DataSource())
     val exuSources = OptionWrapper(params.isIQWakeUpSink, Vec(params.numRegSrc, ExuSource(params)))
     val srcTimer = OptionWrapper(params.isIQWakeUpSink, Vec(params.numRegSrc, UInt(3.W)))
@@ -788,12 +788,12 @@ object Bundles {
   }
 
   // ExuOutput + DynInst --> WriteBackBundle
-  class WriteBackBundle(val params: PregWB, backendParams: BackendParams)(implicit p: Parameters) extends Bundle with BundleSource {
+  class WriteBackBundle(val params: PregWB, backendParams: BackendParams)(implicit p: Parameters) extends XSBundle with BundleSource {
     val rfWen = Bool()
     val fpWen = Bool()
     val vecWen = Bool()
     val v0Wen = Bool()
-    val mxWen = Bool()
+    val mxWen = OptionWrapper(HasMatrixExtension, Bool())
     val vlWen = Bool()
     val pdest = UInt(params.pregIdxWidth(backendParams).W)
     val data = UInt(params.dataWidth.W)
@@ -816,7 +816,7 @@ object Bundles {
       this.fpWen  := source.fpWen.getOrElse(false.B)
       this.vecWen := source.vecWen.getOrElse(false.B)
       this.v0Wen  := source.v0Wen.getOrElse(false.B)
-      this.mxWen  := source.mxWen.getOrElse(false.B)
+      this.mxWen.foreach(_ := source.mxWen.getOrElse(false.B))
       this.vlWen  := source.vlWen.getOrElse(false.B)
       this.pdest  := source.pdest
       this.data   := source.data(source.params.wbIndex(typeMap(wbType)))
@@ -841,7 +841,7 @@ object Bundles {
       rfWrite.fpWen := false.B
       rfWrite.vecWen := false.B
       rfWrite.v0Wen := false.B
-      rfWrite.mxWen := false.B
+      rfWrite.mxWen.foreach(_ := false.B)
       rfWrite.vlWen := false.B
       rfWrite
     }
@@ -855,7 +855,7 @@ object Bundles {
       rfWrite.fpWen := this.fpWen
       rfWrite.vecWen := false.B
       rfWrite.v0Wen := false.B
-      rfWrite.mxWen := false.B
+      rfWrite.mxWen.foreach(_ := false.B)
       rfWrite.vlWen := false.B
       rfWrite
     }
@@ -869,7 +869,7 @@ object Bundles {
       rfWrite.fpWen := false.B
       rfWrite.vecWen := this.vecWen
       rfWrite.v0Wen := false.B
-      rfWrite.mxWen := false.B
+      rfWrite.mxWen.foreach(_ := false.B)
       rfWrite.vlWen := false.B
       rfWrite
     }
@@ -883,21 +883,21 @@ object Bundles {
       rfWrite.fpWen := false.B
       rfWrite.vecWen := false.B
       rfWrite.v0Wen := this.v0Wen
-      rfWrite.mxWen := false.B
+      rfWrite.mxWen.foreach(_ := false.B)
       rfWrite.vlWen := false.B
       rfWrite
     }
 
     def asMxRfWriteBundle(fire: Bool): RfWritePortWithConfig = {
       val rfWrite = Wire(Output(new RfWritePortWithConfig(this.params.dataCfg, backendParams.getPregParams(MxData()).addrWidth)))
-      rfWrite.wen := this.mxWen && fire
+      rfWrite.wen := this.mxWen.getOrElse(false.B) && fire
       rfWrite.addr := this.pdest
       rfWrite.data := this.data
       rfWrite.intWen := false.B
       rfWrite.fpWen := false.B
       rfWrite.vecWen := false.B
       rfWrite.v0Wen := false.B
-      rfWrite.mxWen := this.mxWen
+      rfWrite.mxWen.foreach(_ := this.mxWen.get)
       rfWrite.vlWen := false.B
       rfWrite
     }
@@ -911,7 +911,7 @@ object Bundles {
       rfWrite.fpWen := false.B
       rfWrite.vecWen := false.B
       rfWrite.v0Wen := false.B
-      rfWrite.mxWen := false.B
+      rfWrite.mxWen.foreach(_ := false.B)
       rfWrite.vlWen := this.vlWen
       rfWrite
     }
@@ -1007,7 +1007,7 @@ object Bundles {
     val fpWen = Bool()
     val vecWen = Bool()
     val v0Wen = Bool()
-    val mxWen = Bool()
+    val mxWen = OptionWrapper(HasMatrixExtension, Bool())
     val vlWen = Bool()
     val pdest = UInt(PhyRegIdxWidth.W)
   }

@@ -863,7 +863,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     SvinvalDecode.table ++
     HypervisorDecode.table ++
     VecDecoder.table ++
-    MatrixDecoder.table ++
+    OptionWrapper(HasMatrixExtension, MatrixDecoder.table).getOrElse(Array()) ++
     ZicondDecode.table ++
     ZimopDecode.table ++
     ZfaDecode.table
@@ -920,7 +920,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   decodedInst.v0Wen := false.B
   decodedInst.vlWen := false.B
   // init mxWen
-  decodedInst.mxWen := false.B
+  decodedInst.mxWen.foreach(_ := false.B)
 
   private val isCboClean = CBO_CLEAN === io.enq.ctrlFlow.instr
   private val isCboFlush = CBO_FLUSH === io.enq.ctrlFlow.instr
@@ -1239,7 +1239,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     // use x0 as src1
     decodedInst.lsrc(0) := 0.U
   }.elsewhen (isMsettilex) {
-    decodedInst.mxWen      := true.B
+    decodedInst.mxWen.foreach(_ := true.B)
     decodedInst.ldest      := MSETtilexOpType.toMxIdx(decodedInst.fuOpType)
   }.elsewhen (isMMA) {
     decodedInst.srcType(0) := SrcType.no

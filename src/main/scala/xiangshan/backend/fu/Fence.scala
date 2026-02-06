@@ -20,6 +20,7 @@ import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import utility.XSDebug
+import utils.OptionWrapper
 import xiangshan.ExceptionNO.{illegalInstr, virtualInstr}
 import xiangshan._
 import xiangshan.backend.fu.matrix.Bundles.AmuReleaseIO2XS
@@ -27,7 +28,7 @@ class FenceIO(implicit p: Parameters) extends XSBundle {
   val sfence = Output(new SfenceBundle)
   val fencei = Output(Bool())
   val sbuffer = new FenceToSbuffer
-  val amuRelease = Flipped(Decoupled(new AmuReleaseIO2XS))
+  val amuRelease = OptionWrapper(HasMatrixExtension, Flipped(Decoupled(new AmuReleaseIO2XS)))
 }
 
 class FenceToSbuffer extends Bundle {
@@ -92,7 +93,7 @@ class Fence(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg) {
   sfence.bits.hg := func === FenceOpType.hfence_g
   sfence.bits.addr := RegEnable(io.in.bits.data.src(0), io.in.fire)
   sfence.bits.id   := RegEnable(io.in.bits.data.src(1), io.in.fire)
-  amuRelease.ready := true.B
+  amuRelease.foreach(_.ready := true.B)
 
   when (state === s_idle && io.in.valid && !FenceOpType.isMatrix(io.in.bits.ctrl.fuOpType)) { state := s_wait }
   when (state === s_idle && io.in.valid && io.in.bits.ctrl.fuOpType === FenceOpType.msyncregreset) { state := s_msyncregreset }
@@ -125,16 +126,18 @@ class Fence(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg) {
     tokens(msyncregreset_token_idx) := 0.U
   }
   
-  when (amuRelease.fire) {
-    // check if there is address conflict
-    val hasConflict = state === s_msyncregreset && 
-                      amuRelease.bits.tokenRd(msyncregreset_token_idx) === true.B
+  if (HasMatrixExtension) {
+    when (amuRelease.get.fire) {
+      // check if there is address conflict
+      val hasConflict = state === s_msyncregreset && 
+                        amuRelease.get.bits.tokenRd(msyncregreset_token_idx) === true.B
 
-    when (!hasConflict) {
-      // no conflict, normal execution
-      for (i <- 0 until p(XSCoreParamsKey).TokenRegs) {
-        when (amuRelease.bits.tokenRd(i) === true.B) {
-          tokens(i) := tokens(i) + 1.U
+      when (!hasConflict) {
+        // no conflict, normal execution
+        for (i <- 0 until p(XSCoreParamsKey).TokenRegs) {
+          when (amuRelease.get.bits.tokenRd(i) === true.B) {
+            tokens(i) := tokens(i) + 1.U
+          }
         }
       }
     }

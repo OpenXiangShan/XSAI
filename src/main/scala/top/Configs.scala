@@ -248,6 +248,7 @@ class MinimalMatrixConfig(n: Int) extends Config(
   new MinimalConfig(n).alter((site, here, up) => {
     case XSTileKey => up(XSTileKey).map { p =>
       p.copy(
+        HasMatrixExtension = true,
         l2tlbParameters = p.l2tlbParameters.copy(
           dfilterSize = 48
         ),
@@ -496,6 +497,7 @@ class DefaultMatrixConfig(n: Int = 1) extends Config(
   new DefaultConfig(n).alter((site, here, up) => {
     case XSTileKey => up(XSTileKey).map { p =>
       p.copy(
+        HasMatrixExtension = true,
         l2tlbParameters = p.l2tlbParameters.copy(
           dfilterSize = 48
         ),

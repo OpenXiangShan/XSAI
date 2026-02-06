@@ -85,7 +85,7 @@ class Entries(implicit p: Parameters, params: IssueBlockParams) extends XSModule
   val issueTimerVec       = Wire(Vec(params.numEntries, UInt(2.W)))
   val sqIdxVec            = OptionWrapper(params.needFeedBackSqIdx || params.needFeedBackLqIdx, Wire(Vec(params.numEntries, new SqPtr())))
   val lqIdxVec            = OptionWrapper(params.needFeedBackSqIdx || params.needFeedBackLqIdx, Wire(Vec(params.numEntries, new LqPtr())))
-  val mlsqIdxVec          = OptionWrapper(params.needFeedBackSqIdx || params.needFeedBackLqIdx, Wire(Vec(params.numEntries, new MlsqPtr())))
+  val mlsqIdxVec          = OptionWrapper((params.needFeedBackSqIdx || params.needFeedBackLqIdx) && HasMatrixExtension, Wire(Vec(params.numEntries, new MlsqPtr())))
   //src status
   val dataSourceVec       = Wire(Vec(params.numEntries, Vec(params.numRegSrc, DataSource())))
   val loadDependencyVec   = Wire(Vec(params.numEntries, Vec(LoadPipelineWidth, UInt(LoadDependencyWidth.W))))
@@ -269,7 +269,8 @@ class Entries(implicit p: Parameters, params: IssueBlockParams) extends XSModule
 
   //issueRespVec
   if (params.needFeedBackSqIdx || params.needFeedBackLqIdx) {
-    issueRespVec.lazyZip(sqIdxVec.get.zip(lqIdxVec.get).zip(mlsqIdxVec.get)).lazyZip(issueTimerVec.lazyZip(deqPortIdxReadVec)).foreach { case (issueResp, ((sqIdx, lqIdx), mlsqIdx), (issueTimer, deqPortIdx)) =>
+    issueRespVec.lazyZip(sqIdxVec.get.zip(lqIdxVec.get).zip(mlsqIdxVec.getOrElse(VecInit(Seq.fill(issueRespVec.length)(0.U.asTypeOf(new MlsqPtr)))))).lazyZip(issueTimerVec.lazyZip(deqPortIdxReadVec)).foreach {
+      case (issueResp, ((sqIdx, lqIdx), mlsqIdx), (issueTimer, deqPortIdx)) =>
       val respInDatapath = if (!params.isVecMemIQ) resps(issueTimer(0))(deqPortIdx)
                            else resps(issueTimer)(deqPortIdx)
       val respAfterDatapath = Wire(chiselTypeOf(respInDatapath))
@@ -435,7 +436,9 @@ class Entries(implicit p: Parameters, params: IssueBlockParams) extends XSModule
     if (params.needFeedBackSqIdx || params.needFeedBackLqIdx) {
       sqIdxVec.get(entryIdx) := out.entry.bits.payload.sqIdx
       lqIdxVec.get(entryIdx) := out.entry.bits.payload.lqIdx
-      mlsqIdxVec.get(entryIdx) := out.entry.bits.payload.mlsqIdx
+      if (HasMatrixExtension) {
+        mlsqIdxVec.get(entryIdx) := out.entry.bits.payload.mlsqIdx.get
+      }
     }
     entryInValidVec(entryIdx)       := out.entryInValid
     entryOutDeqValidVec(entryIdx)   := out.entryOutDeqValid

@@ -4,6 +4,7 @@ import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 import utility.{GatedValidRegNext, SignExt, ZeroExt}
+import utils.OptionWrapper
 import xiangshan.{JumpOpType, SelImm, XSBundle, XSModule}
 import xiangshan.backend.BackendParams
 import xiangshan.backend.Bundles.{ExuBypassBundle, ExuInput, ExuOutput, ExuVec, ImmInfo}
@@ -30,7 +31,7 @@ class BypassNetworkIO()(implicit p: Parameters, params: BackendParams) extends X
     val int: MixedVec[MixedVec[DecoupledIO[ExuInput]]] = Flipped(intSchdParams.genExuInputBundle)
     val fp : MixedVec[MixedVec[DecoupledIO[ExuInput]]] = Flipped(fpSchdParams.genExuInputBundle)
     val vf : MixedVec[MixedVec[DecoupledIO[ExuInput]]] = Flipped(vfSchdParams.genExuInputBundle)
-    val mf : MixedVec[MixedVec[DecoupledIO[ExuInput]]] = Flipped(mfSchdParams.genExuInputBundle)
+    val mf : Option[MixedVec[MixedVec[DecoupledIO[ExuInput]]]] = OptionWrapper(HasMatrixExtension, Flipped(mfSchdParams.genExuInputBundle))
     val mem: MixedVec[MixedVec[DecoupledIO[ExuInput]]] = Flipped(memSchdParams.genExuInputBundle)
     val immInfo: Vec[ImmInfo] = Input(Vec(params.allExuParams.size, new ImmInfo))
     val rcData: MixedVec[MixedVec[Vec[UInt]]] = MixedVec(
@@ -44,7 +45,7 @@ class BypassNetworkIO()(implicit p: Parameters, params: BackendParams) extends X
     val int: MixedVec[MixedVec[DecoupledIO[ExuInput]]] = intSchdParams.genExuInputCopySrcBundle
     val fp : MixedVec[MixedVec[DecoupledIO[ExuInput]]] = fpSchdParams.genExuInputCopySrcBundle
     val vf : MixedVec[MixedVec[DecoupledIO[ExuInput]]] = vfSchdParams.genExuInputCopySrcBundle
-    val mf : MixedVec[MixedVec[DecoupledIO[ExuInput]]] = mfSchdParams.genExuInputCopySrcBundle
+    val mf : Option[MixedVec[MixedVec[DecoupledIO[ExuInput]]]] = OptionWrapper(HasMatrixExtension, mfSchdParams.genExuInputCopySrcBundle)
     val mem: MixedVec[MixedVec[DecoupledIO[ExuInput]]] = memSchdParams.genExuInputCopySrcBundle
   }
 
@@ -52,7 +53,7 @@ class BypassNetworkIO()(implicit p: Parameters, params: BackendParams) extends X
     val int: MixedVec[MixedVec[ValidIO[ExuBypassBundle]]] = Flipped(intSchdParams.genExuBypassValidBundle)
     val fp : MixedVec[MixedVec[ValidIO[ExuBypassBundle]]] = Flipped(fpSchdParams.genExuBypassValidBundle)
     val vf : MixedVec[MixedVec[ValidIO[ExuBypassBundle]]] = Flipped(vfSchdParams.genExuBypassValidBundle)
-    val mf : MixedVec[MixedVec[ValidIO[ExuBypassBundle]]] = Flipped(mfSchdParams.genExuBypassValidBundle)
+    val mf : Option[MixedVec[MixedVec[ValidIO[ExuBypassBundle]]]] = OptionWrapper(HasMatrixExtension, Flipped(mfSchdParams.genExuBypassValidBundle))
     val mem: MixedVec[MixedVec[ValidIO[ExuBypassBundle]]] = Flipped(memSchdParams.genExuBypassValidBundle)
 
     def connectExuOutput(
@@ -78,9 +79,9 @@ class BypassNetworkIO()(implicit p: Parameters, params: BackendParams) extends X
 class BypassNetwork()(implicit p: Parameters, params: BackendParams) extends XSModule {
   val io: BypassNetworkIO = IO(new BypassNetworkIO)
 
-  private val fromDPs: Seq[DecoupledIO[ExuInput]] = (io.fromDataPath.int ++ io.fromDataPath.fp ++ io.fromDataPath.vf ++ io.fromDataPath.mf ++ io.fromDataPath.mem).flatten.toSeq
-  private val fromExus: Seq[ValidIO[ExuBypassBundle]] = (io.fromExus.int ++ io.fromExus.fp ++ io.fromExus.vf ++ io.fromExus.mf ++ io.fromExus.mem).flatten.toSeq
-  private val toExus: Seq[DecoupledIO[ExuInput]] = (io.toExus.int ++ io.toExus.fp ++ io.toExus.vf ++ io.toExus.mf ++ io.toExus.mem).flatten.toSeq
+  private val fromDPs: Seq[DecoupledIO[ExuInput]] = (io.fromDataPath.int ++ io.fromDataPath.fp ++ io.fromDataPath.vf ++ io.fromDataPath.mf.getOrElse(Nil) ++ io.fromDataPath.mem).flatten.toSeq
+  private val fromExus: Seq[ValidIO[ExuBypassBundle]] = (io.fromExus.int ++ io.fromExus.fp ++ io.fromExus.vf ++ io.fromExus.mf.getOrElse(Nil) ++ io.fromExus.mem).flatten.toSeq
+  private val toExus: Seq[DecoupledIO[ExuInput]] = (io.toExus.int ++ io.toExus.fp ++ io.toExus.vf ++ io.toExus.mf.getOrElse(Nil) ++ io.toExus.mem).flatten.toSeq
   private val fromDPsRCData: Seq[Vec[UInt]] = io.fromDataPath.rcData.flatten.toSeq
   private val immInfo = io.fromDataPath.immInfo
 
