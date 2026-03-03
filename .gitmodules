@@ -30,4 +30,4 @@
 	url = https://github.com/OpenXiangShan/ChiselAIA.git
 [submodule "CUTE"]
 	path = CUTE
-	url = https://github.com/OpenXiangShan/CUTE.git
+	url = git@github.com:OpenXiangShan/CUTE.git

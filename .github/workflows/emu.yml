@@ -42,8 +42,8 @@ jobs:
           export HEAD_SHA=${{ github.run_number }}
           echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
           echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
-          echo "WAVE_HOME=/nfs/home/ci-runner/xs-wave/${HEAD_SHA}" >> $GITHUB_ENV
-          mkdir -p /nfs/home/ci-runner/xs-wave/${HEAD_SHA}
+          echo "WAVE_HOME=/nfs/home/ci-runner/xsai-wave/${HEAD_SHA}" >> $GITHUB_ENV
+          mkdir -p /nfs/home/ci-runner/xsai-wave/${HEAD_SHA}
       - name: Initialize submodules
         run: make init-force
       - name: clean up
@@ -126,11 +126,11 @@ jobs:
           echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
           echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
           echo "AM_HOME=/nfs/home/share/ci-workloads/nexus-am" >> $GITHUB_ENV
-          echo "PERF_HOME=/nfs/home/ci-runner/xs-perf/${HEAD_SHA}" >> $GITHUB_ENV
-          echo "WAVE_HOME=/nfs/home/ci-runner/xs-wave/${HEAD_SHA}" >> $GITHUB_ENV
+          echo "PERF_HOME=/nfs/home/ci-runner/xsai-perf/${HEAD_SHA}" >> $GITHUB_ENV
+          echo "WAVE_HOME=/nfs/home/ci-runner/xsai-wave/${HEAD_SHA}" >> $GITHUB_ENV
           echo "GCPT_RESTORE_BIN=/nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin" >> $GITHUB_ENV
-          mkdir -p /nfs/home/ci-runner/xs-perf/${HEAD_SHA}
-          mkdir -p /nfs/home/ci-runner/xs-wave/${HEAD_SHA}
+          mkdir -p /nfs/home/ci-runner/xsai-perf/${HEAD_SHA}
+          mkdir -p /nfs/home/ci-runner/xsai-wave/${HEAD_SHA}
       - name: Initialize submodules
         run: make init-force
       - name: clean up
@@ -220,8 +220,8 @@ jobs:
           export HEAD_SHA=${{ github.run_number }}
           echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
           echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
-          echo "WAVE_HOME=/nfs/home/ci-runner/xs-wave/${HEAD_SHA}" >> $GITHUB_ENV
-          mkdir -p /nfs/home/ci-runner/xs-wave/${HEAD_SHA}
+          echo "WAVE_HOME=/nfs/home/ci-runner/xsai-wave/${HEAD_SHA}" >> $GITHUB_ENV
+          mkdir -p /nfs/home/ci-runner/xsai-wave/${HEAD_SHA}
       - name: Initialize submodules
         run: make init-force
       - name: clean up
@@ -270,11 +270,11 @@ jobs:
           echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
           echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
           echo "AM_HOME=/nfs/home/share/ci-workloads/nexus-am" >> $GITHUB_ENV
-          echo "PERF_HOME=/nfs/home/ci-runner/xs-perf/${HEAD_SHA}" >> $GITHUB_ENV
-          echo "WAVE_HOME=/nfs/home/ci-runner/xs-wave/${HEAD_SHA}" >> $GITHUB_ENV
+          echo "PERF_HOME=/nfs/home/ci-runner/xsai-perf/${HEAD_SHA}" >> $GITHUB_ENV
+          echo "WAVE_HOME=/nfs/home/ci-runner/xsai-wave/${HEAD_SHA}" >> $GITHUB_ENV
           echo "GCPT_RESTORE_BIN=/nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin" >> $GITHUB_ENV
-          mkdir -p /nfs/home/ci-runner/xs-perf/${HEAD_SHA}
-          mkdir -p /nfs/home/ci-runner/xs-wave/${HEAD_SHA}
+          mkdir -p /nfs/home/ci-runner/xsai-perf/${HEAD_SHA}
+          mkdir -p /nfs/home/ci-runner/xsai-wave/${HEAD_SHA}
       - name: Initialize submodules
         run: make init-force
       - name: clean up
@@ -381,10 +381,10 @@ jobs:
           echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
           echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
           echo "AM_HOME=/nfs/home/share/ci-workloads/nexus-am" >> $GITHUB_ENV
-          echo "PERF_HOME=/nfs/home/ci-runner/xs-perf/${HEAD_SHA}" >> $GITHUB_ENV
-          echo "WAVE_HOME=/nfs/home/ci-runner/xs-wave/${HEAD_SHA}" >> $GITHUB_ENV
-          mkdir -p /nfs/home/ci-runner/xs-perf/${HEAD_SHA}
-          mkdir -p /nfs/home/ci-runner/xs-wave/${HEAD_SHA}
+          echo "PERF_HOME=/nfs/home/ci-runner/xsai-perf/${HEAD_SHA}" >> $GITHUB_ENV
+          echo "WAVE_HOME=/nfs/home/ci-runner/xsai-wave/${HEAD_SHA}" >> $GITHUB_ENV
+          mkdir -p /nfs/home/ci-runner/xsai-perf/${HEAD_SHA}
+          mkdir -p /nfs/home/ci-runner/xsai-wave/${HEAD_SHA}
       - name: Initialize submodules
         run: make init-force
       - name: clean up
@@ -421,10 +421,10 @@ jobs:
           echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
           echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
           echo "AM_HOME=/nfs/home/share/ci-workloads/nexus-am" >> $GITHUB_ENV
-          echo "PERF_HOME=/nfs/home/ci-runner/xs-perf/${HEAD_SHA}" >> $GITHUB_ENV
-          echo "WAVE_HOME=/nfs/home/ci-runner/xs-wave/${HEAD_SHA}" >> $GITHUB_ENV
-          mkdir -p /nfs/home/ci-runner/xs-perf/${HEAD_SHA}
-          mkdir -p /nfs/home/ci-runner/xs-wave/${HEAD_SHA}
+          echo "PERF_HOME=/nfs/home/ci-runner/xsai-perf/${HEAD_SHA}" >> $GITHUB_ENV
+          echo "WAVE_HOME=/nfs/home/ci-runner/xsai-wave/${HEAD_SHA}" >> $GITHUB_ENV
+          mkdir -p /nfs/home/ci-runner/xsai-perf/${HEAD_SHA}
+          mkdir -p /nfs/home/ci-runner/xsai-wave/${HEAD_SHA}
       - name: Initialize submodules
         run: make init-force
       - name: clean up
@@ -476,11 +476,11 @@ jobs:
           echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
           echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
           echo "AM_HOME=/nfs/home/share/ci-workloads/nexus-am" >> $GITHUB_ENV
-          echo "PERF_HOME=/nfs/home/ci-runner/xs-perf/${HEAD_SHA}" >> $GITHUB_ENV
-          echo "WAVE_HOME=/nfs/home/ci-runner/xs-wave/${HEAD_SHA}" >> $GITHUB_ENV
+          echo "PERF_HOME=/nfs/home/ci-runner/xsai-perf/${HEAD_SHA}" >> $GITHUB_ENV
+          echo "WAVE_HOME=/nfs/home/ci-runner/xsai-wave/${HEAD_SHA}" >> $GITHUB_ENV
           echo "GCPT_RESTORE_BIN=/nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin" >> $GITHUB_ENV
-          mkdir -p /nfs/home/ci-runner/xs-perf/${HEAD_SHA}
-          mkdir -p /nfs/home/ci-runner/xs-wave/${HEAD_SHA}
+          mkdir -p /nfs/home/ci-runner/xsai-perf/${HEAD_SHA}
+          mkdir -p /nfs/home/ci-runner/xsai-wave/${HEAD_SHA}
       - name: Initialize submodules
         run: make init-force
       - name: clean up
