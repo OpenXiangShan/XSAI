@@ -33,4 +33,4 @@
 	url = https://github.com/OpenXiangShan/ChiselIOPMP.git
 [submodule "CUTE"]
 	path = CUTE
-	url = git@github.com:OpenXiangShan/CUTE.git
+	url = https://github.com/OpenXiangShan/CUTE.git
