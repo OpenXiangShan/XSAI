@@ -23,11 +23,11 @@ import chisel3.util._
 import xiangshan._
 import utils._
 import utility._
-import xiangshan.backend.rob.RobPtr
+import xiangshan.backend.rob.{RobLsqIO, RobPtr}
 import xiangshan.backend.fu.util.HasCSRConst
 import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
 import freechips.rocketchip.tilelink._
-import xiangshan.backend.fu.{PMPReqBundle, PMPConfig}
+import xiangshan.backend.fu.{PMPConfig, PMPReqBundle}
 import xiangshan.backend.fu.PMPBundle
 
 
@@ -574,6 +574,7 @@ class TlbReq(implicit p: Parameters) extends TlbBundle {
   // do not translate, but still do pmp/pma check
   val no_translate = Output(Bool())
   val pmp_addr = Output(UInt(PAddrBits.W)) // load s1 send prefetch paddr
+  val frm_mabuf = Output(Bool())
   val debug = new Bundle {
     val pc = Output(UInt(XLEN.W))
     val robIdx = Output(new RobPtr)
@@ -701,6 +702,7 @@ class TlbIO(Width: Int, nRespDups: Int = 1, q: TLBParameters)(implicit p: Parame
   val pmp = Vec(Width, ValidIO(new PMPReqBundle(q.lgMaxSize)))
   val pmpMode = Vec(Width, Output(UInt(2.W)))
   val tlbreplay = Vec(Width, Output(Bool()))
+  val robPendingPtr = Input(new RobPtr)
 }
 
 class VectorTlbPtwIO(Width: Int)(implicit p: Parameters) extends TlbBundle {
