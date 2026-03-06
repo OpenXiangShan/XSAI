@@ -321,7 +321,7 @@ class DataPathImp(override val wrapper: DataPath)(implicit p: Parameters, params
   private val v0DiffReadData: Option[Vec[UInt]] =
     OptionWrapper(backendParams.basicDebugEn, Wire(Vec(V0PhyRegs, UInt(V0Data().dataWidth.W))))
   private val mxDiffRead: Option[(Vec[UInt], Vec[UInt])] =
-    OptionWrapper(backendParams.basicDebugEn, (Wire(Vec(3, UInt(log2Up(MxPhyRegs).W))), Wire(Vec(3, UInt(MxData().dataWidth.W)))))
+    OptionWrapper(backendParams.basicDebugEn && HasMatrixExtension, (Wire(Vec(3, UInt(log2Up(MxPhyRegs).W))), Wire(Vec(3, UInt(MxData().dataWidth.W)))))
   private val vlDiffRead: Option[(Vec[UInt], Vec[UInt])] =
     OptionWrapper(backendParams.basicDebugEn, (Wire(Vec(1, UInt(log2Up(VlPhyRegs).W))), Wire(Vec(1, UInt(VlData().dataWidth.W)))))
 
@@ -329,7 +329,7 @@ class DataPathImp(override val wrapper: DataPath)(implicit p: Parameters, params
   private val vecDiffReadData: Option[Vec[UInt]] =
     OptionWrapper(backendParams.basicDebugEn, Wire(Vec(vecDiffNumPregs, UInt(64.W)))) // v0 = Cat(Vec(1), Vec(0))
   private val mxDiffReadData: Option[Vec[UInt]] =
-    OptionWrapper(backendParams.basicDebugEn, Wire(Vec(3, UInt(MxData().dataWidth.W))))
+    OptionWrapper(backendParams.basicDebugEn && HasMatrixExtension, Wire(Vec(3, UInt(MxData().dataWidth.W))))
   private val vlDiffReadData: Option[UInt] =
     OptionWrapper(backendParams.basicDebugEn, Wire(UInt(VlData().dataWidth.W)))
 
@@ -1094,8 +1094,8 @@ class DataPathIO()(implicit p: Parameters, params: BackendParams) extends XSBund
 
   val diffVlRat  = if (params.basicDebugEn) Some(Input(Vec(1, UInt(log2Up(VlPhyRegs).W)))) else None
   val diffVl     = if (params.basicDebugEn) Some(Output(UInt(VlData().dataWidth.W))) else None
-  val diffMxRat  = if (params.basicDebugEn) Some(Input(Vec(3, UInt(log2Up(MxPhyRegs).W)))) else None
-  val diffMx     = if (params.basicDebugEn) Some(Output(Vec(3, UInt(MxData().dataWidth.W)))) else None
+  val diffMxRat  = if (params.basicDebugEn && HasMatrixExtension) Some(Input(Vec(3, UInt(log2Up(MxPhyRegs).W)))) else None
+  val diffMx     = if (params.basicDebugEn && HasMatrixExtension) Some(Output(Vec(3, UInt(MxData().dataWidth.W)))) else None
 
   val topDownInfo = new TopDownInfo
 }

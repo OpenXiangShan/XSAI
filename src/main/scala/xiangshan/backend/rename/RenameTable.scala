@@ -253,11 +253,11 @@ class RenameTableWrapper(implicit p: Parameters) extends XSModule {
     val debug_vec_rat = if (backendParams.debugEn) Some(Vec(31, Output(UInt(PhyRegIdxWidth.W)))) else None
     val debug_v0_rat  = if (backendParams.debugEn) Some(Vec(1,Output(UInt(PhyRegIdxWidth.W)))) else None
     val debug_vl_rat  = if (backendParams.debugEn) Some(Vec(1,Output(UInt(PhyRegIdxWidth.W)))) else None
-    val debug_mx_rat = if (backendParams.debugEn) Some(Vec(3,Output(UInt(PhyRegIdxWidth.W)))) else None
+    val debug_mx_rat = if (backendParams.debugEn && HasMatrixExtension) Some(Vec(3,Output(UInt(PhyRegIdxWidth.W)))) else None
 
     // for difftest
     val diff_vl_rat  = if (backendParams.basicDebugEn) Some(Vec(1,Output(UInt(PhyRegIdxWidth.W)))) else None
-    val diff_mx_rat = if (backendParams.basicDebugEn) Some(Vec(3,Output(UInt(PhyRegIdxWidth.W)))) else None
+    val diff_mx_rat = if (backendParams.basicDebugEn && HasMatrixExtension) Some(Vec(3,Output(UInt(PhyRegIdxWidth.W)))) else None
   })
 
   val intRat = Module(new RenameTable(Reg_I))
@@ -468,8 +468,8 @@ class RenameTableWrapper(implicit p: Parameters) extends XSModule {
     io.debug_mx_rat.foreach(_ := mxRat.get.io.debug_rdata.get)
     io.diff_mx_rat.foreach(_ := mxRat.get.io.diff_rdata.get)
   } else {
-    io.debug_mx_rat.get.foreach(_ := 0.U)
-    io.diff_mx_rat.get.foreach(_ := 0.U)
+    io.debug_mx_rat.foreach(_ := 0.U)
+    io.diff_mx_rat.foreach(_ := 0.U)
   }
   mxRat.foreach(_.io.readPorts <> io.mxReadPorts.get.flatten)
   mxRat.foreach(_.io.redirect := io.redirect)

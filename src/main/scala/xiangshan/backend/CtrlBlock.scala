@@ -997,7 +997,7 @@ class CtrlBlockIO()(implicit p: Parameters, params: BackendParams) extends XSBun
       val lsdqFull  = Bool()
     }
   })
-  val diff_mx_rat  = if (params.basicDebugEn) Some(Vec(3, Output(UInt(PhyRegIdxWidth.W)))) else None
+  val diff_mx_rat  = if (params.basicDebugEn && HasMatrixExtension) Some(Vec(3, Output(UInt(PhyRegIdxWidth.W)))) else None
   val diff_vl_rat  = if (params.basicDebugEn) Some(Vec(1, Output(UInt(PhyRegIdxWidth.W)))) else None
 
   val sqCanAccept = Input(Bool())
