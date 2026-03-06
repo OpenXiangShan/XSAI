@@ -501,98 +501,98 @@ jobs:
           cat perf.log | sort | tee $PERF_HOME/coremark.log
           echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
 
-  artifacts-uploading:
-    runs-on: ubuntu-latest
-    needs: changes
-    if: ${{ needs.changes.outputs.core == 'true' }}
-    continue-on-error: false
-    timeout-minutes: 40
-    name: Upload Artifacts
-    steps:
-      - uses: actions/checkout@v4
-      - name: set env
-        run: echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
-      - name: psutil
-        run: sudo apt install python3-psutil
-      - name: Initialize submodules
-        run: make init-force
-      - name: mill
-        uses: jodersky/setup-mill@v0.3.0
-        with:
-          mill-version: 0.12.3
-      - name: swapfile
-        run: |
-          if [ -f /mnt/swapfile ]; then
-            sudo swapoff /mnt/swapfile || true
-            sudo rm -f /mnt/swapfile
-          fi
-          sudo fallocate -l 10G /mnt/xs-swapfile
-          sudo chmod 600 /mnt/xs-swapfile
-          sudo mkswap /mnt/xs-swapfile
-          sudo swapon /mnt/xs-swapfile
-      - name: Clean up
-        run: python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
-      - name: generate standalone devices for AXI4
-        run: |
-          make StandAloneCLINT DEVICE_BASE_ADDR=0x38000000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=CLINT_
-          make StandAloneSYSCNT DEVICE_BASE_ADDR=0x38040000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=CLINT_
-          make StandAloneDebugModule DEVICE_BASE_ADDR=0x38020000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=DM_
-          make StandAlonePLIC DEVICE_BASE_ADDR=0x3C000000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=PLIC_
-      - name: generate CHI Issue B XSNoCTop verilog with difftest and filelist
-        run: |
-          make verilog WITH_CONSTANTIN=0 WITH_CHISELDB=0 CONFIG='XSNoCTopConfig --enable-difftest' ISSUE=B XSTOP_PREFIX=bosc_ JVM_XMX=16g
-          rm `find $GITHUB_WORKSPACE/build -name "*.fir"`
-          cd $GITHUB_WORKSPACE/build/rtl && find . -name "*.*v" > filelist.f
-      - name: acrhive issue B verilog artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: xs-issue-b-difftest-verilog
-          path: build
-      - name: clean up
-        run: python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
-      - name: generate standalone devices for AXI4
-        run: |
-          make StandAloneCLINT DEVICE_BASE_ADDR=0x38000000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=CLINT_
-          make StandAloneSYSCNT DEVICE_BASE_ADDR=0x38040000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=CLINT_
-          make StandAloneDebugModule DEVICE_BASE_ADDR=0x38020000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=DM_
-          make StandAlonePLIC DEVICE_BASE_ADDR=0x3C000000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=PLIC_
-      - name: generate CHI Issue E.b XSNoCTop verilog with difftest and filelist
-        run: |
-          make verilog WITH_CONSTANTIN=0 WITH_CHISELDB=0 CONFIG='XSNoCTopConfig --enable-difftest' ISSUE=E.b XSTOP_PREFIX=bosc_ JVM_XMX=16g
-          rm `find $GITHUB_WORKSPACE/build -name "*.fir"`
-          cd $GITHUB_WORKSPACE/build/rtl && find . -name "*.*v" > filelist.f
-      - name: acrhive issue E.b verilog artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: xs-issue-e-b-difftest-verilog
-          path: build
-      - name: clean up
-        run: python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
-      - name: generate standalone devices for AXI4
-        run: |
-          make StandAloneCLINT DEVICE_BASE_ADDR=0x38000000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=CLINT_
-          make StandAloneSYSCNT DEVICE_BASE_ADDR=0x38040000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=CLINT_
-          make StandAloneDebugModule DEVICE_BASE_ADDR=0x38020000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=DM_
-          make StandAlonePLIC DEVICE_BASE_ADDR=0x3C000000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=PLIC_
-      - name: generate CHI Issue E.b lowpower XSNoCTop verilog with difftest and filelist
-        run: |
-          make verilog WITH_CONSTANTIN=0 WITH_CHISELDB=0 CONFIG='XSNoCTopConfig --enable-difftest' ISSUE=E.b XSTOP_PREFIX=bosc_ JVM_XMX=16g YAML_CONFIG=$NOOP_HOME/src/main/resources/config/Poweroff.yml
-          rm `find $GITHUB_WORKSPACE/build -name "*.fir"`
-          cd $GITHUB_WORKSPACE/build/rtl && find . -name "*.*v" > filelist.f
-      - name: acrhive issue E.b lowpower verilog artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: xs-issue-e-b-lowpower-difftest-verilog
-          path: build
-      - name: generate test-jar
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
-          make test-jar
-      - name: acrhive test jar artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: xsgen
-          path: out/xiangshan/test/assembly.dest/out.jar
+  # artifacts-uploading:
+  #   runs-on: ubuntu-latest
+  #   needs: changes
+  #   if: ${{ needs.changes.outputs.core == 'true' }}
+  #   continue-on-error: false
+  #   timeout-minutes: 40
+  #   name: Upload Artifacts
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: set env
+  #       run: echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
+  #     - name: psutil
+  #       run: sudo apt install python3-psutil
+  #     - name: Initialize submodules
+  #       run: make init-force
+  #     - name: mill
+  #       uses: jodersky/setup-mill@v0.3.0
+  #       with:
+  #         mill-version: 0.12.3
+  #     - name: swapfile
+  #       run: |
+  #         if [ -f /mnt/swapfile ]; then
+  #           sudo swapoff /mnt/swapfile || true
+  #           sudo rm -f /mnt/swapfile
+  #         fi
+  #         sudo fallocate -l 10G /mnt/xs-swapfile
+  #         sudo chmod 600 /mnt/xs-swapfile
+  #         sudo mkswap /mnt/xs-swapfile
+  #         sudo swapon /mnt/xs-swapfile
+  #     - name: Clean up
+  #       run: python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
+  #     - name: generate standalone devices for AXI4
+  #       run: |
+  #         make StandAloneCLINT DEVICE_BASE_ADDR=0x38000000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=CLINT_
+  #         make StandAloneSYSCNT DEVICE_BASE_ADDR=0x38040000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=CLINT_
+  #         make StandAloneDebugModule DEVICE_BASE_ADDR=0x38020000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=DM_
+  #         make StandAlonePLIC DEVICE_BASE_ADDR=0x3C000000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=PLIC_
+  #     - name: generate CHI Issue B XSNoCTop verilog with difftest and filelist
+  #       run: |
+  #         make verilog WITH_CONSTANTIN=0 WITH_CHISELDB=0 CONFIG='XSNoCTopConfig --enable-difftest' ISSUE=B XSTOP_PREFIX=bosc_ JVM_XMX=16g
+  #         rm `find $GITHUB_WORKSPACE/build -name "*.fir"`
+  #         cd $GITHUB_WORKSPACE/build/rtl && find . -name "*.*v" > filelist.f
+  #     - name: acrhive issue B verilog artifacts
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: xs-issue-b-difftest-verilog
+  #         path: build
+  #     - name: clean up
+  #       run: python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
+  #     - name: generate standalone devices for AXI4
+  #       run: |
+  #         make StandAloneCLINT DEVICE_BASE_ADDR=0x38000000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=CLINT_
+  #         make StandAloneSYSCNT DEVICE_BASE_ADDR=0x38040000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=CLINT_
+  #         make StandAloneDebugModule DEVICE_BASE_ADDR=0x38020000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=DM_
+  #         make StandAlonePLIC DEVICE_BASE_ADDR=0x3C000000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=PLIC_
+  #     - name: generate CHI Issue E.b XSNoCTop verilog with difftest and filelist
+  #       run: |
+  #         make verilog WITH_CONSTANTIN=0 WITH_CHISELDB=0 CONFIG='XSNoCTopConfig --enable-difftest' ISSUE=E.b XSTOP_PREFIX=bosc_ JVM_XMX=16g
+  #         rm `find $GITHUB_WORKSPACE/build -name "*.fir"`
+  #         cd $GITHUB_WORKSPACE/build/rtl && find . -name "*.*v" > filelist.f
+  #     - name: acrhive issue E.b verilog artifacts
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: xs-issue-e-b-difftest-verilog
+  #         path: build
+  #     - name: clean up
+  #       run: python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
+  #     - name: generate standalone devices for AXI4
+  #       run: |
+  #         make StandAloneCLINT DEVICE_BASE_ADDR=0x38000000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=CLINT_
+  #         make StandAloneSYSCNT DEVICE_BASE_ADDR=0x38040000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=CLINT_
+  #         make StandAloneDebugModule DEVICE_BASE_ADDR=0x38020000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=DM_
+  #         make StandAlonePLIC DEVICE_BASE_ADDR=0x3C000000 DEVICE_ADDR_WIDTH=32 DEVICE_DATA_WIDTH=64 DEVICE_TL=0 DEVICE_PREFIX=PLIC_
+  #     - name: generate CHI Issue E.b lowpower XSNoCTop verilog with difftest and filelist
+  #       run: |
+  #         make verilog WITH_CONSTANTIN=0 WITH_CHISELDB=0 CONFIG='XSNoCTopConfig --enable-difftest' ISSUE=E.b XSTOP_PREFIX=bosc_ JVM_XMX=16g YAML_CONFIG=$NOOP_HOME/src/main/resources/config/Poweroff.yml
+  #         rm `find $GITHUB_WORKSPACE/build -name "*.fir"`
+  #         cd $GITHUB_WORKSPACE/build/rtl && find . -name "*.*v" > filelist.f
+  #     - name: acrhive issue E.b lowpower verilog artifacts
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: xs-issue-e-b-lowpower-difftest-verilog
+  #         path: build
+  #     - name: generate test-jar
+  #       run: |
+  #         python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
+  #         make test-jar
+  #     - name: acrhive test jar artifacts
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: xsgen
+  #         path: out/xiangshan/test/assembly.dest/out.jar
 
   check-submodules:
     runs-on: ubuntu-latest
