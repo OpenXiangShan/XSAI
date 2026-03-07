@@ -522,7 +522,11 @@ class NewDispatch(implicit p: Parameters) extends XSModule with HasPerfEvents wi
         val thisSrcHasV0  = allFuThisIQ.map(x => {x.srcData.map(xx => {if (j < xx.size) V0RegSrcDataSet.contains(xx(j))  else false}).reduce(_ || _)}).reduce(_ || _)
         val thisSrcHasVl  = allFuThisIQ.map(x => {x.srcData.map(xx => {if (j < xx.size) VlRegSrcDataSet.contains(xx(j))  else false}).reduce(_ || _)}).reduce(_ || _)
         val thisSrcHasMx  = allFuThisIQ.map(x => {x.srcData.map(xx => {if (j < xx.size) MxRegSrcDataSet.contains(xx(j))  else false}).reduce(_ || _)}).reduce(_ || _)
-        val selSrcState = Seq(thisSrcHasInt || maskForStd, thisSrcHasFp || maskForStd, thisSrcHasVec, thisSrcHasV0, thisSrcHasMx, thisSrcHasVl)
+        val selSrcState = if (HasMatrixExtension) {
+          Seq(thisSrcHasInt || maskForStd, thisSrcHasFp || maskForStd, thisSrcHasVec, thisSrcHasV0, thisSrcHasMx, thisSrcHasVl)
+        } else {
+          Seq(thisSrcHasInt || maskForStd, thisSrcHasFp || maskForStd, thisSrcHasVec, thisSrcHasV0, thisSrcHasVl)
+        }
         IQSelUop(temp).bits.srcState(j) := PriorityMux(oh, allSrcState)(j).zip(selSrcState).filter(_._2 == true).map(_._1).foldLeft(false.B)(_ || _).asUInt
       }
       temp = temp + 1
