@@ -39,11 +39,6 @@ class VlBusyTableReadIO(implicit p: Parameters) extends XSBundle {
   val is_vlmax = Output(Bool())
 }
 
-class MxBusyTableReadIO(implicit p: Parameters) extends XSBundle {
-  val is_zero = Output(Bool())
-  val is_mxmax = Output(Bool())
-}
-
 class BusyTable(numReadPorts: Int, numWritePorts: Int, numPhyPregs: Int, pregWB: PregWB)(implicit p: Parameters) extends XSModule with HasPerfEvents {
   val io = IO(new Bundle() {
     // set preg state to busy
@@ -268,16 +263,4 @@ class VlBusyTable(numReadPorts: Int, numWritePorts: Int, numPhyPregs: Int, pregW
     vlRes.is_nonzero := !nonzeroTable(res.req)
     vlRes.is_vlmax := !vlmaxTable(res.req)
   }
-}
-
-class MxBusyTable(numReadPorts: Int, numWritePorts: Int, numPhyPregs: Int, pregWB: PregWB)(implicit p: Parameters) extends BusyTable(numReadPorts, numWritePorts, numPhyPregs, pregWB) {
-  val io_mx_read = IO(new Bundle() {
-    val mxReadInfo = Vec(numReadPorts, new MxBusyTableReadIO)
-  })
-
-  var intSchdMxWbPort = p(XSCoreParamsKey).intSchdMxWbPort
-  var mfSchdMxWbPort = p(XSCoreParamsKey).mfSchdMxWbPort
-
-  val intMxWb = Mux(io.wbPregs(intSchdMxWbPort).valid, UIntToOH(io.wbPregs(intSchdMxWbPort).bits), 0.U)
-  val mfMxWb = Mux(io.wbPregs(mfSchdMxWbPort).valid, UIntToOH(io.wbPregs(mfSchdMxWbPort).bits), 0.U)
 }
