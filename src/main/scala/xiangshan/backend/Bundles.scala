@@ -217,7 +217,6 @@ object Bundles {
     val isDropAmocasSta = Bool()
     val uopIdx          = UopIdx()
     val isVset          = Bool()
-    val isMsettilex     = OptionWrapper(HasMatrixExtension, Bool())
     val needAmuCtrl     = OptionWrapper(HasMatrixExtension, Bool())
     val firstUop        = Bool()
     val lastUop         = Bool()

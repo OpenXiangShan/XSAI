@@ -144,54 +144,6 @@ trait BitFieldMatrix { this: Riscv32BitInst =>
     this.OPCODE === xiangshan.backend.decode.isa.bitfield.OPCODE7Bit.MATRIX_INSTS
   }
 
-  def isMatrixConfig = {
-    this.OPCODE === xiangshan.backend.decode.isa.bitfield.OPCODE7Bit.MATRIX_INSTS &&
-      this.MATRIX_FUNCT6(5, 2) === "b0000".U && this.FUNCT3(2) === "b1".U
-  }
-
-  def isMatrixStore = {
-    this.OPCODE === xiangshan.backend.decode.isa.bitfield.OPCODE7Bit.MATRIX_INSTS &&
-      this.LS === "b1".U && (this.MATRIX_FUNCT6(5, 2) === "b0000".U && this.FUNCT3(2) === "b0".U
-        || this.MATRIX_FUNCT6(5, 2) === "b1000".U)
-  }
-
-  def isMatrixLoad = {
-    this.OPCODE === xiangshan.backend.decode.isa.bitfield.OPCODE7Bit.MATRIX_INSTS &&
-      this.LS === "b0".U && (this.MATRIX_FUNCT6(5, 2) === "b0000".U && this.FUNCT3(2) === "b0".U
-        || this.MATRIX_FUNCT6(5, 2) === "b1000".U)
-  }
-
-  def isMatrixMove = {
-    this.OPCODE === xiangshan.backend.decode.isa.bitfield.OPCODE7Bit.MATRIX_INSTS &&
-      this.MATRIX_FUNCT6(5, 2) === "b0001".U
-  }
-
-  def isMatrixZmvMove = {
-    this.OPCODE === xiangshan.backend.decode.isa.bitfield.OPCODE7Bit.MATRIX_INSTS &&
-      this.MATRIX_FUNCT6(5, 2) === "b1001".U
-  }
-
-  def isMatrixMul = {
-    this.OPCODE === xiangshan.backend.decode.isa.bitfield.OPCODE7Bit.MATRIX_INSTS &&
-      this.MATRIX_FUNCT6(5, 2) === "b0010".U && this.MA === "b1".U
-  }
-
-  def isMatrixSparseMul = {
-    this.OPCODE === xiangshan.backend.decode.isa.bitfield.OPCODE7Bit.MATRIX_INSTS &&
-      this.MATRIX_FUNCT6(5, 2) === "b1010".U
-  }
-
-  def isMatrixArith = {
-    this.OPCODE === xiangshan.backend.decode.isa.bitfield.OPCODE7Bit.MATRIX_INSTS &&
-      (this.MATRIX_FUNCT6(5, 3) === "b001".U || this.MATRIX_FUNCT6(5, 2) === "b0100".U) &&
-      this.MA === "b0".U
-  }
-
-  def isMatrixTypeConvert = {
-    this.OPCODE === xiangshan.backend.decode.isa.bitfield.OPCODE7Bit.MATRIX_INSTS &&
-      this.MATRIX_FUNCT6(5, 2) === "b0110".U
-  }
-
   def isMsync = {
     this.OPCODE === xiangshan.backend.decode.isa.bitfield.OPCODE7Bit.MATRIX_INSTS &&
       (this.MATRIX_FUNCT6(5, 1) === "b11000".U || this.MATRIX_FUNCT6 === "b110010".U)
