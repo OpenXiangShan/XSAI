@@ -1224,7 +1224,6 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
     exceptionGen.io.enq(i).bits.isFetchMalAddr := io.enq.req(i).bits.isFetchMalAddr
     exceptionGen.io.enq(i).bits.flushPipe := io.enq.req(i).bits.flushPipe
     exceptionGen.io.enq(i).bits.isVset := io.enq.req(i).bits.isVset
-    exceptionGen.io.enq(i).bits.isMsettilex.foreach(_ := io.enq.req(i).bits.isMsettilex.get)
     exceptionGen.io.enq(i).bits.needAmuCtrl.foreach(_ := io.enq.req(i).bits.needAmuCtrl.get)
     exceptionGen.io.enq(i).bits.replayInst := false.B
     XSError(canEnqueue(i) && io.enq.req(i).bits.replayInst, "enq should not set replayInst")
@@ -1262,7 +1261,6 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
     exc_wb.bits.isFetchMalAddr  := false.B
     exc_wb.bits.flushPipe       := wb.bits.flushPipe.getOrElse(false.B)
     exc_wb.bits.isVset          := false.B
-    exc_wb.bits.isMsettilex.foreach(_ := false.B)
     exc_wb.bits.needAmuCtrl.foreach(_ := false.B)
     exc_wb.bits.replayInst      := wb.bits.replay.getOrElse(false.B)
     exc_wb.bits.singleStep      := false.B

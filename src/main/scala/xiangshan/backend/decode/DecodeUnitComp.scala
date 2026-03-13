@@ -146,7 +146,6 @@ class DecodeUnitComp()(implicit p : Parameters) extends XSModule with DecodeUnit
   val numOfWB = Wire(UInt(log2Up(maxUopSize).W))
   val lmul = Wire(UInt(4.W))
   val isVsetSimple = Wire(Bool())
-  val isMsettilexSimple = Wire(Bool())
 
   val indexedLSRegOffset = Seq.tabulate(MAX_VLMUL)(i => Module(new indexedLSUopTable(i)))
   indexedLSRegOffset.map(_.src := 0.U)
@@ -157,8 +156,6 @@ class DecodeUnitComp()(implicit p : Parameters) extends XSModule with DecodeUnit
   val vlmulReg = latchedInst.vpu.vlmul
   val vsewReg = latchedInst.vpu.vsew
   val vstartReg = latchedInst.vpu.vstart
-
-  isMsettilexSimple := latchedInst.isMsettilex
 
   //Type of uop Div
   val typeOfSplit = latchedInst.uopSplitType

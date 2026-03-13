@@ -467,55 +467,17 @@ package object xiangshan {
     def isTileM (func: UInt) = func(3, 0) === "b0000".U
     def isTileN (func: UInt) = func(3, 0) === "b0001".U
     def isTileK (func: UInt) = func(3, 0) === "b0010".U
-    def isMRd   (func: UInt) = func(3, 0) === "b0100".U
     
     def isSetX         (func: UInt) = isSet(func) && func(6, 4) === "b000".U
     def isSetImm       (func: UInt) = isSet(func) && func(6, 4) === "b001".U
-    def isSetMaxMtilem (func: UInt) = isSet(func) && func(6, 4) === "b100".U
-    def isSetMaxMtilen (func: UInt) = isSet(func) && func(6, 4) === "b101".U
-    def isSetMaxMtilek (func: UInt) = isSet(func) && func(6, 4) === "b110".U
-    def isSetKeep      (func: UInt) = isSet(func) && func(6, 4) === "b111".U
 
-    // msettilex's uop
-    //   case1: rs1!=x0, normal
-    //     uop0: r(rs1), w(mtilex) | x[rs1] -> mtilex
     def umsettilem_x = "b0_000_0000".U
     def umsettilen_x = "b0_000_0001".U
     def umsettilek_x = "b0_000_0010".U
-    //     uop1: r(rs1), w(rd)     | x[rs1] -> x[rd]
-    def umsetrd_xx   = "b0_000_0100".U
-    //   case2: rs1==x0, rd!=x0, set mtilex to max, set rd to max
-    //     uop0: w(mconfig)        | mtilexmax -> mconfig
-    def umsetmtilem_mtilemmax = "b0_100_0000".U
-    def umsetmtilen_mtilenmax = "b0_101_0001".U
-    def umsetmtilek_mtilekmax = "b0_110_0010".U
-    //     uop1: w(rd)             | mtilexmax -> x[rd]
-    def umsetrd_mtilemmax = "b0_100_0100".U
-    def umsetrd_mtilenmax = "b0_101_0100".U
-    def umsetrd_mtilekmax = "b0_110_0100".U
-    //   case3: rs1==x0, rd==x0, keep mtilex
-    def umsettilem_vv = "b0_000_0000".U // TODO: Implement me!
 
-    // msettilexi's uop
-    //   case1: rs1!=x0, normal
-    //     uop0: w(mtilex)         | imm -> mconfig
     def umsettilem_i = "b0_001_0000".U
     def umsettilen_i = "b0_001_0001".U
     def umsettilek_i = "b0_001_0010".U
-    //     uop1: w(rd)             | imm -> x[rd]
-    def umsetrd_i    = "b0_001_0100".U
-    //   case2: rs1==x0, rd!=x0, set mtilex to max, set rd to max
-    //     uop0: w(mconfig)        | mtilexmax -> mconfig
-    // def umsetmtilem_mtilemmax = "b0_100_0000".U
-    // def umsetmtilen_mtilenmax = "b0_101_0001".U
-    // def umsetmtilek_mtilekmax = "b0_110_0010".U
-    //     uop1: w(rd)             | mtilexmax -> x[rd]
-    // def umsetrd_mtilemmax    = "b0_100_0100".U
-    // def umsetrd_mtilenmax    = "b0_101_0100".U
-    // def umsetrd_mtilekmax    = "b0_110_0100".U
-    //   case3: rs1==x0, rd==x0, keep mtilex
-    //     uop0: r(mconfig), w(mconfig) | ld_mconfig.mtilex, imm -> mconfig
-    def umsettilem_keep_i = "b0_000_0000".U // TODO: Implement me!
 
     // read mtilex
     def csrrmtilem    = "b1_000_0000".U
@@ -524,17 +486,13 @@ package object xiangshan {
     
     def isMsettilem (func: UInt)  = isSetX(func)         && isTileM(func)
     def isMsettilemi (func: UInt) = isSetImm(func)       && isTileM(func)
-    def isMsetTilemMax (func: UInt)   = isSetMaxMtilem(func) && isTileM(func)
     def isMsettilen (func: UInt)  = isSetX(func)         && isTileN(func)
     def isMsettileni (func: UInt) = isSetImm(func)       && isTileN(func)
-    def isMsetTilenMax (func: UInt)   = isSetMaxMtilen(func) && isTileN(func)
     def isMsettilek (func: UInt)  = isSetX(func)         && isTileK(func)
     def isMsettileki (func: UInt) = isSetImm(func)       && isTileK(func)
-    def isMsetTilekMax (func: UInt)   = isSetMaxMtilek(func) && isTileK(func)
 
     def isMsettilexi (func: UInt) = isSetImm(func) && (isTileM(func) || isTileN(func) || isTileK(func))
     def isMsettilex (func: UInt)  = isSetX(func) && (isTileM(func) || isTileN(func) || isTileK(func))
-    def isMsetMtilexmax (func: UInt) = isSet(func) && (isSetMaxMtilem(func) || isSetMaxMtilen(func) || isSetMaxMtilek(func))
 
     def isMsetMtilem (func: UInt)  = isSet(func)  && isTileM(func)
     def isMsetMtilen (func: UInt)  = isSet(func)  && isTileN(func)
@@ -544,8 +502,6 @@ package object xiangshan {
     def isMreadMtilen (func: UInt) = isRead(func) && isTileN(func)
     def isMreadMtilek (func: UInt) = isRead(func) && isTileK(func)
     def isMreadMtilex (func: UInt) = isRead(func) && (isTileM(func) || isTileN(func) || isTileK(func))
-
-    // def isMsetMtypeFromImm (func: UInt) = isSet(func) && (isSetImm(func) || isSetImmH(func) || isSetImmL(func)) && isMType(func)
 
     def toMxIdx (func: UInt) = func(1, 0)
   }

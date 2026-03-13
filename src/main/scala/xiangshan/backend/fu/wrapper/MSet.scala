@@ -14,8 +14,6 @@ class MSetMtilexRiWmf(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUn
   connect0LatencyCtrlSingal
   io.out.valid := io.in.valid
   io.in.ready := io.out.ready
-
-  val isMsettilex = MSETtilexOpType.isMsettilex(io.in.bits.ctrl.fuOpType)
   
   val atx = Mux(MSETtilexOpType.isMsettilexi(io.in.bits.ctrl.fuOpType),
     Imm_MSET().getAtx(io.in.bits.data.src(0)),
@@ -24,8 +22,6 @@ class MSetMtilexRiWmf(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUn
   io.out.bits.res.data := atx
 
   assert(cfg.writeMxRf, "MSetMtilexRiWmf must write mtilex")
-  // io.mtilex.get.bits := atx
-  // io.mtilex.get.valid := io.out.valid && isMsettilex
 }
 
 class MSetMtilexRmfWmf(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUnit(cfg) {

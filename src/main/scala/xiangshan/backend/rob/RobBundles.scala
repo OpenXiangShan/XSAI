@@ -61,7 +61,6 @@ object RobBundles extends HasCircularQueuePtrHelper {
     val ftqOffset = UInt(log2Up(PredictWidth).W)
     val isRVC = Bool()
     val isVset = Bool()
-    val isMsettilex = OptionWrapper(HasMatrixExtension, Bool())
     val isHls = Bool()
     val instrSize = UInt(log2Ceil(RenameWidth + 1).W)
     val needAmuCtrl = OptionWrapper(HasMatrixExtension, Bool())
@@ -106,7 +105,6 @@ object RobBundles extends HasCircularQueuePtrHelper {
     val vxsat = Bool()
     val isRVC = Bool()
     val isVset = Bool()
-    val isMsettilex = OptionWrapper(HasMatrixExtension, Bool())
     val needAmuCtrl = OptionWrapper(HasMatrixExtension, Bool())
     val amuCtrl = OptionWrapper(HasMatrixExtension, new AmuCtrlIO) // TODO: It's too big. Can we optimize it?
     val isHls = Bool()
@@ -142,7 +140,6 @@ object RobBundles extends HasCircularQueuePtrHelper {
     robEntry.ftqOffset := robEnq.ftqOffset
     robEntry.isRVC := robEnq.preDecodeInfo.isRVC
     robEntry.isVset := robEnq.isVset
-    robEntry.isMsettilex.foreach(_ := robEnq.isMsettilex.get)
     robEntry.isHls := robEnq.isHls
     robEntry.instrSize := robEnq.instrSize
     robEntry.rfWen := robEnq.rfWen
@@ -175,7 +172,6 @@ object RobBundles extends HasCircularQueuePtrHelper {
     robCommitEntry.vxsat := robEntry.vxsat
     robCommitEntry.isRVC := robEntry.isRVC
     robCommitEntry.isVset := robEntry.isVset
-    robCommitEntry.isMsettilex.foreach(_ := robEntry.isMsettilex.get)
     robCommitEntry.needAmuCtrl.foreach(_ := robEntry.needAmuCtrl.get)
     robCommitEntry.amuCtrl.foreach(_ := 0.U.asTypeOf(robEntry.amuCtrl.get))
     robCommitEntry.isHls := robEntry.isHls
@@ -309,7 +305,6 @@ class RobExceptionInfo(implicit p: Parameters) extends XSBundle {
   val isFetchMalAddr = Bool()
   val flushPipe = Bool()
   val isVset = Bool()
-  val isMsettilex = OptionWrapper(HasMatrixExtension, Bool())
   val needAmuCtrl = OptionWrapper(HasMatrixExtension, Bool())
   val replayInst = Bool() // redirect to that inst itself
   val singleStep = Bool() // TODO add frontend hit beneath

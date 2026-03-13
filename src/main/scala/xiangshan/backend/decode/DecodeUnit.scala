@@ -1141,11 +1141,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   uopInfoGen.io.in.preInfo.isVecArith := inst.isVecArith
   uopInfoGen.io.in.preInfo.isVecMem := inst.isVecStore || inst.isVecLoad
   uopInfoGen.io.in.preInfo.isAmoCAS := inst.isAMOCAS
-  uopInfoGen.io.in.preInfo.isMatrixConfig := inst.isMatrixConfig
-  uopInfoGen.io.in.preInfo.isMatrixMem := inst.isMatrixStore || inst.isMatrixLoad
-  uopInfoGen.io.in.preInfo.isMatrixMul := inst.isMatrixMul || inst.isMatrixSparseMul
-  uopInfoGen.io.in.preInfo.isMatrixArith := inst.isMatrixArith || inst.isMatrixTypeConvert || inst.isMatrixMove
-
+  
   uopInfoGen.io.in.preInfo.typeOfSplit := decodedInst.uopSplitType
   uopInfoGen.io.in.preInfo.vsew := decodedInst.vpu.vsew
   uopInfoGen.io.in.preInfo.vlmul := decodedInst.vpu.vlmul
