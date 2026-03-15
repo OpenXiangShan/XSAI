@@ -116,7 +116,7 @@ jobs:
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
       - name: Build EMU
         run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --build --threads 16 \
+          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --build --threads 16 \
             --config DefaultMatrixConfig --pgo $GITHUB_WORKSPACE/ready-to-run/coremark-2-iteration.bin --llvm-profdata llvm-profdata --trace-fst
       - name: Basic Test - cputest
         run: |
@@ -272,7 +272,6 @@ jobs:
       - name: Build EMU
         run: |
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --build \
-            --yaml-config $GITHUB_WORKSPACE/src/main/resources/config/Default.yml \
             --dramsim3 /nfs/home/share/ci-workloads/DRAMsim3 --with-dramsim3 --threads 16 \
             --config DefaultMatrixConfig \
             --pgo $GITHUB_WORKSPACE/ready-to-run/coremark-2-iteration.bin --llvm-profdata llvm-profdata --trace-fst
