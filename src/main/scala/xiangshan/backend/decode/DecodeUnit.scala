@@ -863,7 +863,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     SvinvalDecode.table ++
     HypervisorDecode.table ++
     VecDecoder.table ++
-    OptionWrapper(HasMatrixExtension, MatrixDecoder.table).getOrElse(Array()) ++
+    OptionWrapper(HasMatrixExtension, MatrixDecoder.table(MatrixExtension)).getOrElse(Array()) ++
     ZicondDecode.table ++
     ZimopDecode.table ++
     ZfaDecode.table

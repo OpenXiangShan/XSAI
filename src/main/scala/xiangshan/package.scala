@@ -644,6 +644,8 @@ package object xiangshan {
     def mma_fp16_fp16 = "b0_1_000_01_01".U
     def mma_fp16_fp32 = "b0_1_000_01_10".U
     def mma_bf16_fp32 = "b0_1_100_01_10".U
+    def mma_tf32_fp32 = "b0_1_001_10_10".U
+    def mma_fp32_fp32 = "b0_1_000_10_10".U
 
     def mma_int8_int32    = "b0_0_011_00_10".U
     def mma_uint8_int32   = "b0_0_000_00_10".U
