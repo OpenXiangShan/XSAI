@@ -104,6 +104,9 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   val s0_isFirstIssue  = Wire(Bool())
   val s0_ld_rep        = Wire(Bool())
   val s0_sched_idx     = Wire(UInt())
+  val s0_stride        = Wire(UInt(PAddrBits.W))
+  val s0_mtile0        = Wire(UInt(XLEN.W))
+  val s0_mtile1        = Wire(UInt(XLEN.W))
   val s0_can_go        = s1_ready
   val s0_fire          = s0_valid && s0_can_go
   val s0_out           = Wire(new MlsqWriteBundle)
@@ -167,9 +170,12 @@ class MlsUnit(implicit p: Parameters) extends XSModule
     s0_isFirstIssue  := false.B
     s0_ld_rep        := false.B
     s0_sched_idx     := 0.U
+    s0_stride        := 0.U
+    s0_mtile0        := 0.U
+    s0_mtile1        := 0.U
   }
 
-  def fromNormalReplaySource(src: LsPipelineBundle) = {
+  def fromNormalReplaySource(src: MlsPipelineBundle) = {
     s0_vaddr         := src.vaddr
     s0_uop           := src.uop
     s0_try_l2l       := false.B
@@ -178,6 +184,9 @@ class MlsUnit(implicit p: Parameters) extends XSModule
     s0_isFirstIssue  := false.B
     s0_ld_rep        := true.B
     s0_sched_idx     := src.schedIndex
+    s0_stride        := src.stride
+    s0_mtile0        := src.mtile0
+    s0_mtile1        := src.mtile1
   }
 
   def fromIntIssueSource(src: MemExuInput) = {
@@ -189,6 +198,9 @@ class MlsUnit(implicit p: Parameters) extends XSModule
     s0_isFirstIssue  := true.B
     s0_ld_rep        := false.B
     s0_sched_idx     := 0.U
+    s0_stride        := src.src(1)
+    s0_mtile0        := src.src(2)
+    s0_mtile1        := src.src(3)
   }
 
   // set default
@@ -209,34 +221,34 @@ class MlsUnit(implicit p: Parameters) extends XSModule
     MldstOpType.isMatrixC(s0_uop.fuOpType)
   )
   val illegal_mtilem = Mux1H(Seq(
-    MldstOpType.isMatrixA(s0_uop.fuOpType)  -> (io.lsin.bits.src(2) > ROWNUM.U),
+    MldstOpType.isMatrixA(s0_uop.fuOpType)  -> (s0_mtile0 > ROWNUM.U),
     MldstOpType.isMatrixB(s0_uop.fuOpType)  -> false.B,
-    MldstOpType.isMatrixC(s0_uop.fuOpType)  -> (io.lsin.bits.src(2) > ROWNUM.U),
+    MldstOpType.isMatrixC(s0_uop.fuOpType)  -> (s0_mtile0 > ROWNUM.U),
     MldstOpType.isWholeReg(s0_uop.fuOpType) -> false.B,
   ))
   val illegal_mtilen = Mux1H(Seq(
     MldstOpType.isMatrixA(s0_uop.fuOpType) -> false.B,
-    MldstOpType.isMatrixB(s0_uop.fuOpType) -> (io.lsin.bits.src(3) > ROWNUM.U),
+    MldstOpType.isMatrixB(s0_uop.fuOpType) -> (s0_mtile1 > ROWNUM.U),
     MldstOpType.isMatrixC(s0_uop.fuOpType) -> Mux1H(Seq(
-      MldstOpType.isE8(s0_uop.fuOpType)  -> (io.lsin.bits.src(3) > (ARLEN / 8).U),
-      MldstOpType.isE16(s0_uop.fuOpType) -> (io.lsin.bits.src(3) > (ARLEN / 16).U),
-      MldstOpType.isE32(s0_uop.fuOpType) -> (io.lsin.bits.src(3) > (ARLEN / 32).U),
-      MldstOpType.isE64(s0_uop.fuOpType) -> (io.lsin.bits.src(3) > (ARLEN / 64).U),
+      MldstOpType.isE8(s0_uop.fuOpType)  -> (s0_mtile1 > (ARLEN / 8).U),
+      MldstOpType.isE16(s0_uop.fuOpType) -> (s0_mtile1 > (ARLEN / 16).U),
+      MldstOpType.isE32(s0_uop.fuOpType) -> (s0_mtile1 > (ARLEN / 32).U),
+      MldstOpType.isE64(s0_uop.fuOpType) -> (s0_mtile1 > (ARLEN / 64).U),
     )),
     MldstOpType.isWholeReg(s0_uop.fuOpType) -> false.B,
   ))
   val illegal_mtilek = Mux1H(Seq(
     MldstOpType.isMatrixA(s0_uop.fuOpType) -> Mux1H(Seq(
-      MldstOpType.isE8(s0_uop.fuOpType)  -> (io.lsin.bits.src(3) > (TRLEN / 8).U),
-      MldstOpType.isE16(s0_uop.fuOpType) -> (io.lsin.bits.src(3) > (TRLEN / 16).U),
-      MldstOpType.isE32(s0_uop.fuOpType) -> (io.lsin.bits.src(3) > (TRLEN / 32).U),
-      MldstOpType.isE64(s0_uop.fuOpType) -> (io.lsin.bits.src(3) > (TRLEN / 64).U),
+      MldstOpType.isE8(s0_uop.fuOpType)  -> (s0_mtile1 > (TRLEN / 8).U),
+      MldstOpType.isE16(s0_uop.fuOpType) -> (s0_mtile1 > (TRLEN / 16).U),
+      MldstOpType.isE32(s0_uop.fuOpType) -> (s0_mtile1 > (TRLEN / 32).U),
+      MldstOpType.isE64(s0_uop.fuOpType) -> (s0_mtile1 > (TRLEN / 64).U),
     )),
     MldstOpType.isMatrixB(s0_uop.fuOpType) -> Mux1H(Seq(
-      MldstOpType.isE8(s0_uop.fuOpType)  -> (io.lsin.bits.src(2) > (TRLEN / 8).U),
-      MldstOpType.isE16(s0_uop.fuOpType) -> (io.lsin.bits.src(2) > (TRLEN / 16).U),
-      MldstOpType.isE32(s0_uop.fuOpType) -> (io.lsin.bits.src(2) > (TRLEN / 32).U),
-      MldstOpType.isE64(s0_uop.fuOpType) -> (io.lsin.bits.src(2) > (TRLEN / 64).U),
+      MldstOpType.isE8(s0_uop.fuOpType)  -> (s0_mtile0 > (TRLEN / 8).U),
+      MldstOpType.isE16(s0_uop.fuOpType) -> (s0_mtile0 > (TRLEN / 16).U),
+      MldstOpType.isE32(s0_uop.fuOpType) -> (s0_mtile0 > (TRLEN / 32).U),
+      MldstOpType.isE64(s0_uop.fuOpType) -> (s0_mtile0 > (TRLEN / 64).U),
     )),
     MldstOpType.isMatrixC(s0_uop.fuOpType) -> false.B,
     MldstOpType.isWholeReg(s0_uop.fuOpType) -> false.B,
@@ -248,9 +260,9 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   s0_out.isFirstIssue  := s0_isFirstIssue
   s0_out.hasROBEntry   := s0_has_rob_entry
   s0_out.isLoadReplay  := s0_ld_rep
-  s0_out.stride        := io.lsin.bits.src(1)
-  s0_out.mtile0        := io.lsin.bits.src(2)
-  s0_out.mtile1        := io.lsin.bits.src(3)
+  s0_out.stride        := s0_stride
+  s0_out.mtile0        := s0_mtile0
+  s0_out.mtile1        := s0_mtile1
   s0_out.uop.exceptionVec(illegalInstr)        := illegal_regidx || illegal_mtilem || illegal_mtilen || illegal_mtilek
   s0_out.uop.exceptionVec(loadAddrMisaligned)  := !s0_addr_aligned && s0_ld_flow
   s0_out.uop.exceptionVec(storeAddrMisaligned) := !s0_addr_aligned && !s0_ld_flow
