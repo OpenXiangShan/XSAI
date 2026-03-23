@@ -36,7 +36,7 @@ import device.EnableJtag
 import huancun._
 import coupledL2._
 import coupledL2.prefetch._
-import cute.{CuteParamsKey, CuteParams, CuteDebugParams, Cutev3extParams}
+import cute.{CuteParamsKey, CuteParams, CuteDebugParams, Cutev3extParams, MatrixIsaParams}
 
 class BaseConfig(n: Int) extends Config((site, here, up) => {
   case XLen => 64
@@ -246,7 +246,14 @@ class MinimalMatrixConfig(n: Int) extends Config(
   new MinimalConfig(n).alter((site, here, up) => {
     case XSTileKey => up(XSTileKey).map { p =>
       p.copy(
-        HasMatrixExtension = true,
+        MatrixExtension = MatrixIsaParams(
+          enableInt8Int32 = true,
+          enableFp8Fp32 = true,
+          enableFp8Fp16 = true,
+          enableFp8Bf16 = true,
+          enableFp16Fp16 = true,
+          enableBf16Fp32 = true,
+        ),
         l2tlbParameters = p.l2tlbParameters.copy(
           dfilterSize = 48
         ),
@@ -264,6 +271,7 @@ class MinimalMatrixConfig(n: Int) extends Config(
         v3config = Cutev3extParams(
           TaskCtrl_AutoClear = true,
         ),
+        MatrixExtension = site(XSTileKey).head.MatrixExtension,
         L2NBanks = site(XSTileKey).head.L2NBanks,
       )
   })
@@ -496,7 +504,14 @@ class DefaultMatrixConfig(n: Int = 1) extends Config(
   new DefaultConfig(n).alter((site, here, up) => {
     case XSTileKey => up(XSTileKey).map { p =>
       p.copy(
-        HasMatrixExtension = true,
+        MatrixExtension = MatrixIsaParams(
+          enableInt8Int32 = true,
+          enableFp8Fp32 = true,
+          enableFp8Fp16 = true,
+          enableFp8Bf16 = true,
+          enableFp16Fp16 = true,
+          enableBf16Fp32 = true,
+        ),
         l2tlbParameters = p.l2tlbParameters.copy(
           dfilterSize = 48
         ),
@@ -514,6 +529,7 @@ class DefaultMatrixConfig(n: Int = 1) extends Config(
         v3config = Cutev3extParams(
           TaskCtrl_AutoClear = true,
         ),
+        MatrixExtension = site(XSTileKey).head.MatrixExtension,
         L2NBanks = site(XSTileKey).head.L2NBanks,
       )
   })

@@ -43,6 +43,7 @@ import huancun.debug._
 import xiangshan.cache.wpu.WPUParameters
 import coupledL2._
 import coupledL2.tl2chi._
+import cute.MatrixIsaParams
 import xiangshan.backend.datapath.WakeUpConfig
 import xiangshan.mem.prefetch.{PrefetcherParams, SMSParams}
 
@@ -70,7 +71,8 @@ case class XSCoreParameters
   HasMExtension: Boolean = true,
   HasCExtension: Boolean = true,
   HasHExtension: Boolean = true,
-  HasMatrixExtension: Boolean = false,
+  // Matrix ISA capability set. Keep detailed precision controls here.
+  MatrixExtension: MatrixIsaParams = MatrixIsaParams(),
   HasDiv: Boolean = true,
   HasICache: Boolean = true,
   HasDCache: Boolean = true,
@@ -615,6 +617,8 @@ case class XSCoreParameters
     ItypeWidth     = 4,
     IlastsizeWidth = 1,
   )
+
+  def HasMatrixExtension: Boolean = MatrixExtension.enableMatrix
 }
 
 case object DebugOptionsKey extends Field[DebugOptions]
@@ -685,7 +689,8 @@ trait HasXSParameter {
   def HasMExtension = coreParams.HasMExtension
   def HasCExtension = coreParams.HasCExtension
   def HasHExtension = coreParams.HasHExtension
-  def HasMatrixExtension = coreParams.HasMatrixExtension
+  def MatrixExtension = coreParams.MatrixExtension
+  def HasMatrixExtension = MatrixExtension.enableMatrix
   def EnableSv48 = coreParams.EnableSv48
   def HasDiv = coreParams.HasDiv
   def HasIcache = coreParams.HasICache
