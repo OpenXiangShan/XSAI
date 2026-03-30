@@ -8,7 +8,7 @@ import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import org.chipsalliance.cde.config._
 import coupledL2.MatrixDataBundle
-import utility.ChiselDB
+import utility.{ChiselDB, TLLoggerM}
 import xiangshan.HasXSParameter
 
 /**
@@ -156,6 +156,15 @@ class XSCuteImp(wrapper: XSCute)(implicit p: Parameters) extends LazyModuleImp(w
     val matrix_data_in_vec = io.matrix_data_in
     val matrix_data_arb = Module(new Arbiter(matrix_data_in_vec(0).bits.cloneType, matrix_data_in_vec.length))
     matrix_data_arb.io.in <> matrix_data_in_vec
+
+    val enableTLLog = !env.FPGAPlatform && env.AlwaysBasicDB
+    require(wrapper.node.out.size == 1)
+    val logm = Module(new TLLoggerM(s"L2_CUTE_${coreParams.HartId}", wrapper.node.out.head._2, enableTLLog))
+    logm.io.a.valid := wrapper.node.out.head._1.a.valid
+    logm.io.a.bits := wrapper.node.out.head._1.a.bits
+    logm.io.m.valid := matrix_data_arb.io.out.valid
+    logm.io.m.bits.source := matrix_data_arb.io.out.bits.sourceId
+    logm.io.m.bits.data := matrix_data_arb.io.out.bits.data.data
 
     tl_data_in.valid := matrix_data_arb.io.out.valid
     tl_data_in.bits := 0.U.asTypeOf(tl_data_in.bits)
