@@ -242,10 +242,34 @@ class MinimalConfig(n: Int = 1) extends Config(
   })
 )
 
+/** Derive CUTE `Tensor_MN` / `Tensor_K` from XiangShan `XSCoreParameters` matrix geometry (`TLEN`, `TRLEN`, `MELEN`).
+  *
+  *  - `Tensor_MN = TLEN / TRLEN` (matches core `ROWNUM` and CSR-visible extent along M/N).
+  *  - `Tensor_K = TRLEN / 8` (K in 8-bit elements; `TRLEN` is in bits).
+  *
+  * `MELEN` is part of the same matrix model in `Parameters.scala`; override it via YAML/Config together with
+  * `TLEN`/`TRLEN` so CSR, execution units, and CUTE stay consistent.
+  *
+  * Further validation (power-of-two `Tensor_MN`/`Tensor_K`, `ReduceGroupSize == 2`, `outsideDataWidthByte <= Tensor_K`, …)
+  * is left to `cute.CuteParams` constructor `require`s — not duplicated here.
+  */
+private[top] object MatrixCuteTensorDims {
+  def fromXcore(xp: XSCoreParameters): (Int, Int) = {
+    require(xp.TLEN % xp.TRLEN == 0, s"TLEN must be divisible by TRLEN, got TLEN=${xp.TLEN} TRLEN=${xp.TRLEN}")
+    require(xp.TRLEN % 8 == 0, s"TRLEN (bits) must be divisible by 8, got TRLEN=${xp.TRLEN}")
+    val tensorMn = xp.TLEN / xp.TRLEN
+    val tensorK = xp.TRLEN / 8
+    (tensorMn, tensorK)
+  }
+}
+
 class MinimalMatrixConfig(n: Int) extends Config(
   new MinimalConfig(n).alter((site, here, up) => {
     case XSTileKey => up(XSTileKey).map { p =>
       p.copy(
+        TLEN = 64 * 64 * 8,
+        TRLEN = 64 * 8,
+        MELEN = 32,
         MatrixExtension = MatrixIsaParams(
           enableInt8Int32 = true,
           enableFp8Fp32 = true,
@@ -265,14 +289,19 @@ class MinimalMatrixConfig(n: Int) extends Config(
     }
     case MatAccKey => MatAcc.CUTE
     case CuteParamsKey =>
-      CuteParams.CUTE_8Tops_128SCP.copy(
+      val xp = site(XSTileKey).head
+      val cuteBase = CuteParams.CUTE_2Tops
+      val (tensorMn, tensorK) = MatrixCuteTensorDims.fromXcore(xp)
+      cuteBase.copy(
+        Tensor_MN = tensorMn,
+        Tensor_K = tensorK,
         Debug = CuteDebugParams.NoDebug,
         EnableDifftest = site(DebugOptionsKey).EnableDifftest,
         v3config = Cutev3extParams(
           TaskCtrl_AutoClear = true,
         ),
-        MatrixExtension = site(XSTileKey).head.MatrixExtension,
-        L2NBanks = site(XSTileKey).head.L2NBanks,
+        MatrixExtension = xp.MatrixExtension,
+        L2NBanks = xp.L2NBanks,
       )
   })
 )
@@ -504,6 +533,9 @@ class DefaultMatrixConfig(n: Int = 1) extends Config(
   new DefaultConfig(n).alter((site, here, up) => {
     case XSTileKey => up(XSTileKey).map { p =>
       p.copy(
+        TLEN = 128 * 64 * 8,
+        TRLEN = 64 * 8,
+        MELEN = 32,
         MatrixExtension = MatrixIsaParams(
           enableInt8Int32 = true,
           enableFp8Fp32 = true,
@@ -523,14 +555,53 @@ class DefaultMatrixConfig(n: Int = 1) extends Config(
     }
     case MatAccKey => MatAcc.CUTE
     case CuteParamsKey =>
-      CuteParams.CUTE_8Tops_128SCP.copy(
+      val xp = site(XSTileKey).head
+      val cuteBase = CuteParams.CUTE_8Tops_128SCP
+      val (tensorMn, tensorK) = MatrixCuteTensorDims.fromXcore(xp)
+      cuteBase.copy(
+        Tensor_MN = tensorMn,
+        Tensor_K = tensorK,
         Debug = CuteDebugParams.NoDebug,
         EnableDifftest = site(DebugOptionsKey).EnableDifftest,
         v3config = Cutev3extParams(
           TaskCtrl_AutoClear = true,
         ),
-        MatrixExtension = site(XSTileKey).head.MatrixExtension,
-        L2NBanks = site(XSTileKey).head.L2NBanks,
+        MatrixExtension = xp.MatrixExtension,
+        L2NBanks = xp.L2NBanks,
+      )
+  })
+)
+
+class FpgaDiffDefaultMatrixConfig(n: Int = 1) extends Config(
+  new DefaultMatrixConfig(n).alter((site, here, up) => {
+    case DebugOptionsKey =>
+      up(DebugOptionsKey).copy(
+        AlwaysBasicDiff = true,
+        AlwaysBasicDB = false,
+      )
+    case SoCParamsKey =>
+      up(SoCParamsKey).copy(
+        UseXSTileDiffTop = true,
+        L3CacheParamsOpt = Some(up(SoCParamsKey).L3CacheParamsOpt.get.copy(
+          sramClkDivBy2 = false,
+        )),
+      )
+  })
+)
+
+class FpgaDiffMinimalMatrixConfig(n: Int = 1) extends Config(
+  new MinimalMatrixConfig(n).alter((site, here, up) => {
+    case DebugOptionsKey =>
+      up(DebugOptionsKey).copy(
+        AlwaysBasicDiff = true,
+        AlwaysBasicDB = false,
+      )
+    case SoCParamsKey =>
+      up(SoCParamsKey).copy(
+        UseXSTileDiffTop = true,
+        L3CacheParamsOpt = Some(up(SoCParamsKey).L3CacheParamsOpt.get.copy(
+          sramClkDivBy2 = false,
+        )),
       )
   })
 )

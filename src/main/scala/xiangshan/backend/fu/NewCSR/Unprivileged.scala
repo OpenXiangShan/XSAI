@@ -11,10 +11,36 @@ import xiangshan.backend.fu.vector.Bundles._
 import xiangshan.backend.fu.NewCSR.CSRConfig._
 import xiangshan.backend.fu.fpu.Bundles.{Fflags, Frm}
 import xiangshan.backend.fu.NewCSR.CSREnumTypeImplicitCast._
+import xiangshan.XSCoreParameters
 
 import scala.collection.immutable.SeqMap
 
 trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
+
+  // Matrix CSR read-only fields: enum reset literals follow p(XSCoreParamsKey) (same as HasXSParameter.coreParams).
+  private val matrixCp: XSCoreParameters = self.coreParams
+
+  object XmisaField extends CSREnum with ROApply {
+    val init = Value(0x2e6.U)
+  }
+
+  object XtlenbField extends CSREnum with ROApply {
+    val init = Value((matrixCp.TLEN / 8).U)
+  }
+
+  object XtrlenbField extends CSREnum with ROApply {
+    val init = Value((matrixCp.TRLEN / 8).U)
+  }
+
+  object XalenbField extends CSREnum with ROApply {
+    val init = Value(
+      (((matrixCp.TLEN / matrixCp.TRLEN) * (matrixCp.TLEN / matrixCp.TRLEN) * matrixCp.MELEN) / 8).U
+    )
+  }
+
+  object MtokField extends CSREnum with ROApply {
+    val init = Value(matrixCp.MTOK.U)
+  }
 
   val fcsr = Module(new CSRModule("Fcsr", new CSRBundle {
     val NX = WARL(0, wNoFilter)
@@ -397,26 +423,6 @@ class CSRFFlagsBundle extends CSRBundle {
 
 object VlenbField extends CSREnum with ROApply {
   val init = Value((VLEN / 8).U)
-}
-
-object XmisaField extends CSREnum with ROApply {
-  val init = Value(0x2e6.U)
-}
-
-object XtlenbField extends CSREnum with ROApply {
-  val init = Value((TLEN / 8).U)
-}
-
-object XtrlenbField extends CSREnum with ROApply {
-  val init = Value((TRLEN / 8).U)
-}
-
-object XalenbField extends CSREnum with ROApply {
-  val init = Value(((TLEN / TRLEN) * (TLEN / TRLEN) * MELEN / 8).U)
-}
-
-object MtokField extends CSREnum with ROApply {
-  val init = Value(MTOK.U)
 }
 
 trait HasMHPMSink { self: CSRModule[_] =>
