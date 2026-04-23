@@ -26,7 +26,7 @@ trait CSRAIA { self: NewCSR with HypervisorLevel =>
     .setAddr(CSRs.miselect)
 
   val mireg = Module(new CSRModule("Mireg") with HasIregSink {
-    rdata := iregRead.mireg
+    regOut := iregRead.mireg
   })
     .setAddr(CSRs.mireg)
 
@@ -53,7 +53,7 @@ trait CSRAIA { self: NewCSR with HypervisorLevel =>
     .setAddr(CSRs.siselect)
 
   val sireg = Module(new CSRModule("Sireg") with HasIregSink {
-    rdata := iregRead.sireg
+    regOut := iregRead.sireg
   })
     .setAddr(CSRs.sireg)
 
@@ -78,7 +78,7 @@ trait CSRAIA { self: NewCSR with HypervisorLevel =>
     .setAddr(CSRs.vsiselect)
 
   val vsireg    = Module(new CSRModule("VSireg") with HasIregSink {
-    rdata := iregRead.sireg
+    regOut := iregRead.sireg
   })
     .setAddr(CSRs.vsireg)
 
