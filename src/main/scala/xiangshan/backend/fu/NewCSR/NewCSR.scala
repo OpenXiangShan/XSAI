@@ -48,13 +48,6 @@ object CSRConfig {
   // log2Up(128 + 1), hold 0~128
   final val VlWidth = 8
 
-  // Matrix extension
-  // TODO: use XSParams to configure them
-  final val MELEN = 32
-  final val TLEN  = 0x10000
-  final val TRLEN = 0x00200
-  final val MTOK = 32
-
   // final val MlWidth = 8
 
   final val PAddrWidth = 48
@@ -1555,6 +1548,11 @@ class NewCSR(implicit val p: Parameters) extends Module
 
   // Always instantiate basic difftest modules.
   if (env.AlwaysBasicDiff || env.EnableDifftest) {
+    // Matrix checker constants for C++ DiffTest, derived from hardware matrix geometry.
+    // Keep these in one path so matrix.cpp can follow TLEN/TRLEN automatically.
+    DifftestModule.addCppMacro("CONFIG_DIFF_AMU_ARLEN", BigInt(TLEN) / 8)
+    DifftestModule.addCppMacro("CONFIG_DIFF_AMU_TRLEN", BigInt(TRLEN))
+
     // Delay trap passed to difftest until VecExcpMod is not busy
     val pendingTrap = RegInit(false.B)
     when (hasTrap) {
