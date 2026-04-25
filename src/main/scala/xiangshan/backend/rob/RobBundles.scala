@@ -69,7 +69,7 @@ object RobBundles extends HasCircularQueuePtrHelper {
     val needAmuCtrl = OptionWrapper(HasMatrixExtension, Bool())
     val amuCtrl = OptionWrapper(HasMatrixExtension, new AmuCtrlIO)
     // data end
-    
+
     // trace
     val traceBlockInPipe = new TracePipe(IretireWidthInPipe)
     // status begin
@@ -314,6 +314,7 @@ class RobExceptionInfo(implicit p: Parameters) extends XSBundle {
   val exceptionVec = ExceptionVec()
   val isFetchMalAddr = Bool()
   val flushPipe = Bool()
+  val satpFlushPipe = Bool()
   val isVset = Bool()
   val needAmuCtrl = OptionWrapper(HasMatrixExtension, Bool())
   val replayInst = Bool() // redirect to that inst itself
