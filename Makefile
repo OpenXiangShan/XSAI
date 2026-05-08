@@ -44,7 +44,8 @@ TOP_V = $(RTL_DIR)/$(TOP).$(RTL_SUFFIX)
 SIM_TOP_V = $(RTL_DIR)/$(SIM_TOP).$(RTL_SUFFIX)
 JAR = $(BUILD_DIR)/xsgen.jar
 
-SCALA_FILE = $(shell find ./src/main/scala -name '*.scala')
+SCALA_DIRS = ./src/main/scala $(wildcard ./CUTE/src/main/scala)
+SCALA_FILE = $(shell find $(SCALA_DIRS) -name '*.scala')
 TEST_FILE = $(shell find ./src/test/scala -name '*.scala')
 
 MEM_GEN = ./scripts/vlsi_mem_gen
