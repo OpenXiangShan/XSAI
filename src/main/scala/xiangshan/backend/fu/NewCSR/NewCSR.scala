@@ -1550,7 +1550,7 @@ class NewCSR(implicit val p: Parameters) extends Module
   if (env.AlwaysBasicDiff || env.EnableDifftest) {
     // Matrix checker constants for C++ DiffTest, derived from hardware matrix geometry.
     // Keep these in one path so matrix.cpp can follow TLEN/TRLEN automatically.
-    DifftestModule.addCppMacro("CONFIG_DIFF_AMU_ARLEN", BigInt(TLEN) / 8)
+    DifftestModule.addCppMacro("CONFIG_DIFF_AMU_ARLEN", BigInt(TLEN / TRLEN * MELEN))
     DifftestModule.addCppMacro("CONFIG_DIFF_AMU_TRLEN", BigInt(TRLEN))
 
     // Delay trap passed to difftest until VecExcpMod is not busy
