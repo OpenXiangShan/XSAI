@@ -7,6 +7,7 @@ import freechips.rocketchip.rocket.CSRs
 import xiangshan.backend.fu.NewCSR.CSRBundles.{Counteren, PrivState}
 import xiangshan.backend.fu.NewCSR.CSRDefines._
 import org.chipsalliance.cde.config.Parameters
+import xiangshan.backend.fu.util.CSRConst._
 import system.HasSoCParameter
 
 class CSRPermitModule(implicit p: Parameters) extends Module {
@@ -186,6 +187,8 @@ class MLevelPermitModule extends Module {
   private val tvm = io.in.status.tvm
 
   private val mcounteren = io.in.xcounteren.mcounteren
+  private val ameMcounteren = io.in.xcounteren.ameMcounteren
+  private val ameScounteren = io.in.xcounteren.ameScounteren
 
   private val mstateen0 = io.in.xstateen.mstateen0
   private val mstateen1 = io.in.xstateen.mstateen1
@@ -211,6 +214,7 @@ class MLevelPermitModule extends Module {
 
   private val csrIsRO = addr(11, 10) === "b11".U
   private val csrIsHPM = addr >= CSRs.cycle.U && addr <= CSRs.hpmcounter31.U
+  private val csrIsAmeURO = addr === AmeCycle.U || addr === AmeInstret.U || (addr >= AmeHpmcounter3.U && addr <= AmeHpmcounter31.U)
   private val csrIsFp = Seq(CSRs.fflags, CSRs.frm, CSRs.fcsr).map(_.U === addr).reduce(_ || _)
   private val csrIsVec = Seq(CSRs.vstart, CSRs.vxsat, CSRs.vxrm, CSRs.vcsr, CSRs.vtype).map(_.U === addr).reduce(_ || _)
   private val csrIsWritableVec = Seq(CSRs.vstart, CSRs.vxsat, CSRs.vxrm, CSRs.vcsr).map(_.U === addr).reduce(_ || _)
@@ -218,6 +222,7 @@ class MLevelPermitModule extends Module {
   private val csrIsWritableMatrix = Seq(CSRs.xmcsr, CSRs.xmxrm, CSRs.xmsat, CSRs.xmfflags, CSRs.xmfrm, CSRs.xmsaten).map(_.U === addr).reduce(_ || _)
 
   private val counterAddr = addr(4, 0) // 32 counters
+  private val ameCounterAddr = Mux(addr === AmeCycle.U, 0.U, Mux(addr === AmeInstret.U, 2.U, addr(4, 0)))
 
   private val rwIllegal = csrIsRO && wen
 
@@ -234,6 +239,11 @@ class MLevelPermitModule extends Module {
   private val rwStimecmp_EX_II = !privState.isModeM && (!mcounterenTM || !menvcfgSTCE) && (addr === CSRs.vstimecmp.U || addr === CSRs.stimecmp.U)
 
   private val accessHPM_EX_II = csrIsHPM && !privState.isModeM && !mcounteren(counterAddr)
+  private val accessAmeURO_EX_II = csrIsAmeURO && (
+      privState.isModeHS && !ameMcounteren(ameCounterAddr) ||
+      privState.isModeHU && (!ameMcounteren(ameCounterAddr) || !ameScounteren(ameCounterAddr))
+    )
+  private val accessAmeScountovf_EX_II = addr === AmeScountovf.U && privState.isModeHU
 
   private val rwSatp_EX_II = privState.isModeHS && tvm && (addr === CSRs.satp.U || addr === CSRs.hgatp.U)
 
@@ -294,7 +304,17 @@ class MLevelPermitModule extends Module {
   // [0x800, 0x8ff], [0xcc0, 0xcff]
   private val csrIsUCustom   = (addr(11, 8) === "b1000".U) || (addr(11, 6) === "b110011".U)
   private val allCustom      = csrIsHVSCustom || csrIsSCustom || csrIsUCustom
-  private val accessCustom_EX_II = allCustom && !privState.isModeM && !mstateen0.C.asBool
+  private val csrIsAmeCounterCSR = (
+    addr === AmeMcounteren.U || addr === AmeScounteren.U || addr === AmeHcounteren.U ||
+    addr === AmeMcountinhibit.U ||
+    (addr >= AmeMhpmevent3.U && addr <= AmeMhpmevent31.U) ||
+    (addr >= AmeMhpmcounter3.U && addr <= AmeMhpmcounter31.U) ||
+    addr === AmeMcycle.U || addr === AmeMinstret.U ||
+    addr === AmeCycle.U || addr === AmeInstret.U ||
+    (addr >= AmeHpmcounter3.U && addr <= AmeHpmcounter31.U) ||
+    addr === AmeScountovf.U
+  )
+  private val accessCustom_EX_II = allCustom && !csrIsAmeCounterCSR && !privState.isModeM && !mstateen0.C.asBool
 
   private val xstateControlAccess_EX_II = accessStateen_EX_II || accessEnvcfg_EX_II || accessIND_EX_II || accessAIA_EX_II ||
     accessTopie_EX_II || accessContext_EX_II || accessCustom_EX_II
@@ -303,7 +323,7 @@ class MLevelPermitModule extends Module {
    */
 
   io.out.mLevelPermit_EX_II := rwIllegal || fpVecMatrix_EX_II || rwStimecmp_EX_II ||
-    accessHPM_EX_II || rwSatp_EX_II || rwStopei_EX_II || xstateControlAccess_EX_II
+    accessHPM_EX_II || accessAmeURO_EX_II || accessAmeScountovf_EX_II || rwSatp_EX_II || rwStopei_EX_II || xstateControlAccess_EX_II
   io.out.hasLegalWriteFcsr := wen && csrIsFp && !fsEffectiveOff
   io.out.hasLegalWriteVcsr := wen && csrIsWritableVec && !vsEffectiveOff
   io.out.hasLegalWriteMcsr := wen && csrIsWritableMatrix && !msEffectiveOff
@@ -337,7 +357,8 @@ class SLevelPermitModule extends Module {
   private val accessHPM_EX_II = csrIsHPM && privState.isModeHU && !scounteren(counterAddr)
 
   private val csrIsUCustom   = (addr(11, 8) === "b1000".U) || (addr(11, 6) === "b110011".U)
-  private val accessCustom_EX_II = csrIsUCustom && privState.isModeHU && !sstateen0.C.asBool
+  private val csrIsAmeURO = addr === AmeCycle.U || addr === AmeInstret.U || (addr >= AmeHpmcounter3.U && addr <= AmeHpmcounter31.U)
+  private val accessCustom_EX_II = csrIsUCustom && !csrIsAmeURO && privState.isModeHU && !sstateen0.C.asBool
 
   io.out.sLevelPermit_EX_II := accessHPM_EX_II || accessCustom_EX_II
 }
@@ -417,9 +438,12 @@ class VirtualLevelPermitModule(implicit val p: Parameters) extends Module with H
     io.in.status.vgein,
   )
 
-  private val (hcounteren, scounteren) = (
+  private val (hcounteren, scounteren, ameMcounteren, ameHcounteren, ameScounteren) = (
     io.in.xcounteren.hcounteren,
     io.in.xcounteren.scounteren,
+    io.in.xcounteren.ameMcounteren,
+    io.in.xcounteren.ameHcounteren,
+    io.in.xcounteren.ameScounteren,
   )
 
   private val hcounterenTM = hcounteren(1)
@@ -439,7 +463,9 @@ class VirtualLevelPermitModule(implicit val p: Parameters) extends Module with H
   private val hvictlVTI = io.in.aia.hvictlVTI
 
   private val csrIsHPM = addr >= CSRs.cycle.U && addr <= CSRs.hpmcounter31.U
+  private val csrIsAmeURO = addr === AmeCycle.U || addr === AmeInstret.U || (addr >= AmeHpmcounter3.U && addr <= AmeHpmcounter31.U)
   private val counterAddr = addr(4, 0) // 32 counters
+  private val ameCounterAddr = Mux(addr === AmeCycle.U, 0.U, Mux(addr === AmeInstret.U, 2.U, addr(4, 0)))
 
   private val rwSatp_EX_VI = privState.isModeVS && vtvm && (addr === CSRs.satp.U)
 
@@ -455,6 +481,11 @@ class VirtualLevelPermitModule(implicit val p: Parameters) extends Module with H
       privState.isModeVS && !hcounteren(counterAddr) ||
       privState.isModeVU && (!hcounteren(counterAddr) || !scounteren(counterAddr))
     )
+  private val accessAmeURO_EX_VI = csrIsAmeURO && (
+      privState.isModeVS && (!ameMcounteren(ameCounterAddr) || !ameHcounteren(ameCounterAddr)) ||
+      privState.isModeVU && (!ameMcounteren(ameCounterAddr) || !ameHcounteren(ameCounterAddr) || !ameScounteren(ameCounterAddr))
+    )
+  private val accessAmeScountovf_EX_VI = addr === AmeScountovf.U && privState.isModeVU
 
   /**
    * Sm/Ssstateen begin
@@ -496,14 +527,25 @@ class VirtualLevelPermitModule(implicit val p: Parameters) extends Module with H
   private val csrIsSCustom   = (addr(11, 10) =/= "b00".U) && (addr(9, 8) === "b01".U) && (addr(7, 6) === "b11".U)
   // [0x800, 0x8ff], [0xcc0, 0xcff]
   private val csrIsUCustom   = (addr(11, 8) === "b1000".U) || (addr(11, 6) === "b110011".U)
-  private val accessCustom_EX_VI = (csrIsSCustom || csrIsUCustom) && privState.isVirtual && !hstateen0.C.asBool ||
-    csrIsUCustom && privState.isModeVU && hstateen0.C.asBool && !sstateen0.C.asBool
+  private val csrIsAmeCounterCSR = (
+    addr === AmeMcounteren.U || addr === AmeScounteren.U || addr === AmeHcounteren.U ||
+    addr === AmeMcountinhibit.U ||
+    (addr >= AmeMhpmevent3.U && addr <= AmeMhpmevent31.U) ||
+    (addr >= AmeMhpmcounter3.U && addr <= AmeMhpmcounter31.U) ||
+    addr === AmeMcycle.U || addr === AmeMinstret.U ||
+    addr === AmeCycle.U || addr === AmeInstret.U ||
+    (addr >= AmeHpmcounter3.U && addr <= AmeHpmcounter31.U) ||
+    addr === AmeScountovf.U
+  )
+  private val accessCustom_EX_VI = (csrIsSCustom || csrIsUCustom) && !csrIsAmeCounterCSR && privState.isVirtual && !hstateen0.C.asBool ||
+    csrIsUCustom && !csrIsAmeCounterCSR && privState.isModeVU && hstateen0.C.asBool && !sstateen0.C.asBool
 
   private val xstateControlAccess_EX_VI = accessStateen_EX_VI || accessEnvcfg_EX_VI || accessIND_EX_VI || accessAIA_EX_VI ||
     accessTopie_EX_VI || accessContext_EX_VI || accessCustom_EX_VI
 
   io.out.virtualLevelPermit_EX_II := rwVStopei_EX_II
-  io.out.virtualLevelPermit_EX_VI := rwSatp_EX_VI || rwStopei_EX_VI || rwSip_Sie_EX_VI || rwStimecmp_EX_VI || accessHPM_EX_VI || xstateControlAccess_EX_VI
+  io.out.virtualLevelPermit_EX_VI := rwSatp_EX_VI || rwStopei_EX_VI || rwSip_Sie_EX_VI || rwStimecmp_EX_VI ||
+    accessHPM_EX_VI || accessAmeURO_EX_VI || accessAmeScountovf_EX_VI || xstateControlAccess_EX_VI
 }
 
 class IndirectCSRPermitModule extends Module {
@@ -620,6 +662,9 @@ class xcounterenIO extends Bundle {
   // Accessing PMC from **HU level** will trap EX_II, if s[x]=0
   // Accessing PMC from **VU level** will trap EX_VI, if m[x]=1 && h[x]=1 && s[x]=0
   val scounteren = UInt(32.W)
+  val ameMcounteren = UInt(32.W)
+  val ameHcounteren = UInt(32.W)
+  val ameScounteren = UInt(32.W)
 }
 
 class xenvcfgIO extends Bundle {

@@ -127,6 +127,10 @@ trait MachineLevel { self: NewCSR =>
   val mcounteren = Module(new CSRModule("Mcounteren", new Counteren))
     .setAddr(CSRs.mcounteren)
 
+  val ameMcounteren = if (enableAme) Some(
+    Module(new CSRModule("AmeMcounteren", new Counteren)).setAddr(AmeMcounteren)
+  ) else None
+
   val mvien = Module(new CSRModule("Mvien", new MvienBundle))
     .setAddr(CSRs.mvien)
 
@@ -187,6 +191,10 @@ trait MachineLevel { self: NewCSR =>
   val mcountinhibit = Module(new CSRModule("Mcountinhibit", new McountinhibitBundle))
     .setAddr(CSRs.mcountinhibit)
 
+  val ameMcountinhibit = if (enableAme) Some(
+    Module(new CSRModule("AmeMcountinhibit", new McountinhibitBundle)).setAddr(AmeMcountinhibit)
+  ) else None
+
   val mhpmevents: Seq[CSRModule[_]] = (3 to 0x1F).map(num =>
     Module(new CSRModule(s"Mhpmevent", new MhpmeventBundle) with HasOfFromPerfCntBundle {
       when(wen){
@@ -197,6 +205,16 @@ trait MachineLevel { self: NewCSR =>
     })
       .setAddr(CSRs.mhpmevent3 - 3 + num).suggestName(s"Mhpmevent$num")
   )
+
+  val ameMhpmevents: Seq[CSRModule[_]] = if (enableAme) (0 until ameCounterNum).map(idx =>
+    Module(new CSRModule(s"AmeMhpmevent${idx + 3}", new MhpmeventBundle) with HasOfFromPerfCntBundle {
+      when(wen){
+        reg.OF := wdata.OF
+      }.elsewhen(ofFromPerfCnt) {
+        reg.OF := ofFromPerfCnt
+      }
+    }).setAddr(AmeMhpmevent3 + idx)
+  ) else Seq.empty
 
   val mscratch = Module(new CSRModule("Mscratch"))
     .setAddr(CSRs.mscratch)
@@ -336,6 +354,18 @@ trait MachineLevel { self: NewCSR =>
     }
   }).setAddr(CSRs.mcycle)
 
+  val ameMcycle = if (enableAme) Some(
+    Module(new CSRModule("AmeMcycle") with HasAmeFixedPerfBundle {
+      when(w.wen) {
+        reg := w.wdata
+      }.elsewhen(!this.ameMcountinhibit.CY.asUInt.asBool && perf =/= 0.U) {
+        reg := reg.ALL.asUInt + perf
+      }.otherwise {
+        reg := reg
+      }
+    }).setAddr(AmeMcycle)
+  ) else None
+
 
   val minstret = Module(new CSRModule("Minstret") with HasMachineCounterControlBundle with HasRobCommitBundle {
     when(w.wen) {
@@ -346,6 +376,18 @@ trait MachineLevel { self: NewCSR =>
       reg := reg
     }
   }).setAddr(CSRs.minstret)
+
+  val ameMinstret = if (enableAme) Some(
+    Module(new CSRModule("AmeMinstret") with HasAmeFixedPerfBundle {
+      when(w.wen) {
+        reg := w.wdata
+      }.elsewhen(!this.ameMcountinhibit.IR.asUInt.asBool && perf =/= 0.U) {
+        reg := reg.ALL.asUInt + perf
+      }.otherwise {
+        reg := reg
+      }
+    }).setAddr(AmeMinstret)
+  ) else None
 
   val mhpmcounters: Seq[CSRModule[_]] = (3 to 0x1F).map(num =>
     Module(new CSRModule(s"Mhpmcounter$num", new MhpmcounterBundle) with HasMachineCounterControlBundle with HasPerfCounterBundle {
@@ -363,6 +405,22 @@ trait MachineLevel { self: NewCSR =>
       toMhpmeventOF := !countingInhibit & counterAdd.head(1)
     }).setAddr(CSRs.mhpmcounter3 - 3 + num)
   )
+
+  val ameMhpmcounters: Seq[CSRModule[_]] = if (enableAme) (0 until ameCounterNum).map(idx =>
+    Module(new CSRModule(s"AmeMhpmcounter${idx + 3}", new MhpmcounterBundle) with HasAmePerfCounterBundle {
+      private val counterBit = idx + 3
+      val countingInhibit = this.ameMcountinhibit.asUInt(counterBit) | !countingEn
+      val counterAdd = this.reg.ALL.asUInt +& perf
+      when (this.w.wen) {
+        this.reg := this.w.wdata
+      }.elsewhen (perf =/= 0.U && !countingInhibit) {
+        this.reg := counterAdd.tail(1)
+      }.otherwise {
+        this.reg := this.reg
+      }
+      toMhpmeventOF := !countingInhibit & counterAdd.head(1)
+    }).setAddr(AmeMhpmcounter3 + idx)
+  ) else Seq.empty
 
   // JEDEC JEP106 Manufacturer ID: 
   //   Bank 17 (16 continuations), Offset 0x6F (111)
@@ -471,7 +529,14 @@ trait MachineLevel { self: NewCSR =>
     mnstatus,
     mnscratch,
     mcontext,
-  ) ++ mhpmevents ++ mhpmcounters ++ (if (HasBitmapCheck) Seq(mbmc.get) else Seq())
+  ) ++ mhpmevents ++ mhpmcounters ++
+    ameMcounteren.toSeq ++
+    ameMcountinhibit.toSeq ++
+    ameMcycle.toSeq ++
+    ameMinstret.toSeq ++
+    ameMhpmevents ++
+    ameMhpmcounters ++
+    (if (HasBitmapCheck) Seq(mbmc.get) else Seq())
 
 
   val machineLevelCSRMap: SeqMap[Int, (CSRAddrWriteBundle[_], UInt)] = SeqMap.from(
@@ -831,6 +896,10 @@ trait HasMachineCounterControlBundle { self: CSRModule[_] =>
   val mcountinhibit = IO(Input(new McountinhibitBundle))
 }
 
+trait HasAmeMachineCounterControlBundle { self: CSRModule[_] =>
+  val ameMcountinhibit = IO(Input(new McountinhibitBundle))
+}
+
 trait HasRobCommitBundle { self: CSRModule[_] =>
   val robCommit = IO(Input(new RobCommitCSR))
   val writeFCSR = IO(Input(Bool()))
@@ -847,6 +916,18 @@ trait HasPerfCounterBundle { self: CSRModule[_] =>
   val countingEn    = IO(Input(Bool()))
   val perf          = IO(Input(new PerfEvent))
   val toMhpmeventOF = IO(Output(Bool()))
+}
+
+trait HasAmePerfCounterBundle { self: CSRModule[_] =>
+  val countingEn       = IO(Input(Bool()))
+  val perf             = IO(Input(UInt(8.W)))
+  val toMhpmeventOF    = IO(Output(Bool()))
+  val ameMcountinhibit = IO(Input(new McountinhibitBundle))
+}
+
+trait HasAmeFixedPerfBundle { self: CSRModule[_] =>
+  val perf             = IO(Input(UInt(8.W)))
+  val ameMcountinhibit = IO(Input(new McountinhibitBundle))
 }
 
 trait HasPerfEventBundle { self: CSRModule[_] =>

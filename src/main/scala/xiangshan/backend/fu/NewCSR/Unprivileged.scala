@@ -12,6 +12,7 @@ import xiangshan.backend.fu.NewCSR.CSRConfig._
 import xiangshan.backend.fu.fpu.Bundles.{Fflags, Frm}
 import xiangshan.backend.fu.NewCSR.CSREnumTypeImplicitCast._
 import xiangshan.XSCoreParameters
+import xiangshan.backend.fu.util.CSRConst._
 
 import scala.collection.immutable.SeqMap
 
@@ -317,6 +318,45 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
     }).setAddr(CSRs.cycle + num)
   )
 
+  val ameCycle = if (enableAme) Some(
+    Module(new CSRModule("AmeCycle", new CSRBundle {
+      val cycle = RO(63, 0)
+    }) with HasAmeMHPMSink with HasDebugStopBundle {
+      when(unprivCountUpdate) {
+        reg := mHPM.cycle
+      }.otherwise {
+        reg := reg
+      }
+      regOut := Mux(debugModeStopCount, reg.asUInt, mHPM.cycle)
+    }).setAddr(AmeCycle)
+  ) else None
+
+  val ameInstret = if (enableAme) Some(
+    Module(new CSRModule("AmeInstret", new CSRBundle {
+      val instret = RO(63, 0)
+    }) with HasAmeMHPMSink with HasDebugStopBundle {
+      when(unprivCountUpdate) {
+        reg := mHPM.instret
+      }.otherwise {
+        reg := reg
+      }
+      regOut := Mux(debugModeStopCount, reg.asUInt, mHPM.instret)
+    }).setAddr(AmeInstret)
+  ) else None
+
+  val ameHpmcounters: Seq[CSRModule[_]] = if (enableAme) (0 until ameCounterNum).map(idx =>
+    Module(new CSRModule(s"AmeHpmcounter${idx + 3}", new CSRBundle {
+      val hpmcounter = RO(63, 0).withReset(0.U)
+    }) with HasAmeMHPMSink with HasDebugStopBundle {
+      when(unprivCountUpdate) {
+        reg := mHPM.hpmcounters(idx)
+      }.otherwise {
+        reg := reg
+      }
+      regOut := Mux(debugModeStopCount, reg.asUInt, mHPM.hpmcounters(idx))
+    }).setAddr(AmeHpmcounter3 + idx)
+  ) else Seq.empty
+
   val unprivilegedCSRMap: SeqMap[Int, (CSRAddrWriteBundle[_], UInt)] = SeqMap(
     CSRs.fflags   -> (fcsr.wAliasFflags -> fcsr.fflagsRdata),
     CSRs.frm      -> (fcsr.wAliasFfm    -> fcsr.frmRdata),
@@ -345,7 +385,11 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
     CSRs.cycle    -> (cycle.w           -> cycle.rdata),
     CSRs.time     -> (time.w            -> time.rdata),
     CSRs.instret  -> (instret.w         -> instret.rdata),
-  ) ++ hpmcounters.map(counter => (counter.addr -> (counter.w -> counter.rdata)))
+  ) ++
+    hpmcounters.map(counter => counter.addr -> (counter.w -> counter.rdata)) ++
+    ameCycle.toSeq.map(c => c.addr -> (c.w -> c.rdata)) ++
+    ameInstret.toSeq.map(c => c.addr -> (c.w -> c.rdata)) ++
+    ameHpmcounters.map(counter => counter.addr -> (counter.w -> counter.rdata))
 
   val unprivilegedCSRMods: Seq[CSRModule[_]] = Seq(
     fcsr,
@@ -366,7 +410,7 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
     cycle,
     time,
     instret,
-  ) ++ hpmcounters
+  ) ++ hpmcounters ++ ameCycle.toSeq ++ ameInstret.toSeq ++ ameHpmcounters
 
   val unprivilegedCSROutMap: SeqMap[Int, UInt] = SeqMap(
     CSRs.fflags  -> fcsr.fflags.asUInt,
@@ -396,7 +440,11 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
     CSRs.cycle   -> cycle.rdata,
     CSRs.time    -> time.rdata,
     CSRs.instret -> instret.rdata,
-  ) ++ hpmcounters.map(counter => (counter.addr -> counter.rdata))
+  ) ++
+    hpmcounters.map(counter => counter.addr -> counter.rdata) ++
+    ameCycle.toSeq.map(c => c.addr -> c.rdata) ++
+    ameInstret.toSeq.map(c => c.addr -> c.rdata) ++
+    ameHpmcounters.map(counter => counter.addr -> counter.rdata)
 }
 
 class CSRVTypeBundle extends CSRBundle {
@@ -436,6 +484,14 @@ trait HasMHPMSink { self: CSRModule[_] =>
   val v = IO(Input(Bool()))
   val nextV = IO(Input(Bool()))
   val htimedelta = IO(Input(UInt(64.W)))
+}
+
+trait HasAmeMHPMSink { self: CSRModule[_] =>
+  val mHPM = IO(Input(new Bundle {
+    val cycle   = UInt(64.W)
+    val instret = UInt(64.W)
+    val hpmcounters = Vec(perfCntNum, UInt(XLEN.W))
+  }))
 }
 
 trait HasDebugStopBundle { self: CSRModule[_] =>

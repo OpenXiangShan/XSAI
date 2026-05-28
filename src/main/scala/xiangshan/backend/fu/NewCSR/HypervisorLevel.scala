@@ -12,6 +12,7 @@ import xiangshan.backend.fu.NewCSR.CSREnumTypeImplicitCast._
 import xiangshan.backend.fu.NewCSR.CSREvents.{SretEventSinkBundle, TrapEntryHSEventSinkBundle}
 import xiangshan.backend.fu.NewCSR.CSRFunc._
 import xiangshan.backend.fu.NewCSR.ChiselRecordForField._
+import xiangshan.backend.fu.util.CSRConst._
 import system.HasSoCParameter
 
 import scala.collection.immutable.SeqMap
@@ -60,6 +61,10 @@ trait HypervisorLevel { self: NewCSR =>
 
   val hcounteren = Module(new CSRModule("Hcounteren", new Counteren))
     .setAddr(CSRs.hcounteren)
+
+  val ameHcounteren = if (enableAme) Some(
+    Module(new CSRModule("AmeHcounteren", new Counteren)).setAddr(AmeHcounteren)
+  ) else None
 
   val hgeie = Module(new CSRModule("Hgeie", new HgeieBundle))
     .setAddr(CSRs.hgeie)
@@ -217,7 +222,7 @@ trait HypervisorLevel { self: NewCSR =>
     hstateen2,
     hstateen3,
     hcontext,
-  )
+  ) ++ ameHcounteren.toSeq
 
   val hypervisorCSRMap: SeqMap[Int, (CSRAddrWriteBundle[_], UInt)] = SeqMap.from(
     hypervisorCSRMods.map(csr => (csr.addr -> (csr.w -> csr.rdata))).iterator

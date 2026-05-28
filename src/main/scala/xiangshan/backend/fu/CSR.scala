@@ -36,6 +36,7 @@ import utils.MathUtils.{BigIntGenMask, BigIntNot}
 import xiangshan.backend.trace._
 import freechips.rocketchip.rocket.CSRs
 import system.HasSoCParameter
+import cute.{CuteParamsKey, PerfEventAme}
 
 class FpuCsrIO extends Bundle {
   val fflags = Output(Valid(UInt(5.W)))
@@ -70,10 +71,13 @@ class MpuCsrIO(implicit p: Parameters) extends XSBundle {
 }
 
 class PerfCounterIO(implicit p: Parameters) extends XSBundle {
+  private val ameCounterNum = if (HasMatrixExtension && p(MatAccKey) == MatAcc.CUTE) p(CuteParamsKey).AmeCounterNum else 29
   val perfEventsFrontend  = Vec(numCSRPCntFrontend, new PerfEvent)
   val perfEventsBackend   = Vec(numCSRPCntCtrl, new PerfEvent)
   val perfEventsLsu       = Vec(numCSRPCntLsu, new PerfEvent)
   val perfEventsHc        = Vec(numPCntHc * coreParams.L2NBanks + 1, new PerfEvent)
+  val perfEventsAme       = Vec(ameCounterNum, new PerfEventAme)
+  val fixedPerfAme        = Vec(2, new PerfEventAme)
   val retiredInstr = UInt(7.W)
   val frontendInfo = new Bundle {
     val ibufFull  = Bool()

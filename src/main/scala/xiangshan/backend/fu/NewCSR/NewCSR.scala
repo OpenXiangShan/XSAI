@@ -21,6 +21,7 @@ import xiangshan.backend.fu.PerfCounterIO
 import xiangshan.backend.fu.util.CSRConst
 import xiangshan.ExceptionNO._
 import xiangshan.backend.trace._
+import cute.CuteParamsKey
 
 import scala.collection.immutable.SeqMap
 
@@ -118,6 +119,10 @@ class NewCSR(implicit val p: Parameters) extends Module
   with HasCriticalErrors
   with IpIeAliasConnect
 {
+
+  // Use defs to avoid trait/class initialization-order hazards when traits consume AME knobs.
+  def enableAme: Boolean = HasMatrixExtension && p(MatAccKey) == MatAcc.CUTE
+  def ameCounterNum: Int = if (enableAme) p(CuteParamsKey).AmeCounterNum else 29
 
   import CSRConfig._
 
@@ -503,6 +508,15 @@ class NewCSR(implicit val p: Parameters) extends Module
   permitMod.io.in.xcounteren.mcounteren := mcounteren.rdata
   permitMod.io.in.xcounteren.hcounteren := hcounteren.rdata
   permitMod.io.in.xcounteren.scounteren := scounteren.rdata
+  if (enableAme) {
+    permitMod.io.in.xcounteren.ameMcounteren := ameMcounteren.get.rdata
+    permitMod.io.in.xcounteren.ameHcounteren := ameHcounteren.get.rdata
+    permitMod.io.in.xcounteren.ameScounteren := ameScounteren.get.rdata
+  } else {
+    permitMod.io.in.xcounteren.ameMcounteren := 0.U
+    permitMod.io.in.xcounteren.ameHcounteren := 0.U
+    permitMod.io.in.xcounteren.ameScounteren := 0.U
+  }
 
   permitMod.io.in.xstateen.mstateen0 := mstateen0.rdata
   permitMod.io.in.xstateen.mstateen1 := mstateen1.rdata
@@ -604,6 +618,15 @@ class NewCSR(implicit val p: Parameters) extends Module
     mod match {
       case m: HasMachineCounterControlBundle =>
         m.mcountinhibit := mcountinhibit.regOut
+      case _ =>
+    }
+    mod match {
+      case m: HasAmeMachineCounterControlBundle =>
+        if (enableAme) {
+          m.ameMcountinhibit := ameMcountinhibit.get.regOut
+        } else {
+          m.ameMcountinhibit := 0.U.asTypeOf(new McountinhibitBundle)
+        }
       case _ =>
     }
     mod match {
@@ -734,6 +757,22 @@ class NewCSR(implicit val p: Parameters) extends Module
       case _ =>
     }
     mod match {
+      case m: HasAmeMHPMSink =>
+        m.mHPM.cycle := 0.U
+        m.mHPM.instret := 0.U
+        val ameHpmCnt = Wire(Vec(perfCntNum, UInt(XLEN.W)))
+        ameHpmCnt.foreach(_ := 0.U)
+        if (enableAme) {
+          m.mHPM.cycle := ameMcycle.get.rdata
+          m.mHPM.instret := ameMinstret.get.rdata
+          for (i <- 0 until ameCounterNum) {
+            ameHpmCnt(i) := ameMhpmcounters(i).rdata
+          }
+        }
+        m.mHPM.hpmcounters := ameHpmCnt
+      case _ =>
+    }
+    mod match {
       case m: HasMachineEnvBundle =>
         m.menvcfg := menvcfg.regOut
       case _ =>
@@ -780,6 +819,49 @@ class NewCSR(implicit val p: Parameters) extends Module
         m.privState := privState
         m.mcounteren := mcounteren.rdata
         m.hcounteren := hcounteren.rdata
+      case _ =>
+    }
+    mod match {
+      case m: HasAmeMhpmeventOfBundle =>
+        val ameOfVec = Wire(UInt(perfCntNum.W))
+        if (enableAme) {
+          ameOfVec := VecInit(ameMhpmevents.map { event =>
+            val mhpmevent = Wire(new MhpmeventBundle)
+            mhpmevent := event.rdata
+            mhpmevent.OF.asBool
+          }).asUInt
+        } else {
+          ameOfVec := 0.U
+        }
+        m.ameOfVec := ameOfVec
+        m.privState := privState
+        if (enableAme) {
+          m.ameMcounteren := ameMcounteren.get.rdata
+          m.ameHcounteren := ameHcounteren.get.rdata
+        } else {
+          m.ameMcounteren := 0.U.asTypeOf(new CSRBundles.Counteren)
+          m.ameHcounteren := 0.U.asTypeOf(new CSRBundles.Counteren)
+        }
+      case _ =>
+    }
+    mod match {
+      case m: HasAmeFixedPerfBundle =>
+        if (enableAme) {
+          m.ameMcountinhibit := ameMcountinhibit.get.regOut
+        } else {
+          m.ameMcountinhibit := 0.U.asTypeOf(new McountinhibitBundle)
+        }
+        val fixedPerf = Mux(mod.addr.U === CSRConst.AmeMcycle.U, io.perf.fixedPerfAme(0).value, io.perf.fixedPerfAme(1).value)
+        m.perf := Mux(enableAme.B, fixedPerf, 0.U(8.W))
+      case _ =>
+    }
+    mod match {
+      case m: HasAmePerfCounterBundle =>
+        if (enableAme) {
+          m.ameMcountinhibit := ameMcountinhibit.get.regOut
+        } else {
+          m.ameMcountinhibit := 0.U.asTypeOf(new McountinhibitBundle)
+        }
       case _ =>
     }
     mod match {
@@ -957,6 +1039,19 @@ class NewCSR(implicit val p: Parameters) extends Module
   val addrInPerfCnt = (wenLegal || ren) && (
     (addr >= CSRs.mcycle.U) && (addr <= CSRs.mhpmcounter31.U) ||
     (addr >= CSRs.cycle.U) && (addr <= CSRs.hpmcounter31.U)
+  ) || (wenLegal || ren) && enableAme.B && (
+    (addr === CSRConst.AmeMcycle.U) ||
+    (addr === CSRConst.AmeMinstret.U) ||
+    (addr >= CSRConst.AmeMhpmcounter3.U && addr <= CSRConst.AmeMhpmcounter31.U) ||
+    (addr >= CSRConst.AmeMhpmevent3.U && addr <= CSRConst.AmeMhpmevent31.U) ||
+    (addr === CSRConst.AmeMcountinhibit.U) ||
+    (addr === CSRConst.AmeMcounteren.U) ||
+    (addr === CSRConst.AmeScounteren.U) ||
+    (addr === CSRConst.AmeHcounteren.U) ||
+    (addr === CSRConst.AmeCycle.U) ||
+    (addr === CSRConst.AmeInstret.U) ||
+    (addr >= CSRConst.AmeHpmcounter3.U && addr <= CSRConst.AmeHpmcounter31.U) ||
+    (addr === CSRConst.AmeScountovf.U)
   ) || 
   ren && (
     (addr === CSRs.vstopi.U) || (addr === CSRs.vstopei.U) ||
@@ -1351,7 +1446,41 @@ class NewCSR(implicit val p: Parameters) extends Module
       (privState.isModeVU && !mhpmevent.VUINH)
   }
 
-  val lcofiReq = lcofiReqVec.asUInt.orR
+  val ameLcofiReq = if (enableAme) {
+    val ameCountingEn = RegInit(0.U.asTypeOf(Vec(ameCounterNum, Bool())))
+    val ameOfFromPerfCntVec = Wire(Vec(ameCounterNum, Bool()))
+    val ameLcofiReqVec = Wire(Vec(ameCounterNum, Bool()))
+    for (i <- 0 until ameCounterNum) {
+      ameMhpmcounters(i) match {
+        case m: HasAmePerfCounterBundle =>
+          m.countingEn := ameCountingEn(i)
+          m.perf := io.perf.perfEventsAme(i).value
+          ameOfFromPerfCntVec(i) := m.toMhpmeventOF
+        case _ =>
+      }
+
+      ameMhpmevents(i) match {
+        case m: HasOfFromPerfCntBundle =>
+          m.ofFromPerfCnt := ameOfFromPerfCntVec(i)
+        case _ =>
+      }
+
+      val ameMhpmevent = Wire(new MhpmeventBundle)
+      ameMhpmevent := ameMhpmevents(i).rdata
+      ameLcofiReqVec(i) := ameOfFromPerfCntVec(i) && !ameMhpmevent.OF.asBool
+
+      ameCountingEn(i) := (privState.isModeM && !ameMhpmevent.MINH) ||
+        (privState.isModeHS && !ameMhpmevent.SINH)  ||
+        (privState.isModeHU && !ameMhpmevent.UINH)  ||
+        (privState.isModeVS && !ameMhpmevent.VSINH) ||
+        (privState.isModeVU && !ameMhpmevent.VUINH)
+    }
+    ameLcofiReqVec.asUInt.orR
+  } else {
+    false.B
+  }
+
+  val lcofiReq = lcofiReqVec.asUInt.orR || ameLcofiReq
   mip match {
     case m: HasLocalInterruptReqBundle =>
       m.lcofiReq := lcofiReq

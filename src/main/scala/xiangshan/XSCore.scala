@@ -36,6 +36,7 @@ import xiangshan.backend.trace.TraceCoreInterface
 import xiangshan.mem._
 import xiangshan.cache.mmu._
 import xiangshan.cache.mmu.TlbRequestIO
+import cute.{AmePerfFromCSRIO, AmePerfToCoreIO}
 import scala.collection.mutable.ListBuffer
 
 abstract class XSModule(implicit val p: Parameters) extends Module
@@ -119,6 +120,8 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
     val dft_reset = Option.when(hasDFT)(Input(new DFTResetSignals()))
     val amuCtrl = Option.when(HasMatrixExtension)(Decoupled(new AmuCtrlIO))
     val amuRelease = Option.when(HasMatrixExtension)(Flipped(Decoupled(new AmuReleaseIO2XS)))
+    val ameToCUTE = Option.when(HasMatrixExtension)(Output(new AmePerfFromCSRIO))
+    val ameFromCUTE = Option.when(HasMatrixExtension)(Input(new AmePerfToCoreIO))
   })
 
   dontTouch(io.l2_flush_done)
@@ -206,8 +209,23 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
   backend.io.perf.perfEventsBackend := DontCare
   backend.io.perf.retiredInstr := DontCare
   backend.io.perf.ctrlInfo := DontCare
+  backend.io.perf.perfEventsAme.foreach(_.value := 0.U)
+  backend.io.perf.fixedPerfAme.foreach(_.value := 0.U)
 
   backend.io.mem.storeDebugInfo <> memBlock.io.mem_to_ooo.storeDebugInfo
+
+  if (HasMatrixExtension) {
+    val enableAme = p(MatAccKey) == MatAcc.CUTE
+    io.ameToCUTE.get.csrW.valid := false.B
+    io.ameToCUTE.get.csrW.bits.addr := 0.U
+    io.ameToCUTE.get.csrW.bits.data := 0.U
+
+    when(enableAme.B) {
+      io.ameToCUTE.get.csrW := backend.io.csrCustomCtrl.distribute_csr.w
+      backend.io.perf.perfEventsAme := io.ameFromCUTE.get.perfEventsAme
+      backend.io.perf.fixedPerfAme := io.ameFromCUTE.get.fixedPerfAme
+    }
+  }
   
   if (HasMatrixExtension) {
     val amuCtrlArbiter = Module(new Arbiter(new AmuCtrlIO, CommitWidth))

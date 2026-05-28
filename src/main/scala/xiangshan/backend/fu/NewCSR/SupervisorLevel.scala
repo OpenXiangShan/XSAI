@@ -14,6 +14,7 @@ import xiangshan.backend.fu.NewCSR.CSREvents.TrapEntryHSEventSinkBundle
 import xiangshan.backend.fu.NewCSR.CSREnumTypeImplicitCast._
 import xiangshan.backend.fu.NewCSR.CSRBundleImplicitCast._
 import xiangshan.backend.fu.NewCSR.ChiselRecordForField._
+import xiangshan.backend.fu.util.CSRConst._
 
 import scala.collection.immutable.SeqMap
 
@@ -66,6 +67,10 @@ trait SupervisorLevel { self: NewCSR with MachineLevel =>
 
   val scounteren = Module(new CSRModule("Scounteren", new Counteren))
     .setAddr(CSRs.scounteren)
+
+  val ameScounteren = if (enableAme) Some(
+    Module(new CSRModule("AmeScounteren", new Counteren)).setAddr(AmeScounteren)
+  ) else None
 
   val senvcfg = Module(new CSRModule("Senvcfg", new SEnvCfg))
     .setAddr(CSRs.senvcfg)
@@ -161,6 +166,19 @@ trait SupervisorLevel { self: NewCSR with MachineLevel =>
     ))
   }).setAddr(CSRs.scountovf)
 
+  val ameScountovf = if (enableAme) Some(
+    Module(new CSRModule("AmeScountovf", new CSRBundle {
+      override val len: Int = 32
+      val OFVEC = RO(31, 3).withReset(0.U)
+    }) with HasAmeMhpmeventOfBundle {
+      regOut.OFVEC := Mux1H(Seq(
+        privState.isModeM  -> ameOfVec,
+        privState.isModeHS -> (ameMcounteren.HPM.asUInt & ameOfVec),
+        privState.isModeVS -> (ameMcounteren.HPM.asUInt & ameHcounteren.HPM.asUInt & ameOfVec),
+      ))
+    }).setAddr(AmeScountovf)
+  ) else None
+
   val sstateen0 = Module(new CSRModule("Sstateen0", new Sstateen0Bundle) with HasStateenBundle {
     // For every bit in an mstateen CSR that is zero (whether read-only zero or set to zero), the same bit
     // appears as read-only zero in the matching hstateen and sstateen CSRs. For every bit in an hstateen
@@ -178,7 +196,8 @@ trait SupervisorLevel { self: NewCSR with MachineLevel =>
 
   val scontext = Module(new CSRModule("Scontext", new ScontextBundle)).setAddr(CSRs.scontext)
 
-  val supervisorLevelCSRMods: Seq[CSRModule[_]] = Seq(
+  val supervisorLevelCSRMods: Seq[CSRModule[_]] = (
+    Seq(
     sie,
     stvec,
     scounteren,
@@ -196,7 +215,7 @@ trait SupervisorLevel { self: NewCSR with MachineLevel =>
     sstateen2,
     sstateen3,
     scontext,
-  )
+  ) ++ ameScounteren.toSeq ++ ameScountovf.toSeq)
 
   val supervisorLevelCSRMap: SeqMap[Int, (CSRAddrWriteBundle[_], UInt)] = SeqMap(
     CSRs.sstatus -> (mstatus.wAliasSstatus, mstatus.sstatusRdata),
@@ -279,4 +298,11 @@ trait HasMhpmeventOfBundle { self: CSRModule[_] =>
   val privState = IO(Input(new PrivState))
   val mcounteren = IO(Input(new Counteren))
   val hcounteren = IO(Input(new Counteren))
+}
+
+trait HasAmeMhpmeventOfBundle { self: CSRModule[_] =>
+  val ameOfVec = IO(Input(UInt(perfCntNum.W)))
+  val privState = IO(Input(new PrivState))
+  val ameMcounteren = IO(Input(new Counteren))
+  val ameHcounteren = IO(Input(new Counteren))
 }

@@ -37,6 +37,23 @@ trait HasCSRConst {
   // Machine level Bitmap Check(Custom Read/Write)
   val Mbmc = 0xBC2
 
+  // AME (CUTE PMU) CSR windows
+  val AmeScounteren    = 0x5E6
+  val AmeHcounteren    = 0x6C6
+  val AmeMcounteren    = 0x7E8
+  val AmeMcountinhibit = 0x7E9
+  val AmeMhpmevent3    = 0xBC3
+  val AmeMhpmevent31   = 0xBDF
+  val AmeMcycle        = 0xBE0
+  val AmeMinstret      = 0xBE2
+  val AmeMhpmcounter3  = 0xBE3
+  val AmeMhpmcounter31 = 0xBFF
+  val AmeCycle         = 0xCE0
+  val AmeInstret       = 0xCE2
+  val AmeHpmcounter3   = 0xCE3
+  val AmeHpmcounter31  = 0xCFF
+  val AmeScountovf     = 0xDE0
+
   def privEcall  = 0x000.U
   def privEbreak = 0x001.U
   def privMNret  = 0x702.U
