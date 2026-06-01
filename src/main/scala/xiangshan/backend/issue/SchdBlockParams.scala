@@ -99,15 +99,13 @@ case class SchdBlockParams(
 
   def needSrcVxrm: Boolean = issueBlockParams.map(_.needSrcVxrm).reduce(_ || _)
 
-  def needSrcXmcsr: Boolean = issueBlockParams.map(_.needSrcXmcsr).reduce(_ || _)
-
   def writeVConfig: Boolean = issueBlockParams.map(_.writeVConfig).reduce(_ || _)
   
   def writeVType: Boolean = issueBlockParams.map(_.writeVType).reduce(_ || _)
 
   def writeMx: Boolean = issueBlockParams.map(_.writeMxRf).reduce(_ || _)
 
-  def writeMType: Boolean = issueBlockParams.map(_.writeMType).reduce(_ || _)
+  def needSrcMcsr: Boolean = issueBlockParams.map(_.needSrcMcsr).reduce(_ || _)
 
   def numRedirect: Int = issueBlockParams.map(_.numRedirect).sum
 

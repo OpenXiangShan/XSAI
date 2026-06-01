@@ -827,6 +827,7 @@ class DecodeUnitEnqIO(implicit p: Parameters) extends XSBundle {
   val ctrlFlow = Input(new StaticInst)
   val vtype = Input(new VType)
   val vstart = Input(Vl())
+  val mcfg = Input(new McfgState)
 }
 
 class DecodeUnitDeqIO(implicit p: Parameters) extends XSBundle {
@@ -921,6 +922,9 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   decodedInst.vlWen := false.B
   // init mxWen
   decodedInst.mxWen.foreach(_ := false.B)
+  decodedInst.isMsetcfg := false.B
+  decodedInst.mcfgReadView.foreach(_ := 0.U.asTypeOf(decodedInst.mcfgReadView.get))
+  decodedInst.mmaMcfgReadRaw.foreach(_ := 0.U.asTypeOf(decodedInst.mmaMcfgReadRaw.get))
 
   val isCsr = inst.OPCODE5Bit === OPCODE5Bit.SYSTEM && inst.FUNCT3(1, 0) =/= 0.U
   val isCsrr = isCsr && inst.FUNCT3 === BitPat("b?1?") && inst.RS1 === 0.U
@@ -936,6 +940,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   private val isCboFlush = CBO_FLUSH === io.enq.ctrlFlow.instr
   private val isCboInval = CBO_INVAL === io.enq.ctrlFlow.instr
   private val isCboZero  = CBO_ZERO  === io.enq.ctrlFlow.instr
+  private val isMfence   = MFENCE    === io.enq.ctrlFlow.instr
 
   // Note that rnum of aes64ks1i must be in the range 0x0..0xA. The values 0xB..0xF are reserved.
   private val isAes64ks1iIllegal =
@@ -959,7 +964,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
       inst.isOPFVF || inst.isOPFVV
     ) ||
     io.fromCSR.illegalInst.vsIsOff    && (FuType.FuTypeOrR(decodedInst.fuType, FuType.vecAll) || isCsrrVl || isCsrrVlenb) ||
-    // io.fromCSR.illegalInst.msIsOff    && FuType.FuTypeOrR(decodedInst.fuType, FuType.matrixAll) ||
+    // io.fromCSR.illegalInst.msIsOff    && (FuType.FuTypeOrR(decodedInst.fuType, FuType.matrixAll) || isMfence) ||
     io.fromCSR.illegalInst.wfi        && FuType.FuTypeOrR(decodedInst.fuType, FuType.csr)   && CSROpType.isWfi(decodedInst.fuOpType) ||
     io.fromCSR.illegalInst.wrs_nto    && FuType.FuTypeOrR(decodedInst.fuType, FuType.csr)   && CSROpType.isWrsNto(decodedInst.fuOpType) ||
     (decodedInst.needFrm.scalaNeedFrm || FuType.isScalaNeedFrm(decodedInst.fuType)) && (((decodedInst.fpu.rm === 5.U) || (decodedInst.fpu.rm === 6.U)) || ((decodedInst.fpu.rm === 7.U) && io.fromCSR.illegalInst.frm)) ||
@@ -1155,15 +1160,14 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   io.deq.uopInfo.numOfWB := uopInfoGen.io.out.uopInfo.numOfWB
   io.deq.uopInfo.lmul := uopInfoGen.io.out.uopInfo.lmul
 
-  // The same as above, but for xmisa, xtlenb, xtrlenb, xalenb, mtok, mtilem, mtilen, mtilek
-  val isCsrrXmisa = isCsrr && inst.CSRIDX === CSRs.xmisa.U
-  val isCsrrXtlenb = isCsrr && inst.CSRIDX === CSRs.xtlenb.U
-  val isCsrrXtrlenb = isCsrr && inst.CSRIDX === CSRs.xtrlenb.U
-  val isCsrrXalenb = isCsrr && inst.CSRIDX === CSRs.xalenb.U
-  val isCsrrMtok   = isCsrr && inst.CSRIDX === CSRs.mtok.U
+  // The same as above, but for tlenb, trlenb, alenb, msync, mtilem, mtilen, mtilek
+  val isCsrrTlenb = isCsrr && inst.CSRIDX === CSRs.tlenb.U
+  val isCsrrTrlenb = isCsrr && inst.CSRIDX === CSRs.trlenb.U
+  val isCsrrAlenb = isCsrr && inst.CSRIDX === CSRs.alenb.U
   val isCsrrMtilem = isCsrr && inst.CSRIDX === CSRs.mtilem.U
   val isCsrrMtilen = isCsrr && inst.CSRIDX === CSRs.mtilen.U
   val isCsrrMtilek = isCsrr && inst.CSRIDX === CSRs.mtilek.U
+  val isCsrrMsync  = isCsrr && inst.CSRIDX === CSRs.msync.U
 
   // decode for SoftPrefetch instructions (prefetch.w / prefetch.r / prefetch.i)
   val isSoftPrefetch = inst.OPCODE === BitPat("b0010011") && inst.FUNCT3 === BitPat("b110") && inst.RD === 0.U
@@ -1175,6 +1179,8 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   val isFLI = inst.FUNCT7 === BitPat("b11110??") && inst.RS2 === 1.U && inst.RM === 0.U && inst.OPCODE5Bit === OPCODE5Bit.OP_FP
 
   val isMsettilex = FuType.isMsettilex(decodedInst.fuType)
+  val isMcfg = MSetOpType.isMcfg(decodedInst.fuOpType)
+  val isMsetcfg = MSetOpType.isMsetcfg(decodedInst.fuOpType)
   val isMMA = FuType.isMMA(decodedInst.fuType)
   val isMls = FuType.isMls(decodedInst.fuType)
   val isMarith = FuType.isMarith(decodedInst.fuType)
@@ -1212,7 +1218,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     decodedInst.blockBackward := false.B
     decodedInst.canRobCompress := true.B
     decodedInst.exceptionVec(illegalInstr) := io.fromCSR.illegalInst.vsIsOff
-  }.elsewhen (isCsrrXmisa || isCsrrXtlenb || isCsrrXtrlenb || isCsrrXalenb || isCsrrMtok) {
+  }.elsewhen (isCsrrTlenb || isCsrrTrlenb || isCsrrAlenb || isCsrrMsync) {
     // convert to addi instruction
     decodedInst.srcType(0) := SrcType.reg
     decodedInst.srcType(1) := SrcType.imm
@@ -1236,8 +1242,21 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     decodedInst.lsrc(0) := 0.U
   }.elsewhen (isMsettilex) {
     decodedInst.mxWen.foreach(_ := true.B)
-    decodedInst.ldest      := MSETtilexOpType.toMxIdx(decodedInst.fuOpType)
+    decodedInst.ldest      := MSetOpType.toMxIdx(decodedInst.fuOpType)
+  }.elsewhen (isMcfg) {
+    decodedInst.isMsetcfg := isMsetcfg
+    decodedInst.mcfgReadView.foreach { view =>
+      val sel = Mux(isMsetcfg, inst.RD(2, 0), inst.RS1(2, 0))
+      view.sel := sel
+      view.entry := io.enq.mcfg.entries(sel)
+    }
   }.elsewhen (isMMA) {
+    val mmaMcfgSels = Seq(inst.RS1(2, 0), inst.RS2(2, 0), inst.RD(2, 0))
+    decodedInst.mmaMcfgReadRaw.foreach { raws =>
+      raws.zip(mmaMcfgSels).foreach { case (raw, sel) =>
+        raw := io.enq.mcfg.entries(sel).raw
+      }
+    }
     decodedInst.srcType(0) := SrcType.no
     decodedInst.srcType(1) := SrcType.no
     decodedInst.srcType(2) := SrcType.mx
@@ -1265,6 +1284,11 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
       decodedInst.fuOpType(6, 3),
       Seq(Mtilek_IDX.U, Mtilen_IDX.U, Mtilen_IDX.U, 0.U)
     )
+    decodedInst.mcfgReadView.foreach { view =>
+      val mlsMcfgSel = inst.RD(2, 0)
+      view.sel := mlsMcfgSel
+      view.entry := io.enq.mcfg.entries(mlsMcfgSel)
+    }
   }.elsewhen (isMarith) {
     decodedInst.srcType(0) := SrcType.no
     decodedInst.srcType(1) := SrcType.no
@@ -1278,18 +1302,17 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   io.deq.decodedInst.fuType := Mux1H(Seq(
     // keep condition
     (!FuType.FuTypeOrR(decodedInst.fuType, FuType.vldu, FuType.vstu) && 
-      !isCsrrVl && !isCsrrVlenb && !isCsrrXmisa && !isCsrrXtlenb && !isCsrrXtrlenb && !isCsrrXalenb &&
-      !isCsrrMtok && !isCsrrMtilem && !isCsrrMtilen && !isCsrrMtilek) -> decodedInst.fuType,
+      !isCsrrVl && !isCsrrVlenb && !isCsrrTlenb && !isCsrrTrlenb && !isCsrrAlenb &&
+      !isCsrrMsync && !isCsrrMtilem && !isCsrrMtilen && !isCsrrMtilek) -> decodedInst.fuType,
     (isCsrrVl) -> FuType.vsetfwf.U,
     (isCsrrVlenb) -> FuType.alu.U,
     (isCsrrMtilem) -> FuType.msetmtilexfwf.U,
     (isCsrrMtilen) -> FuType.msetmtilexfwf.U,
     (isCsrrMtilek) -> FuType.msetmtilexfwf.U,
-    (isCsrrXmisa) -> FuType.alu.U,
-    (isCsrrXtlenb) -> FuType.alu.U,
-    (isCsrrXtrlenb) -> FuType.alu.U,
-    (isCsrrXalenb) -> FuType.alu.U,
-    (isCsrrMtok) -> FuType.alu.U,
+    (isCsrrTlenb) -> FuType.alu.U,
+    (isCsrrTrlenb) -> FuType.alu.U,
+    (isCsrrAlenb) -> FuType.alu.U,
+    (isCsrrMsync) -> FuType.alu.U,
 
     // change vlsu to vseglsu when NF =/= 0.U
     ( FuType.FuTypeOrR(decodedInst.fuType, FuType.vldu, FuType.vstu) && inst.NF === 0.U || (inst.NF =/= 0.U && (inst.MOP === "b00".U && inst.SUMOP === "b01000".U))) -> decodedInst.fuType,
@@ -1303,24 +1326,22 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   io.deq.decodedInst.imm := MuxCase(decodedInst.imm, Seq(
     isCsrrVlenb  -> (VLEN / 8).U,
     isZimop      -> 0.U,
-    isCsrrXmisa  -> 0x2e6.U,
-    isCsrrXtlenb -> (TLEN / 8).U,
-    isCsrrXtrlenb -> (TRLEN / 8).U,
-    isCsrrXalenb -> ((TLEN / TRLEN) * (TLEN / TRLEN) * MELEN / 8).U,
-    isCsrrMtok   -> MTOK.U,
+    isCsrrTlenb -> (TLEN / 8).U,
+    isCsrrTrlenb -> (TRLEN / 8).U,
+    isCsrrAlenb -> ((TLEN / TRLEN) * (TLEN / TRLEN) * MELEN / 8).U,
+    isCsrrMsync   -> MsyncRegs.U,
   ))
 
   io.deq.decodedInst.fuOpType := MuxCase(decodedInst.fuOpType, Seq(
     isCsrrVl    -> VSETOpType.csrrvl,
     isCsrrVlenb -> ALUOpType.add,
-    isCsrrMtilem -> MSETtilexOpType.csrrmtilem,
-    isCsrrMtilen -> MSETtilexOpType.csrrmtilen,
-    isCsrrMtilek -> MSETtilexOpType.csrrmtilek,
-    isCsrrXmisa -> ALUOpType.add,
-    isCsrrXtlenb -> ALUOpType.add,
-    isCsrrXtrlenb -> ALUOpType.add,
-    isCsrrXalenb -> ALUOpType.add,
-    isCsrrMtok -> ALUOpType.add,
+    isCsrrMtilem -> MSetOpType.csrrmtilem,
+    isCsrrMtilen -> MSetOpType.csrrmtilen,
+    isCsrrMtilek -> MSetOpType.csrrmtilek,
+    isCsrrTlenb -> ALUOpType.add,
+    isCsrrTrlenb-> ALUOpType.add,
+    isCsrrAlenb -> ALUOpType.add,
+    isCsrrMsync  -> ALUOpType.add,
     isFLI       -> Cat(1.U, inst.FMT, inst.RS1),
     (isPreW || isPreR || isPreI) -> Mux1H(Seq(
       isPreW -> LSUOpType.prefetch_w,

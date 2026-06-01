@@ -282,6 +282,7 @@ package object xiangshan {
     def hfence_g = "b10100".U
     def msyncregreset = "b11000".U
     def macquire = "b11001".U
+    def mfence = "b11010".U
     def nofence= "b00000".U
 
     def isMatrix(op: UInt) = op(4, 3) === "b11".U
@@ -458,7 +459,7 @@ package object xiangshan {
     def setVlmax(func: UInt)    = func | (1 << setVlmaxBit).U
   }
 
-  object MSETtilexOpType {
+  object MSetOpType {
     def placeholder = "b1100_0000".U
 
     def isSet  (func: UInt) = func(7) === "b0".U
@@ -471,37 +472,28 @@ package object xiangshan {
     def isSetX         (func: UInt) = isSet(func) && func(6, 4) === "b000".U
     def isSetImm       (func: UInt) = isSet(func) && func(6, 4) === "b001".U
 
-    def umsettilem_x = "b0_000_0000".U
-    def umsettilen_x = "b0_000_0001".U
-    def umsettilek_x = "b0_000_0010".U
+    def settilem_x = "b0_000_0000".U
+    def settilen_x = "b0_000_0001".U
+    def settilek_x = "b0_000_0010".U
 
-    def umsettilem_i = "b0_001_0000".U
-    def umsettilen_i = "b0_001_0001".U
-    def umsettilek_i = "b0_001_0010".U
+    def settilem_i = "b0_001_0000".U
+    def settilen_i = "b0_001_0001".U
+    def settilek_i = "b0_001_0010".U
 
     // read mtilex
-    def csrrmtilem    = "b1_000_0000".U
-    def csrrmtilen    = "b1_000_0001".U
-    def csrrmtilek    = "b1_000_0010".U
-    
-    def isMsettilem (func: UInt)  = isSetX(func)         && isTileM(func)
-    def isMsettilemi (func: UInt) = isSetImm(func)       && isTileM(func)
-    def isMsettilen (func: UInt)  = isSetX(func)         && isTileN(func)
-    def isMsettileni (func: UInt) = isSetImm(func)       && isTileN(func)
-    def isMsettilek (func: UInt)  = isSetX(func)         && isTileK(func)
-    def isMsettileki (func: UInt) = isSetImm(func)       && isTileK(func)
+    def csrrmtilem = "b1_000_0000".U
+    def csrrmtilen = "b1_000_0001".U
+    def csrrmtilek = "b1_000_0010".U
+
+    def msetcfg    = "b0_010_0100".U
+    def mgetcfg    = "b1_010_0100".U
 
     def isMsettilexi (func: UInt) = isSetImm(func) && (isTileM(func) || isTileN(func) || isTileK(func))
     def isMsettilex (func: UInt)  = isSetX(func) && (isTileM(func) || isTileN(func) || isTileK(func))
 
-    def isMsetMtilem (func: UInt)  = isSet(func)  && isTileM(func)
-    def isMsetMtilen (func: UInt)  = isSet(func)  && isTileN(func)
-    def isMsetMtilek (func: UInt)  = isSet(func)  && isTileK(func)
-    def isMsetMtilex (func: UInt)  = isSet(func)  && (isTileM(func) || isTileN(func) || isTileK(func))
-    def isMreadMtilem (func: UInt) = isRead(func) && isTileM(func)
-    def isMreadMtilen (func: UInt) = isRead(func) && isTileN(func)
-    def isMreadMtilek (func: UInt) = isRead(func) && isTileK(func)
-    def isMreadMtilex (func: UInt) = isRead(func) && (isTileM(func) || isTileN(func) || isTileK(func))
+    def isMsetcfg(func: UInt): Bool = func === msetcfg
+    def isMgetcfg(func: UInt): Bool = func === mgetcfg
+    def isMcfg(func: UInt): Bool = isMsetcfg(func) || isMgetcfg(func)
 
     def toMxIdx (func: UInt) = func(1, 0)
   }
@@ -509,7 +501,7 @@ package object xiangshan {
   object MldstOpType {
     def placeholder = "b0_00000_0_00".U
 
-    // bit encoding: ldst (1b) | async (1b) | matrix type (4b) | transposed (1b) | width (2b)
+    // bit encoding: ldst (1b) | async (1b) | matrix type (4b) | transposed (1b) | reserved-zero (2b)
     // matrix type [3:0]
     // 0 0 0 1 : output matrix, C
     // 0 0 1 0 : left matrix, A
@@ -529,71 +521,24 @@ package object xiangshan {
     def isUntransposed (func: UInt) = func(2) === "b0".U
     def isTransposed   (func: UInt) = func(2) === "b1".U
     
-    def isE8  (func: UInt) = func(1, 0) === "b00".U
-    def isE16 (func: UInt) = func(1, 0) === "b01".U
-    def isE32 (func: UInt) = func(1, 0) === "b10".U
-    def isE64 (func: UInt) = func(1, 0) === "b11".U
-    
     // Sync load/store
-    def mlae8    = "b0_0_0001_0_00".U
-    def mlae16   = "b0_0_0001_0_01".U
-    def mlae32   = "b0_0_0001_0_10".U
-    def mlae64   = "b0_0_0001_0_11".U
-    def mlate8   = "b0_0_0001_1_00".U
-    def mlate16  = "b0_0_0001_1_01".U
-    def mlate32  = "b0_0_0001_1_10".U
-    def mlate64  = "b0_0_0001_1_11".U
-    def mlbe8    = "b0_0_0010_0_00".U
-    def mlbe16   = "b0_0_0010_0_01".U
-    def mlbe32   = "b0_0_0010_0_10".U
-    def mlbe64   = "b0_0_0010_0_11".U
-    def mlbte8   = "b0_0_0010_1_00".U
-    def mlbte16  = "b0_0_0010_1_01".U
-    def mlbte32  = "b0_0_0010_1_10".U
-    def mlbte64  = "b0_0_0010_1_11".U
-    def mlce8    = "b0_0_0100_0_00".U
-    def mlce16   = "b0_0_0100_0_01".U
-    def mlce32   = "b0_0_0100_0_10".U
-    def mlce64   = "b0_0_0100_0_11".U
-    def mlcte8   = "b0_0_0100_1_00".U
-    def mlcte16  = "b0_0_0100_1_01".U
-    def mlcte32  = "b0_0_0100_1_10".U
-    def mlcte64  = "b0_0_0100_1_11".U
+    def mla   = "b0_0_0001_0_00".U
+    def mlat  = "b0_0_0001_1_00".U
+    def mlb   = "b0_0_0010_0_00".U
+    def mlbt  = "b0_0_0010_1_00".U
+    def mlc   = "b0_0_0100_0_00".U
+    def mlct  = "b0_0_0100_1_00".U
+    def mlaWhole = "b0_0_1001_0_00".U
+    def mlbWhole = "b0_0_1010_0_00".U
+    def mlcWhole = "b0_0_1100_0_00".U
 
-    def mlme8    = "b0_0_1000_0_00".U
-    def mlme16   = "b0_0_1000_0_01".U
-    def mlme32   = "b0_0_1000_0_10".U
-    def mlme64   = "b0_0_1000_0_11".U
-
-    def msae8    = "b1_0_0001_0_00".U
-    def msae16   = "b1_0_0001_0_01".U
-    def msae32   = "b1_0_0001_0_10".U
-    def msae64   = "b1_0_0001_0_11".U
-    def msate8   = "b1_0_0001_1_00".U
-    def msate16  = "b1_0_0001_1_01".U
-    def msate32  = "b1_0_0001_1_10".U
-    def msate64  = "b1_0_0001_1_11".U
-    def msbe8    = "b1_0_0010_0_00".U
-    def msbe16   = "b1_0_0010_0_01".U
-    def msbe32   = "b1_0_0010_0_10".U
-    def msbe64   = "b1_0_0010_0_11".U
-    def msbte8   = "b1_0_0010_1_00".U
-    def msbte16  = "b1_0_0010_1_01".U
-    def msbte32  = "b1_0_0010_1_10".U
-    def msbte64  = "b1_0_0010_1_11".U
-    def msce8    = "b1_0_0100_0_00".U
-    def msce16   = "b1_0_0100_0_01".U
-    def msce32   = "b1_0_0100_0_10".U
-    def msce64   = "b1_0_0100_0_11".U
-    def mscte8   = "b1_0_0100_1_00".U
-    def mscte16  = "b1_0_0100_1_01".U
-    def mscte32  = "b1_0_0100_1_10".U
-    def mscte64  = "b1_0_0100_1_11".U
-
-    def msme8    = "b1_0_1000_0_00".U
-    def msme16   = "b1_0_1000_0_01".U
-    def msme32   = "b1_0_1000_0_10".U
-    def msme64   = "b1_0_1000_0_11".U
+    def msa   = "b1_0_0001_0_00".U
+    def msat  = "b1_0_0001_1_00".U
+    def msb   = "b1_0_0010_0_00".U
+    def msbt  = "b1_0_0010_1_00".U
+    def msc   = "b1_0_0100_0_00".U
+    def msct  = "b1_0_0100_1_00".U
+    def mscWhole = "b1_0_1100_0_00".U
   }
 
   object MmulOpType {

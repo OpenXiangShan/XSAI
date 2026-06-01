@@ -74,9 +74,8 @@ case class FuConfig (
   trigger       : Boolean = false,
   needSrcFrm    : Boolean = false,
   needSrcVxrm   : Boolean = false,
-  needSrcXmcsr  : Boolean = false,
   writeVType    : Boolean = false,
-  writeMType    : Boolean = false,
+  needSrcMcsr   : Boolean = false,
   immType       : Set[UInt] = Set(),
   // vector
   vconfigWakeUp : Boolean = false,
@@ -464,6 +463,19 @@ object FuConfig {
     immType = Set(SelImm.IMM_MSET),
   )
 
+  val McfgCfg: FuConfig = FuConfig(
+    name = "mcfg",
+    fuType = FuType.mcfg,
+    fuGen = (p: Parameters, cfg: FuConfig) => Module(new Mcfg(cfg)(p).suggestName("Mcfg")),
+    srcData = Seq(
+      Seq(IntData()),
+    ),
+    piped = true,
+    writeIntRf = true,
+    latency = CertainLatency(0),
+    exceptionOut = Seq(illegalInstr),
+  )
+
   val MmaCfg: FuConfig = FuConfig (
     name = "mma",
     fuType = FuType.mma,
@@ -473,7 +485,7 @@ object FuConfig {
     ),
     piped = true,
     needAmuCtrl = true,
-    needSrcXmcsr = true,
+    needSrcMcsr = true,
     latency = CertainLatency(0),
     exceptionOut = Seq(illegalInstr),
     immType = Set(SelImm.IMM_MATRIXREG)
@@ -939,7 +951,7 @@ object FuConfig {
     LduCfg, StaCfg, StdCfg, MouCfg, MoudCfg, VialuCfg, VipuCfg, VlduCfg, VstuCfg, VseglduSeg, VsegstuCfg,
     FaluCfg, FmacCfg, FcvtCfg, FdivCfg,
     VfaluCfg, VfmaCfg, VfcvtCfg, HyldaCfg, HystaCfg,
-    MSetMtilexRiWmfCfg, MSetMtilexRmfWmfCfg,
+    MSetMtilexRiWmfCfg, MSetMtilexRmfWmfCfg, McfgCfg,
     MmaCfg, MarithCfg, MlsCfg,
   )
 
@@ -947,4 +959,3 @@ object FuConfig {
     VialuCfg, VimacCfg, VppuCfg, VipuCfg, VfaluCfg, VfmaCfg, VfcvtCfg
   )
 }
-

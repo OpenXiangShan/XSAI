@@ -36,6 +36,8 @@ class FuncUnitCtrlInput(cfg: FuConfig)(implicit p: Parameters) extends XSBundle 
   })
   val fpu         = OptionWrapper(cfg.writeFflags, new FPUCtrlSignals)
   val vpu         = OptionWrapper(cfg.needVecCtrl, new VPUCtrlSignals)
+  val mcfgReadRaw = OptionWrapper(HasMatrixExtension, UInt(XLEN.W))
+  val mmaMcfgReadRaw = OptionWrapper(HasMatrixExtension, Vec(3, UInt(XLEN.W)))
 }
 
 class FuncUnitCtrlOutput(cfg: FuConfig)(implicit p: Parameters) extends XSBundle {
@@ -105,9 +107,9 @@ class FuncUnitIO(cfg: FuConfig)(implicit p: Parameters) extends XSBundle {
   val vlIsZero = OptionWrapper(cfg.writeVlRf, Output(Bool()))
   val vlIsVlmax = OptionWrapper(cfg.writeVlRf, Output(Bool()))
   val instrAddrTransType = Option.when(cfg.isJmp || cfg.isBrh)(Input(new AddrTransType))
-  val xmxrm = OptionWrapper(cfg.needSrcXmcsr, Input(UInt(2.W)))
-  val xmfrm = OptionWrapper(cfg.needSrcXmcsr, Input(UInt(3.W)))
-  val xmsaten = OptionWrapper(cfg.needSrcXmcsr, Input(UInt(1.W)))
+  val mxrm = OptionWrapper(cfg.needSrcMcsr, Input(UInt(2.W)))
+  val mfrm = OptionWrapper(cfg.needSrcMcsr, Input(UInt(3.W)))
+  val msaten = OptionWrapper(cfg.needSrcMcsr, Input(UInt(1.W)))
   // val mtilex = OptionWrapper(cfg.writeMxRf, (Valid(UInt(XLEN.W))))
 }
 

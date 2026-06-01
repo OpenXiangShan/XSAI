@@ -74,6 +74,7 @@ object FuType extends OHEnumeration {
   // matrix
   val msetmtilexiwf = addType(name = "msetmtilexiwf") // msettilex read rs write mtilex
   val msetmtilexfwf = addType(name = "msetmtilexfwf") // msettilex read old mtilex write mtilex
+  val mcfg = addType(name = "mcfg")
   
   val mls = addType(name = "mls")
   val mma   = addType(name = "mma")   // matrix mul (dense/sparse)
@@ -145,7 +146,7 @@ object FuType extends OHEnumeration {
   val vectorNeedFrm = Seq(vfalu, vfma, vfdiv, vfcvt)
 
   val matrixMSETtilex = Seq(msetmtilexiwf, msetmtilexfwf)
-  val matrixMSET = matrixMSETtilex ++ Seq(mrelease)
+  val matrixMSET = matrixMSETtilex ++ Seq(mcfg, mrelease)
   val matrixArith = Seq(mma, marith)
   val matrixMem = Seq(mls)
   val matrixAll = matrixMSET ++ matrixArith ++ matrixMem
@@ -290,4 +291,3 @@ object FuType extends OHEnumeration {
     vfcvt -> "vfcvt",
   )
 }
-
