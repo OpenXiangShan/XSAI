@@ -45,15 +45,15 @@ object Bundles {
 
   object MtypeMSew extends NamedUInt(3)
 
-  object Xmxrm extends NamedUInt(2)
+  object Mxrm extends NamedUInt(2)
 
-  object Xmsat extends NamedUInt(1)
+  object Msat extends NamedUInt(1)
 
-  object Xmfflags extends NamedUInt(5)
+  object Mfflags extends NamedUInt(5)
 
-  object Xmfrm extends NamedUInt(3)
+  object Mfrm extends NamedUInt(3)
 
-  object Xmsaten extends NamedUInt(1)
+  object Msaten extends NamedUInt(1)
 
   object Mtilex {
     def apply()(implicit p: Parameters): UInt = UInt(width.W)
@@ -63,32 +63,35 @@ object Bundles {
     def width(implicit p: Parameters) = p(XSCoreParamsKey).mlWidth
   }
 
-  // class AmuMmaIO(implicit p: Parameters) extends XSBundle {
-  //   val md       = UInt(4.W) // 3 : 0
-  //   val sat      = Bool()    // 4
-  //   val ms1      = UInt(4.W) // 8 : 5
-  //   val ms2      = UInt(4.W) // 12 : 9
-  //   val mtilem   = Mtilex()  // 21 : 13
-  //   val mtilen   = Mtilex()  // 30 : 22
-  //   val mtilek   = Mtilex()  // 39 : 31
-  //   val types    = UInt(3.W) // 42 : 40
-  //   val typed    = UInt(3.W) // 45 : 43
-  //   val isfp     = Bool()    // 46
-  //   val issigned = Bool()  // 47
-  // }
-
   class AmuMmaIO(implicit p: Parameters) extends XSBundle {
+    // rounding mode (mfrm/mxrm)
     val rm       = UInt(3.W) // 52 : 50
+    // dest matrix register index
     val md       = UInt(4.W) // 49 : 46
+    // whether saturate (msaten)
     val sat      = Bool()    // 45
+    // src matrix register indices
     val ms1      = UInt(4.W) // 44 : 41
     val ms2      = UInt(4.W) // 40 : 37
+
+    // the scale of mma operations, m/n/k
     val mtilem   = Mtilex()  // 36 : 28
     val mtilen   = Mtilex()  // 27 : 19
     val mtilek   = Mtilex()  // 18 : 10
-    val types2   = UInt(3.W) // 9 : 8
+
+    // the type of source matrices
+    // - lower 2 bits stands for the element width:
+    //   - 0: e8, 1: e16, 2: e32, 3: e4
+    // - the highest bit determines the specific type:
+    //   - 0 for unsigned and 1 for signed when isfp is false
+    //   - 0 for e5m2 and 1 for e4m3 when the type is 8-bit fp
+    //   - 0 for fp16 and 1 for bf16 when the type is 16-bit fp
+    //   - 0 for fp32 and 1 for tf32 when the type is 32-bit fp
+    val types2   = UInt(3.W) // 9 : 7
     val types1   = UInt(3.W) // 6 : 4
+    // the same as types1/2, but for destination matrix
     val typed    = UInt(3.W) // 3 : 1
+    // whether floating point mma
     val isfp     = Bool()    // 0
   }
 
@@ -107,14 +110,23 @@ object Bundles {
     val transpose = Bool()            // 120
     // whether accumulation register
     val isacc     = Bool()            // 119
+    // whether matrix A
     val isA       = Bool()            // 118
+    // whether matrix B
     val isB       = Bool()            // 117
 
+    // the address of the first element of the matrix
     val baseAddr  = UInt(48.W)        // 116 : 69
+    // the stride of the matrix
     val stride    = UInt(48.W)        // 68 : 21
-    
+
+    // the number of rows of the matrix
     val row       = Mtilex()          // 20 : 12
+    // the number of columns of the matrix
     val column    = Mtilex()          // 11 : 3
+    // the width of elements in the matrix, see also MSew
+    // 0: e8, 1: e16, 2: e32, 3: e64, 7: e4
+    // other values are reserved
     val widths    = MtypeMSew()       // 2 : 0
   }
 
@@ -124,8 +136,13 @@ object Bundles {
     }
   }
 
-  class AmuArithIO(implicit p: Parameters) extends XSBundle {
+  class AmuArithIO extends Bundle {
+    // Only support mzero currently
+
+    // dest matrix register index
     val md     = UInt(4.W) // 12 : 9
+    // operation type
+    // see also package.scala
     val opType = UInt(9.W) // 8 : 0
   }
 
@@ -136,7 +153,7 @@ object Bundles {
   }
 
   class AmuReleaseIO2CUTE(implicit p: Parameters) extends XSBundle {
-    val tokenRd = UInt(p(XSCoreParamsKey).TokenRegs.W)
+    val msyncRd = UInt(p(XSCoreParamsKey).MsyncRegs.W)
   }
 
   object AmuReleaseIO2CUTE {
@@ -146,7 +163,7 @@ object Bundles {
   }
 
   class AmuReleaseIO2XS(implicit p: Parameters) extends XSBundle {
-    val tokenRd = Vec(p(XSCoreParamsKey).TokenRegs, Bool())
+    val msyncRd = Vec(p(XSCoreParamsKey).MsyncRegs, Bool())
   }
 
   object AmuReleaseIO2XS {

@@ -320,7 +320,7 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
         difftestAmuCtrl.widths    := mlsio.widths
       }
       when (amuCtrl.bits.isRelease()) {
-        difftestAmuCtrl.tokenRd := mreleaseio.tokenRd
+        difftestAmuCtrl.msyncRd := mreleaseio.msyncRd
       }
       when (amuCtrl.bits.isArith()) {
         difftestAmuCtrl.ms     := arithio.md

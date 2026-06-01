@@ -67,6 +67,10 @@ class DecodeStageIO(implicit p: Parameters) extends XSBundle {
       val hasVsetvl = Input(Bool())
     }
     val walkVType = Flipped(Valid(new VType))
+    val isResumeMcfg = Input(Bool())
+    val walkToArchMcfg = Input(Bool())
+    val commitMcfg = Flipped(Vec(CommitWidth, Valid(new McfgCommit)))
+    val walkMcfg = Flipped(Vec(CommitWidth, Valid(new McfgCommit)))
   }
   val stallReason = new Bundle {
     val in = Flipped(new StallReasonIO(DecodeWidth))
@@ -106,6 +110,8 @@ class DecodeStage(implicit p: Parameters) extends XSModule
   val decoders = Seq.fill(DecodeWidth)(Module(new DecodeUnit))
   /** vtype generation module */
   val vtypeGen = Module(new VTypeGen)
+  /** mcfg generation module */
+  val mcfgGen = Module(new McfgGen)
 
   val debug_globalCounter = RegInit(0.U(XLEN.W))
 
@@ -119,6 +125,7 @@ class DecodeStage(implicit p: Parameters) extends XSModule
     dst.io.fromCSR := io.fromCSR
     dst.io.enq.vtype := vtypeGen.io.vtype
     dst.io.enq.vstart := io.vstart
+    dst.io.enq.mcfg := mcfgGen.io.mcfg
   }
 
   /** whether instructions decoded by simple decoders require complex decoding */
@@ -164,13 +171,17 @@ class DecodeStage(implicit p: Parameters) extends XSModule
   vtypeGen.io.walkVType := io.fromRob.walkVType
   vtypeGen.io.vsetvlVType := io.vsetvlVType
 
+  mcfgGen.io.walkToArchMcfg := io.fromRob.walkToArchMcfg
+  mcfgGen.io.walkMcfg := io.fromRob.walkMcfg
+  mcfgGen.io.commitMcfg := io.fromRob.commitMcfg
+
   //Comp 1
   decoderComp.io.redirect := io.redirect
   decoderComp.io.csrCtrl := io.csrCtrl
   decoderComp.io.vtypeBypass := vtypeGen.io.vtype
   // The input inst of decoderComp is latched last cycle.
   // Set input empty, if there is no complex inst latched last cycle.
-  decoderComp.io.in.valid := complexValid && !io.fromRob.isResumeVType
+  decoderComp.io.in.valid := complexValid && !io.fromRob.isResumeVType && !io.fromRob.isResumeMcfg
   decoderComp.io.in.bits.simpleDecodedInst := complexInst
   decoderComp.io.in.bits.uopInfo := complexUopInfo
   decoderComp.io.out.complexDecodedInsts.zipWithIndex.foreach { case (out, i) => out.ready := io.out(i).ready }
@@ -196,7 +207,8 @@ class DecodeStage(implicit p: Parameters) extends XSModule
   val hasMatrixInst = false.B
 
   /** condition of acceptation: no redirection, ready from rename/complex decoder, no resumeVType/resumeMType */
-  canAccept := !io.redirect && (io.out.head.ready || decoderComp.io.in.ready) && !io.fromRob.isResumeVType
+  canAccept := !io.redirect && (io.out.head.ready || decoderComp.io.in.ready) &&
+    !io.fromRob.isResumeVType && !io.fromRob.isResumeMcfg
 
   io.canAccept := canAccept
 
@@ -213,7 +225,7 @@ class DecodeStage(implicit p: Parameters) extends XSModule
     in.ready := !io.redirect && (
       simplePrefixVec(i) && (i.U +& complexNum) < readyCounter ||
       firstComplexOH(i) && (i.U +& complexNum) <= readyCounter && decoderComp.io.in.ready
-    ) && !io.fromRob.isResumeVType
+    ) && !io.fromRob.isResumeVType && !io.fromRob.isResumeMcfg
   }
 
   /** final instruction decoding result */
@@ -235,7 +247,7 @@ class DecodeStage(implicit p: Parameters) extends XSModule
    * Note that finalDecodedInst is generated in order.
    */
   io.out.zipWithIndex.foreach { case (inst, i) =>
-    inst.valid := finalDecodedInstValid(i) && !io.fromRob.isResumeVType
+    inst.valid := finalDecodedInstValid(i) && !io.fromRob.isResumeVType && !io.fromRob.isResumeMcfg
     inst.bits := finalDecodedInst(i)
     inst.bits.lsrc(0) := Mux(finalDecodedInst(i).vpu.isReverse, finalDecodedInst(i).lsrc(1), finalDecodedInst(i).lsrc(0))
     inst.bits.lsrc(1) := Mux(finalDecodedInst(i).vpu.isReverse, finalDecodedInst(i).lsrc(0), finalDecodedInst(i).lsrc(1))
