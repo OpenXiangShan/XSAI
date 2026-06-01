@@ -275,7 +275,6 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
         val version = Input(UInt(4.W))
       }
       val debug_reset = Output(Bool())
-      val rtc_clock = Input(Clock())
       val cacheable_check = new TLPMAIO()
       val riscv_halt = Output(Vec(NumCores, Bool()))
       val riscv_critical_error = Output(Vec(NumCores, Bool()))
@@ -330,11 +329,23 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
 
     val msiInfo = WireInit(0.U.asTypeOf(ValidIO(UInt(soc.IMSICParams.MSI_INFO_WIDTH.W))))
     // syscnt io input descrip
-    val ref_reset_sync = withClockAndReset(io.rtc_clock, io.reset) { ResetGen() }
+    val rtcClockDiv = 100
+    val rtcClockHalfPeriod = rtcClockDiv / 2
+    require(rtcClockDiv % 2 == 0, "rtcClockDiv must be even")
+    val rtcClockCounter = withClockAndReset(io.clock, io.reset) {
+      RegInit((rtcClockHalfPeriod - 1).U(log2Ceil(rtcClockHalfPeriod).W))
+    }
+    val rtcClockToggle = rtcClockCounter === 0.U
+    rtcClockCounter := Mux(rtcClockToggle, (rtcClockHalfPeriod - 1).U, rtcClockCounter - 1.U)
+    val rtcClock = withClockAndReset(io.clock, io.reset) { RegInit(false.B) }
+    when (rtcClockToggle) {
+      rtcClock := ~rtcClock
+    }
+    val ref_reset_sync = withClockAndReset(rtcClock.asClock, io.reset) { ResetGen() }
     misc.module.scntIO.update_en := false.B
     misc.module.scntIO.update_value := 0.U
     misc.module.scntIO.stop_en := false.B
-    misc.module.rtc_clock := io.rtc_clock // syscnt clock
+    misc.module.rtc_clock := rtcClock.asClock // syscnt clock
     misc.module.rtc_reset := ref_reset_sync.asAsyncReset
     misc.module.bus_clock := io.clock
     misc.module.bus_reset := io.reset
