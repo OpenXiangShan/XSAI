@@ -33,7 +33,7 @@ import coupledL2.tl2chi.PortIO
 import xiangshan.backend.trace.TraceCoreInterface
 import xiangshan.backend.fu.matrix._
 import xiangshan.backend.fu.matrix.Bundles._
-import cute.XSCute
+import cute.{CutePerfToCoreIO, XSCute}
 
 object MatAcc extends Enumeration {
   type MatAcc = Value
@@ -258,8 +258,13 @@ class XSTile()(implicit p: Parameters) extends LazyModule
 
       val matrix_data_out = l2top.module.io.matrixDataOut512L2
       cute.module.io.matrix_data_in <> matrix_data_out
+      core.module.io.cutePerf.foreach(_ <> cute.module.io.cute.perf)
 
       cute.module.io.hartId := io.hartId
+    }
+
+    if (HasMatrixExtension && cuteOpt.isEmpty) {
+      core.module.io.cutePerf.foreach(_ := 0.U.asTypeOf(new CutePerfToCoreIO))
     }
 
     if (!HasMatrixExtension) {

@@ -363,6 +363,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
     val outer_beu_errors_icache = Output(new L1BusErrorUnitInfo)
     val inner_hc_perfEvents = Output(Vec(numPCntHc * coreParams.L2NBanks + 1, new PerfEvent))
     val outer_hc_perfEvents = Input(Vec(numPCntHc * coreParams.L2NBanks + 1, new PerfEvent))
+    val outer_matrixPerfEvents = Input(Vec(12, new PerfEvent))
     val outer_l2PfCtrl = Output(new PrefetchCtrlFromCore)
 
     // reset signals of frontend & backend are generated in memblock
@@ -2203,8 +2204,26 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
   val perfFromPTW = perfEventsPTW.map(x => ("PTW_" + x._1, x._2))
   val perfBlock     = Seq(("ldDeqCount", ldDeqCount),
                           ("stDeqCount", stDeqCount))
+  val perfMatrix = if (HasMatrixExtension && p(MatAccKey) == MatAcc.CUTE) {
+    Seq(
+      ("amu_load_a_done", io.outer_matrixPerfEvents(0).value),
+      ("amu_load_b_done", io.outer_matrixPerfEvents(1).value),
+      ("amu_load_c_done", io.outer_matrixPerfEvents(2).value),
+      ("amu_store_done", io.outer_matrixPerfEvents(3).value),
+      ("amu_aml_active", io.outer_matrixPerfEvents(4).value),
+      ("amu_bml_active", io.outer_matrixPerfEvents(5).value),
+      ("amu_cml_load_active", io.outer_matrixPerfEvents(6).value),
+      ("amu_cml_store_active", io.outer_matrixPerfEvents(7).value),
+      ("amu_mem_rd_req", io.outer_matrixPerfEvents(8).value),
+      ("amu_mem_wr_req", io.outer_matrixPerfEvents(9).value),
+      ("amu_mem_rd_32B_req", io.outer_matrixPerfEvents(10).value),
+      ("amu_mem_wr_32B_req", io.outer_matrixPerfEvents(11).value),
+    )
+  } else {
+    Seq()
+  }
   // let index = 0 be no event
-  val allPerfEvents = Seq(("noEvent", 0.U)) ++ perfFromUnits ++ perfFromTLB ++ perfFromPTW ++ perfBlock
+  val allPerfEvents = Seq(("noEvent", 0.U)) ++ perfFromUnits ++ perfFromTLB ++ perfFromPTW ++ perfBlock ++ perfMatrix
 
   if (printEventCoding) {
     for (((name, inc), i) <- allPerfEvents.zipWithIndex) {

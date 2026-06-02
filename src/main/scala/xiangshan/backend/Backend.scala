@@ -1096,7 +1096,21 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
   val memSchedulerPerf = memScheduler.asInstanceOf[SchedulerMemImp].getPerfEvents
   val dataPathPerf = dataPath.getPerfEvents
 
-  val perfBackend  = Seq()
+  val perfBackend  = if (HasMatrixExtension && p(MatAccKey) == MatAcc.CUTE) {
+    Seq(
+      ("amu_active_cycle", io.perf.perfEventsMatrixBackend(0).value),
+      ("amu_retire", io.perf.perfEventsMatrixBackend(1).value),
+      ("amu_comp_done", io.perf.perfEventsMatrixBackend(2).value),
+      ("amu_release_done", io.perf.perfEventsMatrixBackend(3).value),
+      ("amu_mte_active", io.perf.perfEventsMatrixBackend(4).value),
+      ("amu_mma_nonfp", io.perf.perfEventsMatrixBackend(5).value),
+      ("amu_mma_fp16", io.perf.perfEventsMatrixBackend(6).value),
+      ("amu_mma_bf16", io.perf.perfEventsMatrixBackend(7).value),
+      ("amu_mma_tf32", io.perf.perfEventsMatrixBackend(8).value),
+    )
+  } else {
+    Seq()
+  }
   // Keep kunminghu-v2 backend events as a stable prefix, and append matrix-related events after it.
   val perfEventsBase = Seq(("noEvent", 0.U)) ++ ctrlBlockPerfBase ++ dataPathPerf ++
     intSchedulerPerf.take(5) ++ fpSchedulerPerf ++ vecSchedulerPerf ++
