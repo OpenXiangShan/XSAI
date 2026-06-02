@@ -868,7 +868,6 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
     ("rename_stall_cycle_vec     ", inHeadValid && !io.rabCommits.isWalk && dispatchCanAcc && intFreeList.io.canAllocate && fpFreeList.io.canAllocate && v0FreeList.io.canAllocate && vlFreeList.io.canAllocate && !vecFreeList.io.canAllocate),
     ("rename_stall_cycle_v0      ", inHeadValid && !io.rabCommits.isWalk && dispatchCanAcc && intFreeList.io.canAllocate && fpFreeList.io.canAllocate && vecFreeList.io.canAllocate && vlFreeList.io.canAllocate && !v0FreeList.io.canAllocate),
     ("rename_stall_cycle_vl      ", inHeadValid && !io.rabCommits.isWalk && dispatchCanAcc && intFreeList.io.canAllocate && fpFreeList.io.canAllocate && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate && !vlFreeList.io.canAllocate),
-    ("rename_stall_cycle_mx      ", inHeadValid && !io.rabCommits.isWalk && dispatchCanAcc && intFreeList.io.canAllocate && fpFreeList.io.canAllocate && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate && !mxFreeList_io_canAllocate),
   )
   val intFlPerf = intFreeList.getPerfEvents
   val fpFlPerf = fpFreeList.getPerfEvents
@@ -876,6 +875,19 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
   val v0FlPerf = v0FreeList.getPerfEvents
   val mxFlPerf = OptionWrapper(HasMatrixExtension, mxFreeList.get.getPerfEvents)
   val vlFlPerf = vlFreeList.getPerfEvents
-  val perfEvents = renamePerf ++ intFlPerf ++ fpFlPerf ++ vecFlPerf ++ v0FlPerf ++ mxFlPerf.getOrElse(Seq()) ++ vlFlPerf
+
+  val perfEventsBase = renamePerf ++ intFlPerf ++ fpFlPerf ++ vecFlPerf ++ v0FlPerf ++ vlFlPerf
+  val perfEventsExt = if (HasMatrixExtension) {
+    Seq(
+      ("rename_stall_cycle_mx      ", inHeadValid && !io.rabCommits.isWalk && dispatchCanAcc && intFreeList.io.canAllocate && fpFreeList.io.canAllocate && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate && !mxFreeList_io_canAllocate),
+    ) ++ mxFlPerf.get
+  } else {
+    Seq()
+  }
+
+  val perfEvents = perfEventsBase ++ perfEventsExt
   generatePerfEvent()
+
+  def getPerfEventsBase: Seq[(String, UInt)] = perfEventsBase.map(_._1).zip(io_perf.take(perfEventsBase.length)).map { case (name, perf) => (name, perf.value) }
+  def getPerfEventsExt: Seq[(String, UInt)] = perfEventsExt.map(_._1).zip(io_perf.drop(perfEventsBase.length)).map { case (name, perf) => (name, perf.value) }
 }
