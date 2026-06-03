@@ -85,7 +85,7 @@ class ExceptionGen(params: BackendParams)(implicit p: Parameters) extends XSModu
     sink.flushPipe := source.bits.flushPipe && !source.bits.hasException
   }
 
-  // s0: compare wb in 6 groups
+  // s0: compare wb groups
   val csr_wb = io.wb.zip(wbExuParams).filter(_._2.fuConfigs.filter(t => t.isCsr).nonEmpty).map(_._1)
   val load_wb = io.wb.zip(wbExuParams).filter(_._2.fuConfigs.filter(_.fuType == FuType.ldu).nonEmpty).map(_._1)
   val store_wb = io.wb.zip(wbExuParams).filter(_._2.fuConfigs.filter(t => t.isSta || t.fuType == FuType.mou).nonEmpty).map(_._1)
@@ -105,7 +105,7 @@ class ExceptionGen(params: BackendParams)(implicit p: Parameters) extends XSModu
   val s0_out_valid = wb_valid.map(x => RegNext(x))
   val s0_out_bits = wb_bits.zip(wb_valid).map{ case(b, v) => RegEnable(b, v)}
 
-  // s1: compare last six and current flush
+  // s1: compare last groups and current flush
   val s1_valid = VecInit(s0_out_valid.zip(s0_out_bits).map{ case (v, b) => v && !(b.robIdx.needFlush(io.redirect) || io.flush) })
   val s1_out_bits = RegEnable(getOldest(s0_out_valid, s0_out_bits), s1_valid.asUInt.orR)
   val s1_out_valid = RegNext(s1_valid.asUInt.orR)
