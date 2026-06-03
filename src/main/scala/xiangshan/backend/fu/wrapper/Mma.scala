@@ -5,8 +5,8 @@ import chisel3._
 import chisel3.util._
 import xiangshan._
 import xiangshan.backend.fu.{FuConfig, FuncUnit, PipedFuncUnit}
-import xiangshan.backend.fu.matrix.Bundles.{AmuMmaIO, MtypeMSew, AmuCtrlIO}
-import xiangshan.MmulOpType
+import xiangshan.backend.decode.{McfgEntry, McfgHelpers}
+import xiangshan.backend.fu.matrix.Bundles.{AmuMmaIO, AmuCtrlIO}
 
 class Mma(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUnit(cfg) {
   protected val in = io.in.bits
@@ -19,103 +19,60 @@ class Mma(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUnit(cfg) {
   protected val mtilem = in.data.src(2)
   protected val mtilen = in.data.src(3)
   protected val mtilek = in.data.src(4)
-  protected val realFuOpType = WireInit(in.ctrl.fuOpType)
+  private val mmaMcfgReadRaw = in.ctrl.mmaMcfgReadRaw.get
+
+  private def mcfgEntryFromRaw(raw: UInt): McfgEntry = {
+    val entry = Wire(new McfgEntry)
+    entry.raw := raw
+    entry
+  }
+
+  private val aMcfgEntry = mcfgEntryFromRaw(mmaMcfgReadRaw(0))
+  private val bMcfgEntry = mcfgEntryFromRaw(mmaMcfgReadRaw(1))
+  private val cMcfgEntry = mcfgEntryFromRaw(mmaMcfgReadRaw(2))
+  private val aTypeCode = aMcfgEntry.typeCode
+  private val bTypeCode = bMcfgEntry.typeCode
+  private val cTypeCode = cMcfgEntry.typeCode
+
+  private def elementLimit(totalBits: Int, typeCode: UInt): UInt =
+    MuxLookup(McfgHelpers.elementWidth(typeCode), 0.U)(Seq(
+      4.U -> (totalBits / 4).U,
+      8.U -> (totalBits / 8).U,
+      16.U -> (totalBits / 16).U,
+      32.U -> (totalBits / 32).U,
+    ))
+
+  private val legalMcfgEntries = aMcfgEntry.supported && bMcfgEntry.supported && cMcfgEntry.supported
+  private val legalMmaTypes = McfgHelpers.isMmaTripleSupported(aTypeCode, bTypeCode, cTypeCode, MatrixExtension)
+  private val illegal_mcfg = !legalMcfgEntries || !legalMmaTypes
 
   val illegal_regidx = !in.data.imm(2) || in.data.imm(5) || in.data.imm(8)
-  
-  private val mtilenChecks = Seq(
-    Option.when(MatrixExtension.enable4BitDst)(
-      MmulOpType.isToE4(in.ctrl.fuOpType) -> (mtilek > (ARLEN / 4).U)
-    ),
-    Option.when(MatrixExtension.enable8BitDst)(
-      MmulOpType.isToE8(in.ctrl.fuOpType) -> (mtilek > (ARLEN / 8).U)
-    ),
-    Option.when(MatrixExtension.enable16BitDst)(
-      MmulOpType.isToE16(in.ctrl.fuOpType) -> (mtilek > (ARLEN / 16).U)
-    ),
-    Option.when(MatrixExtension.enable32BitDst)(
-      MmulOpType.isToE32(in.ctrl.fuOpType) -> (mtilek > (ARLEN / 32).U)
-    ),
-  ).flatten
-  private val mtilekChecks = Seq(
-    Option.when(MatrixExtension.enable4BitSrc)(
-      MmulOpType.isFromE4(in.ctrl.fuOpType) -> (mtilek > (TRLEN / 4).U)
-    ),
-    Option.when(MatrixExtension.enable8BitSrc)(
-      MmulOpType.isFromE8(in.ctrl.fuOpType) -> (mtilek > (TRLEN / 8).U)
-    ),
-    Option.when(MatrixExtension.enable16BitSrc)(
-      MmulOpType.isFromE16(in.ctrl.fuOpType) -> (mtilek > (TRLEN / 16).U)
-    ),
-    Option.when(MatrixExtension.enable32BitSrc)(MmulOpType.isFromE32(in.ctrl.fuOpType) -> (mtilek > (TRLEN / 32).U)),
-  ).flatten
-
-  private val fromTypeSignChecks = Seq(
-    Option.when(MatrixExtension.enable4BitSrc)(MmulOpType.isFromE4(realFuOpType) -> "b0".U),
-    Option.when(MatrixExtension.enable8BitSrc)(MmulOpType.isFromE8(realFuOpType) -> MmulOpType.isE4m3(realFuOpType).asUInt),
-    Option.when(MatrixExtension.enable16BitSrc)(MmulOpType.isFromE16(realFuOpType) -> MmulOpType.isBf16(realFuOpType).asUInt),
-    Option.when(MatrixExtension.enable32BitSrc)(MmulOpType.isFromE32(realFuOpType) -> MmulOpType.isTf32(realFuOpType).asUInt),
-  ).flatten
-
-  private val toTypeSignChecks = Seq(
-    Option.when(MatrixExtension.enable4BitDst)(MmulOpType.isToE4(realFuOpType) -> "b0".U),
-    Option.when(MatrixExtension.enable8BitDst)(MmulOpType.isToE8(realFuOpType) -> MmulOpType.isE4m3(realFuOpType).asUInt),
-    Option.when(MatrixExtension.enable16BitDst)(MmulOpType.isToE16(realFuOpType) -> MmulOpType.isBf16(realFuOpType).asUInt),
-    Option.when(MatrixExtension.enable32BitDst)(MmulOpType.isToE32(realFuOpType) -> MmulOpType.isTf32(realFuOpType).asUInt),
-  ).flatten
-
   val illegal_mtilem = mtilem > ROWNUM.U
-  val illegal_mtilen = mtilen > ROWNUM.U && (if (mtilenChecks.nonEmpty) Mux1H(mtilenChecks) else false.B)
-  val illegal_mtilek = if (mtilekChecks.nonEmpty) Mux1H(mtilekChecks) else false.B
+  val illegal_mtilen = mtilen > ROWNUM.U && mtilek > elementLimit(ARLEN, cTypeCode)
+  val illegal_mtilek = mtilek > elementLimit(TRLEN, aTypeCode)
 
   val output = Wire(new AmuMmaIO)
   dontTouch(output)
   output.ms1    := in.data.imm(5, 3)
   output.ms2    := in.data.imm(8, 6)
   output.md     := in.data.imm(2, 0)
-
-  output.typed  := Cat(
-    MmulOpType.isFloat(realFuOpType) && MmulOpType.isToE16(realFuOpType) && MmulOpType.isBf16(realFuOpType),
-    MmulOpType.getToType(realFuOpType)
-  )
-  output.types1  := Cat(
-    Mux(MmulOpType.isFloat(realFuOpType),
-      Mux1H(Seq(
-        MmulOpType.isFromE4(realFuOpType) -> "b0".U,
-        MmulOpType.isFromE8(realFuOpType) -> MmulOpType.isE4m3(realFuOpType).asUInt,
-        MmulOpType.isFromE16(realFuOpType) -> MmulOpType.isBf16(realFuOpType).asUInt,
-        MmulOpType.isFromE32(realFuOpType) -> MmulOpType.isTf32(realFuOpType).asUInt,
-      )),
-      MmulOpType.ms1sign(realFuOpType).asUInt
-    ),
-    MmulOpType.getFromType(realFuOpType)
-  )
-  output.types2  := Cat(
-    Mux(MmulOpType.isFloat(realFuOpType),
-      Mux1H(Seq(
-        MmulOpType.isToE4(realFuOpType) -> "b0".U,
-        MmulOpType.isToE8(realFuOpType) -> MmulOpType.isE4m3(realFuOpType).asUInt,
-        MmulOpType.isToE16(realFuOpType) -> MmulOpType.isBf16(realFuOpType).asUInt,
-        MmulOpType.isToE32(realFuOpType) -> MmulOpType.isTf32(realFuOpType).asUInt,
-      )),
-      MmulOpType.ms2sign(realFuOpType).asUInt
-    ),
-    MmulOpType.getFromType(realFuOpType)
-  )
-
-  output.sat    := io.xmsaten.get.asBool
-  output.rm     := Mux(MmulOpType.isFloat(realFuOpType), io.xmfrm.get, io.xmxrm.get)
+  output.typed  := McfgHelpers.amuPayload(cTypeCode)
+  output.types1 := McfgHelpers.amuPayload(aTypeCode)
+  output.types2 := McfgHelpers.amuPayload(bTypeCode)
+  output.sat    := io.msaten.get.asBool
+  output.rm     := Mux(McfgHelpers.isFloatType(cTypeCode), io.mfrm.get, io.mxrm.get)
   output.mtilem := mtilem
   output.mtilen := mtilen
   output.mtilek := mtilek
-  output.isfp   := MmulOpType.isFloat(realFuOpType)
+  output.isfp   := McfgHelpers.isFloatType(cTypeCode)
   
   out.res.data := output.asUInt
 
   out.ctrl.amuCtrl.get.op   := AmuCtrlIO.mmaOp()
   out.ctrl.amuCtrl.get.data := output.asUInt
   out.ctrl.exceptionVec.get := 0.U.asTypeOf(out.ctrl.exceptionVec.get)
-  out.ctrl.exceptionVec.get(ExceptionNO.illegalInstr) := illegal_regidx || illegal_mtilem || illegal_mtilen || illegal_mtilek
+  out.ctrl.exceptionVec.get(ExceptionNO.illegalInstr) :=
+    illegal_regidx || illegal_mcfg || illegal_mtilem || illegal_mtilen || illegal_mtilek
   if (env.EnableDifftest) {
     // It will be filled in ROB.
     out.ctrl.amuCtrl.get.pc.get := DontCare

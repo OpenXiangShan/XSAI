@@ -58,9 +58,9 @@ class VpuCsrIO(implicit p: Parameters) extends XSBundle {
 }
 
 class MpuCsrIO(implicit p: Parameters) extends XSBundle {
-  val xmxrm = Input(UInt(2.W))
-  val xmfrm = Input(UInt(3.W))
-  val xmsaten = Input(UInt(1.W))
+  val mxrm = Input(UInt(2.W))
+  val mfrm = Input(UInt(3.W))
+  val msaten = Input(UInt(1.W))
   
   val mtilem = Output(UInt(XLEN.W))
   val mtilen = Output(UInt(XLEN.W))

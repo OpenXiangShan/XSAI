@@ -27,7 +27,6 @@ package xiangshan.backend.rob
 import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.BundleLiterals._
 import difftest._
 import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
 import utility._
@@ -40,7 +39,6 @@ import xiangshan.backend.decode.isa.bitfield.XSInstBitFields
 import xiangshan.backend.fu.{FuConfig, FuType}
 import xiangshan.frontend.FtqPtr
 import xiangshan.mem.{LqPtr, LsqEnqIO, SqPtr, MlsqPtr}
-import xiangshan.backend.Bundles.{DynInst, ExceptionInfo, ExuOutput}
 import xiangshan.backend.ctrlblock.{DebugLSIO, DebugLsInfo, LsTopdownInfo}
 import xiangshan.backend.fu.matrix.Bundles.AmuCtrlIO
 import xiangshan.backend.fu.vector.Bundles.VType
@@ -104,6 +102,10 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
         val vtype = ValidIO(VType())
         val hasVsetvl = Output(Bool())
       }
+      val isResumeMcfg = Output(Bool())
+      val walkToArchMcfg = Output(Bool())
+      val walkMcfg = Vec(CommitWidth, ValidIO(new xiangshan.backend.decode.McfgCommit))
+      val commitMcfg = Vec(CommitWidth, ValidIO(new xiangshan.backend.decode.McfgCommit))
     }
     val fromVecExcpMod = Input(new Bundle {
       val busy = Bool()
@@ -170,6 +172,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
   val rab = Module(new RenameBuffer(RabSize))
   val vtypeBuffer = Module(new VTypeBuffer(VTypeBufferSize))
   val amuBuffer = OptionWrapper(HasMatrixExtension, Module(new AmuCtrlBuffer()))
+  val mcfgBuffer = OptionWrapper(HasMatrixExtension, Module(new MCfgBuffer()))
   val bankNum = 8
   assert(RobSize % bankNum == 0, "RobSize % bankNum must be 0")
   val robEntries = RegInit(VecInit.fill(RobSize)((new RobEntryBundle).Lit(_.valid -> false.B)))
@@ -417,6 +420,30 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
   io.toDecode.commitVType := vtypeBuffer.io.toDecode.commitVType
   io.toDecode.walkVType := vtypeBuffer.io.toDecode.walkVType
 
+  if (HasMatrixExtension) {
+    val commitMcfgVec = Wire(Vec(CommitWidth, Valid(new RobCommitEntryBundle)))
+    val walkMcfgVec = Wire(Vec(CommitWidth, Valid(new RobCommitEntryBundle)))
+    for (i <- 0 until CommitWidth) {
+      commitMcfgVec(i).valid := io.commits.isCommit && io.commits.commitValid(i)
+      commitMcfgVec(i).bits := io.commits.info(i)
+      walkMcfgVec(i).valid := io.commits.isWalk && io.commits.walkValid(i)
+      walkMcfgVec(i).bits := walkInfo(i)
+    }
+    mcfgBuffer.get.io.commit := commitMcfgVec
+    mcfgBuffer.get.io.walk := walkMcfgVec
+    mcfgBuffer.get.io.walkStart := state === s_walk && RegNext(state) =/= s_walk
+    mcfgBuffer.get.io.walkActive := state === s_walk
+    io.toDecode.isResumeMcfg := mcfgBuffer.get.io.toDecode.isResumeMcfg
+    io.toDecode.walkToArchMcfg := mcfgBuffer.get.io.toDecode.walkToArchMcfg
+    io.toDecode.walkMcfg := mcfgBuffer.get.io.toDecode.walkMcfg
+    io.toDecode.commitMcfg := mcfgBuffer.get.io.toDecode.commitMcfg
+  } else {
+    io.toDecode.isResumeMcfg := false.B
+    io.toDecode.walkToArchMcfg := false.B
+    io.toDecode.walkMcfg := 0.U.asTypeOf(io.toDecode.walkMcfg)
+    io.toDecode.commitMcfg := 0.U.asTypeOf(io.toDecode.commitMcfg)
+  }
+
   // When blockBackward instruction leaves Rob (commit or walk), hasBlockBackward should be set to false.B
   // To reduce registers usage, for hasBlockBackward cases, we allow enqueue after ROB is empty.
   when(isEmpty) {
@@ -565,6 +592,16 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
       debug_microOp(wbIdx).debugInfo.selectTime := wb.bits.debugInfo.selectTime
       debug_microOp(wbIdx).debugInfo.issueTime := wb.bits.debugInfo.issueTime
       debug_microOp(wbIdx).debugInfo.writebackTime := wb.bits.debugInfo.writebackTime
+
+      if (HasMatrixExtension) {
+        when(robEntries(wbIdx).isMsetcfg.get) {
+          val mcfgRaw = wb.bits.data(0)
+          robEntries(wbIdx).mcfgReadView.get.entry.raw := mcfgRaw
+          robEntries(wbIdx).mcfgIllegalUnsupported.get := wb.bits.exceptionVec
+            .map(_(ExceptionNO.illegalInstr))
+            .getOrElse(false.B)
+        }
+      }
 
       // debug for lqidx and sqidx
       debug_microOp(wbIdx).lqIdx := wb.bits.lqIdx.getOrElse(0.U.asTypeOf(new LqPtr))
@@ -1170,6 +1207,18 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
     val vxsatRes = vxsatCanWbSeq.zip(vxsat_wb).map { case (canWb, wb) => Mux(canWb, wb.bits.vxsat.get, 0.U) }.fold(false.B)(_ | _)
     needUpdate(i).vxsat := Mux(!robBanksRdata(i).valid && instCanEnqFlag, 0.U, robBanksRdata(i).vxsat | vxsatRes)
 
+    if (HasMatrixExtension) {
+      val mcfgCanWbSeq = exuWBs.map(writeback => writeback.valid && writeback.bits.robIdx.value === needUpdateRobIdx(i))
+      val mcfgRaw = PriorityMux(mcfgCanWbSeq, exuWBs.map(_.bits.data(0)))
+      when(VecInit(mcfgCanWbSeq).asUInt.orR && needUpdate(i).isMsetcfg.get) {
+        needUpdate(i).mcfgReadView.get.entry.raw := mcfgRaw
+        needUpdate(i).mcfgIllegalUnsupported.get := PriorityMux(
+          mcfgCanWbSeq,
+          exuWBs.map(_.bits.exceptionVec.map(_(ExceptionNO.illegalInstr)).getOrElse(false.B))
+        )
+      }
+    }
+
     // trace
     val taken = branchWBs.map(writeback => writeback.valid && writeback.bits.robIdx.value === needUpdateRobIdx(i) && writeback.bits.redirect.get.bits.cfiUpdate.taken).reduce(_ || _)
     when(robBanksRdata(i).valid && Itype.isBranchType(robBanksRdata(i).traceBlockInPipe.itype) && taken){
@@ -1280,7 +1329,6 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
     exc_wb.bits.veew := wb.bits.vls.map(_.vpu.veew).getOrElse(0.U)
     exc_wb.bits.vlmul := wb.bits.vls.map(_.vpu.vlmul).getOrElse(0.U)
   }
-
   fflagsDataRead := (0 until CommitWidth).map(i => robEntries(deqPtrVec(i).value).fflags)
   vxsatDataRead := (0 until CommitWidth).map(i => robEntries(deqPtrVec(i).value).vxsat)
 
@@ -1666,19 +1714,24 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
         difftestLoadEvent.isVLoad  := isVLoad
       }
       if (env.EnableDifftest && HasMatrixExtension) {
-        // Check token regs
-        val difftestTokenEvent = DifftestModule(new DiffTokenEvent, delay = 3)
-        val isTokenEvent = instr.isMsync && FuType.isFence(uop.fuType) // We don't check mrelease here.
-        difftestTokenEvent.valid := io.commits.commitValid(i) && io.commits.isCommit && isTokenEvent
-        difftestTokenEvent.coreid := io.hartId
-        difftestTokenEvent.index := i.U
+        // Check msync events.
+        val difftestMsyncEvent = DifftestModule(new DiffMsyncEvent, delay = 3)
+        val isMsyncEvent = instr.isMsync && FuType.isFence(uop.fuType) // We don't check mrelease here.
+        difftestMsyncEvent.valid := io.commits.commitValid(i) && io.commits.isCommit && isMsyncEvent
+        difftestMsyncEvent.coreid := io.hartId
+        difftestMsyncEvent.index := i.U
         when (uop.fuOpType === FenceOpType.msyncregreset) {
-          difftestTokenEvent.op := 0.U
-        } .otherwise { // uop.fuOpType === FenceOpType.macquire
-          difftestTokenEvent.op := 1.U
+          difftestMsyncEvent.op := 0.U
+        } .elsewhen (uop.fuOpType === FenceOpType.macquire) {
+          difftestMsyncEvent.op := 1.U
+        } .otherwise { // uop.fuOpType === FenceOpType.mfence
+          difftestMsyncEvent.op := 2.U
         }
-        difftestTokenEvent.tokenRd := uop.imm(10, 6)
-        difftestTokenEvent.pc := uop.pc
+        difftestMsyncEvent.msyncRd := Mux(
+          uop.fuOpType === FenceOpType.mfence,
+          0.U, uop.imm(10, 6)
+        )
+        difftestMsyncEvent.pc := uop.pc
       }
     }
   }

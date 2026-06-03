@@ -116,7 +116,10 @@ object Bundles {
     val uopSplitType    = UopSplitType()
     val isVset          = Bool()
     val isMsettilex     = Bool()
+    val isMsetcfg       = Bool()
     val needAmuCtrl     = Bool()
+    val mcfgReadView    = OptionWrapper(HasMatrixExtension, new xiangshan.backend.decode.McfgReadView)
+    val mmaMcfgReadRaw  = OptionWrapper(HasMatrixExtension, Vec(3, UInt(XLEN.W)))
     val firstUop        = Bool()
     val lastUop         = Bool()
     val numUops         = UInt(log2Up(MaxUopSize).W) // rob need this
@@ -218,6 +221,9 @@ object Bundles {
     val uopIdx          = UopIdx()
     val isVset          = Bool()
     val needAmuCtrl     = OptionWrapper(HasMatrixExtension, Bool())
+    val isMsetcfg       = Bool()
+    val mcfgReadView    = OptionWrapper(HasMatrixExtension, new xiangshan.backend.decode.McfgReadView)
+    val mmaMcfgReadRaw  = OptionWrapper(HasMatrixExtension, Vec(3, UInt(XLEN.W)))
     val firstUop        = Bool()
     val lastUop         = Bool()
     val numUops         = UInt(log2Up(MaxUopSize).W) // rob need this
@@ -694,6 +700,8 @@ object Bundles {
 
     val perfDebugInfo = new PerfDebugInfo()
     val debug_seqNum = InstSeqNum()
+    val mcfgReadRaw = OptionWrapper(HasMatrixExtension, UInt(XLEN.W))
+    val mmaMcfgReadRaw = OptionWrapper(HasMatrixExtension, Vec(3, UInt(XLEN.W)))
 
     def exuIdx = this.params.exuIdx
 
@@ -735,6 +743,8 @@ object Bundles {
       this.numLsElem     .foreach(_ := source.common.numLsElem.get)
       this.srcTimer      .foreach(_ := source.common.srcTimer.get)
       this.loadDependency.foreach(_ := source.common.loadDependency.get.map(_ << 1))
+      this.mcfgReadRaw.foreach(_ := source.common.mcfgReadRaw.get)
+      this.mmaMcfgReadRaw.foreach(_ := source.common.mmaMcfgReadRaw.get)
     }
   }
 

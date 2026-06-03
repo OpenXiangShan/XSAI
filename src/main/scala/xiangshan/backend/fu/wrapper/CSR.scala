@@ -342,9 +342,9 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
   csrOut.vpu.vstart := csrMod.io.status.vecState.vstart.asUInt
   csrOut.vpu.vxrm   := csrMod.io.status.vecState.vxrm.asUInt
   
-  csrOut.mpu.xmxrm   := csrMod.io.status.matrixState.xmxrm.asUInt
-  csrOut.mpu.xmfrm   := csrMod.io.status.matrixState.xmfrm.asUInt
-  csrOut.mpu.xmsaten := csrMod.io.status.matrixState.xmsaten.asUInt
+  csrOut.mpu.mxrm   := csrMod.io.status.matrixState.mxrm.asUInt
+  csrOut.mpu.mfrm   := csrMod.io.status.matrixState.mfrm.asUInt
+  csrOut.mpu.msaten := csrMod.io.status.matrixState.msaten.asUInt
 
   csrOut.isXRet := isXRet
 

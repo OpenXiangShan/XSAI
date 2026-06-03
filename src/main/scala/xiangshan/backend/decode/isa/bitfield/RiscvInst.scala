@@ -146,7 +146,13 @@ trait BitFieldMatrix { this: Riscv32BitInst =>
 
   def isMsync = {
     this.OPCODE === xiangshan.backend.decode.isa.bitfield.OPCODE7Bit.MATRIX_INSTS &&
-      (this.MATRIX_FUNCT6(5, 1) === "b11000".U || this.MATRIX_FUNCT6 === "b110010".U)
+      this.inst(27, 25) === 0.U &&
+      this.FUNCT3 === "b100".U &&
+      this.RD === 0.U &&
+      (this.inst(31, 28) === "b1000".U ||
+        this.inst(31, 28) === "b1001".U ||
+        this.inst(31, 28) === "b1010".U ||
+        this.inst(31, 28) === "b1011".U)
   }
 }
 
@@ -230,5 +236,5 @@ object OPCODE5Bit {
 
 object OPCODE7Bit {
   val VECTOR_ARITH = "b1010111".U
-  val MATRIX_INSTS = "b1110111".U
+  val MATRIX_INSTS = "b0101011".U
 }
