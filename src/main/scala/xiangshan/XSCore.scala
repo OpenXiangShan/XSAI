@@ -36,6 +36,7 @@ import xiangshan.backend.trace.TraceCoreInterface
 import xiangshan.mem._
 import xiangshan.cache.mmu._
 import xiangshan.cache.mmu.TlbRequestIO
+import cute.CutePerfToCoreIO
 import scala.collection.mutable.ListBuffer
 
 abstract class XSModule(implicit val p: Parameters) extends Module
@@ -119,6 +120,7 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
     val dft_reset = Option.when(hasDFT)(Input(new DFTResetSignals()))
     val amuCtrl = Option.when(HasMatrixExtension)(Decoupled(new AmuCtrlIO))
     val amuRelease = Option.when(HasMatrixExtension)(Flipped(Decoupled(new AmuReleaseIO2XS)))
+    val cutePerf = Option.when(HasMatrixExtension)(Input(new CutePerfToCoreIO))
   })
 
   dontTouch(io.l2_flush_done)
@@ -204,8 +206,17 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
   backend.io.perf.perfEventsLsu := memBlock.io_perf
   backend.io.perf.perfEventsHc := memBlock.io.inner_hc_perfEvents
   backend.io.perf.perfEventsBackend := DontCare
+  backend.io.perf.perfEventsMatrixBackend.foreach(_.value := 0.U)
+  backend.io.perf.perfEventsMatrixMem.foreach(_.value := 0.U)
   backend.io.perf.retiredInstr := DontCare
   backend.io.perf.ctrlInfo := DontCare
+  memBlock.io.outer_matrixPerfEvents.foreach(_.value := 0.U)
+
+  if (HasMatrixExtension && p(MatAccKey) == MatAcc.CUTE) {
+    backend.io.perf.perfEventsMatrixBackend := VecInit(io.cutePerf.get.backendEvents.map(_.asTypeOf(new PerfEvent)))
+    backend.io.perf.perfEventsMatrixMem := VecInit(io.cutePerf.get.memEvents.map(_.asTypeOf(new PerfEvent)))
+    memBlock.io.outer_matrixPerfEvents := VecInit(io.cutePerf.get.memEvents.map(_.asTypeOf(new PerfEvent)))
+  }
 
   backend.io.mem.storeDebugInfo <> memBlock.io.mem_to_ooo.storeDebugInfo
   
