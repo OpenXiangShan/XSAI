@@ -167,8 +167,8 @@ class NewCSR(implicit val p: Parameters) extends Module
       val privState = new PrivState
       val interrupt = Bool()
       val wfiEvent = Bool()
-      val satp  = new SatpInfo
-      val vsatp = new SatpInfo
+      val satp  = ValidIO(UInt(SatpMode.getWidth.W))
+      val vsatp = ValidIO(UInt(SatpMode.getWidth.W))
       // fp
       val fpState = new Bundle {
         val off = Bool()
@@ -250,6 +250,7 @@ class NewCSR(implicit val p: Parameters) extends Module
 
     val oldPrivSate = Input(new PrivState)
     val oldSatpMode = Input(UInt(SatpMode.getWidth.W))
+    val oldVsatpMode = Input(UInt(SatpMode.getWidth.W))
 
     val distributedWenLegal = Output(Bool())
   })
@@ -290,7 +291,8 @@ class NewCSR(implicit val p: Parameters) extends Module
   val trapIsSatpFlushFirstFetchFault = io.fromRob.trap.bits.satpFlushFirstFetchFault
 
   val oldPrivState = io.oldPrivSate
-  val oldSatpMode = io.oldSatpMode
+  val oldSatpMode  = io.oldSatpMode
+  val oldVsatpMode = io.oldVsatpMode
 
   // debug_intrrupt
   val debugIntrEnable = RegInit(true.B) // debug interrupt will be handle only when debugIntrEnable
@@ -865,8 +867,8 @@ class NewCSR(implicit val p: Parameters) extends Module
         in.satp  := satp.regOut
         in.vsatp := vsatp.regOut
         in.hgatp := hgatp.regOut
-        in.oldSatp := Mux(trapIsSatpFlushFirstFetchFault, Mux(oldPrivState.V.asBool, satp.regOut, Cat(oldSatpMode, 0.U((XLEN-SatpMode.getWidth).W)).asTypeOf(in.oldSatp)), satp.regOut)
-        in.oldVsatp := Mux(trapIsSatpFlushFirstFetchFault, Mux(oldPrivState.V.asBool, Cat(oldSatpMode, 0.U((XLEN-SatpMode.getWidth).W)).asTypeOf(in.oldVsatp), vsatp.regOut), vsatp.regOut)
+        in.oldSatp := Mux(trapIsSatpFlushFirstFetchFault, Cat(oldSatpMode, 0.U((XLEN-SatpMode.getWidth).W)).asTypeOf(in.oldSatp), satp.regOut)
+        in.oldVsatp := Mux(trapIsSatpFlushFirstFetchFault, Cat(oldVsatpMode, 0.U((XLEN-SatpMode.getWidth).W)).asTypeOf(in.oldVsatp), vsatp.regOut)
         if (HasBitmapCheck) {
           in.mbmc := mbmc.get.regOut
         } else {
@@ -1209,10 +1211,10 @@ class NewCSR(implicit val p: Parameters) extends Module
                         (vstopi.regOut.IID.asUInt =/= 0.U)
   io.status.debugMode := debugMode
   io.status.singleStepFlag := !debugMode && dcsr.regOut.STEP
-  io.status.satp.wen   := satp.w.wen
-  io.status.satp.mode  := satp.regOut.MODE.asUInt
-  io.status.vsatp.wen  := vsatp.w.wen
-  io.status.vsatp.mode := vsatp.regOut.MODE.asUInt
+  io.status.satp.valid  := satp.w.wen
+  io.status.satp.bits   := satp.regOut.MODE.asUInt
+  io.status.vsatp.valid := vsatp.w.wen
+  io.status.vsatp.bits  := vsatp.regOut.MODE.asUInt
 
   /**
    * debug_begin
