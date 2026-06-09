@@ -34,6 +34,7 @@ import xiangshan.backend.decode.isa.bitfield.{InstVType, OPCODE5Bit, XSInstBitFi
 import xiangshan.backend.fu.vector.Bundles.{VType, Vl}
 import xiangshan.backend.fu.wrapper.CSRToDecode
 import xiangshan.backend.decode.Zimop._
+import xiangshan.backend.decode.Zfbf._
 import yunsuan.{VfaluType, VfcvtType}
 import xiangshan.backend.decode
 
@@ -558,6 +559,13 @@ object ZfaDecode extends DecodeConstants {
   )
 }
 
+object ZfbfDecode extends DecodeConstants {
+  override val decodeArray: Array[(BitPat, XSDecodeBase)] = Array(
+    FCVT_BF16_S -> FDecode(SrcType.fp, SrcType.X, SrcType.X, FuType.fcvt, VfcvtType.fcvt_bf16_s, fWen = T, canRobCompress = T),
+    FCVT_S_BF16 -> FDecode(SrcType.fp, SrcType.X, SrcType.X, FuType.fcvt, VfcvtType.fcvt_s_bf16, fWen = T, canRobCompress = T),
+  )
+}
+
 /**
  * XiangShan Debug Decode constants
  */
@@ -866,7 +874,8 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     OptionWrapper(HasMatrixExtension, MatrixDecoder.table(MatrixExtension)).getOrElse(Array()) ++
     ZicondDecode.table ++
     ZimopDecode.table ++
-    ZfaDecode.table
+    ZfaDecode.table ++
+    ZfbfDecode.table
 
   require(decode_table.map(_._2.length == 15).reduce(_ && _), "Decode tables have different column size")
   // assertion for LUI: only LUI should be assigned `selImm === SelImm.IMM_U && fuType === FuType.alu`
@@ -1046,7 +1055,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     VFADD_VV, VFSUB_VV, VFWADD_VV, VFWSUB_VV, VFWADD_WV, VFWSUB_WV,
     VFMUL_VV, VFDIV_VV, VFWMUL_VV,
     VFMACC_VV, VFNMACC_VV, VFMSAC_VV, VFNMSAC_VV, VFMADD_VV, VFNMADD_VV, VFMSUB_VV, VFNMSUB_VV,
-    VFWMACC_VV, VFWNMACC_VV, VFWMSAC_VV, VFWNMSAC_VV,
+    VFWMACC_VV, VFWMACCBF16_VV, VFWNMACC_VV, VFWMSAC_VV, VFWNMSAC_VV,
     VFSQRT_V,
     VFMIN_VV, VFMAX_VV,
     VMFEQ_VV, VMFNE_VV, VMFLT_VV, VMFLE_VV,
@@ -1055,7 +1064,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     VFADD_VF, VFSUB_VF, VFRSUB_VF, VFWADD_VF, VFWSUB_VF, VFWADD_WF, VFWSUB_WF,
     VFMUL_VF, VFDIV_VF, VFRDIV_VF, VFWMUL_VF,
     VFMACC_VF, VFNMACC_VF, VFMSAC_VF, VFNMSAC_VF, VFMADD_VF, VFNMADD_VF, VFMSUB_VF, VFNMSUB_VF,
-    VFWMACC_VF, VFWNMACC_VF, VFWMSAC_VF, VFWNMSAC_VF,
+    VFWMACC_VF, VFWMACCBF16_VF, VFWNMACC_VF, VFWMSAC_VF, VFWNMSAC_VF,
     VFMIN_VF, VFMAX_VF,
     VMFEQ_VF, VMFNE_VF, VMFLT_VF, VMFLE_VF, VMFGT_VF, VMFGE_VF,
     VFSGNJ_VF, VFSGNJN_VF, VFSGNJX_VF,
@@ -1066,13 +1075,13 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     FCVT_W_S, FCVT_WU_S, FCVT_L_S, FCVT_LU_S,
     FCVT_D_W, FCVT_D_WU, FCVT_D_L, FCVT_D_LU,
     FCVT_W_D, FCVT_WU_D, FCVT_L_D, FCVT_LU_D, FCVT_S_D, FCVT_D_S,
-    FCVT_S_H, FCVT_H_S, FCVT_H_D, FCVT_D_H,
+    FCVT_S_H, FCVT_H_S, FCVT_H_D, FCVT_D_H, FCVT_BF16_S, FCVT_S_BF16,
     FCVT_H_W, FCVT_H_WU, FCVT_H_L, FCVT_H_LU,
     FCVT_W_H, FCVT_WU_H, FCVT_L_H, FCVT_LU_H,
     VFCVT_XU_F_V, VFCVT_X_F_V, VFCVT_RTZ_XU_F_V, VFCVT_RTZ_X_F_V, VFCVT_F_XU_V, VFCVT_F_X_V,
-    VFWCVT_XU_F_V, VFWCVT_X_F_V, VFWCVT_RTZ_XU_F_V, VFWCVT_RTZ_X_F_V, VFWCVT_F_XU_V, VFWCVT_F_X_V, VFWCVT_F_F_V,
+    VFWCVT_XU_F_V, VFWCVT_X_F_V, VFWCVT_RTZ_XU_F_V, VFWCVT_RTZ_X_F_V, VFWCVT_F_XU_V, VFWCVT_F_X_V, VFWCVT_F_F_V, VFWCVTBF16_F_F_V,
     VFNCVT_XU_F_W, VFNCVT_X_F_W, VFNCVT_RTZ_XU_F_W, VFNCVT_RTZ_X_F_W, VFNCVT_F_XU_W, VFNCVT_F_X_W, VFNCVT_F_F_W,
-    VFNCVT_ROD_F_F_W, VFRSQRT7_V, VFREC7_V,
+    VFNCVT_ROD_F_F_W, VFNCVTBF16_F_F_W, VFRSQRT7_V, VFREC7_V,
     // zfa
     FLEQ_H, FLEQ_S, FLEQ_D, FLTQ_H, FLTQ_S, FLTQ_D,
     FMINM_H, FMINM_S, FMINM_D, FMAXM_H, FMAXM_S, FMAXM_D,
@@ -1085,7 +1094,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     FCVT_W_S, FCVT_WU_S, FCVT_L_S, FCVT_LU_S,
     FCVT_W_D, FCVT_WU_D, FCVT_L_D, FCVT_LU_D, FCVT_S_D, FCVT_D_S,
     FCVT_W_H, FCVT_WU_H, FCVT_L_H, FCVT_LU_H,
-    FCVT_S_H, FCVT_H_S, FCVT_H_D, FCVT_D_H,
+    FCVT_S_H, FCVT_H_S, FCVT_H_D, FCVT_D_H, FCVT_BF16_S, FCVT_S_BF16,
     FROUND_H, FROUND_S, FROUND_D, FROUNDNX_H, FROUNDNX_S, FROUNDNX_D,
   )
 

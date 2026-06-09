@@ -13,6 +13,7 @@ import xiangshan.backend.fu.FuType
 import xiangshan.backend.fu.vector.Bundles._
 import xiangshan.backend.decode.isa.bitfield.{InstVType, XSInstBitFields, OPCODE7Bit}
 import xiangshan.backend.decode.Zvbb._
+import xiangshan.backend.decode.Zfbf._
 
 object RegNumNotAlign {
   def apply(reg: UInt, emul: UInt): Bool = {
@@ -89,8 +90,8 @@ class VecExceptionGen(implicit p: Parameters) extends XSModule{
     //fp
     VFWADD_VF, VFWADD_VV, VFWADD_WF, VFWADD_WV, VFWSUB_VF, VFWSUB_VV, VFWSUB_WF, VFWSUB_WV, 
     VFWMUL_VF, VFWMUL_VV, 
-    VFWMACC_VF, VFWMACC_VV, VFWMSAC_VF, VFWMSAC_VV, VFWNMACC_VF, VFWNMACC_VV, VFWNMSAC_VF, VFWNMSAC_VV, 
-    VFWCVT_F_F_V, VFWCVT_F_X_V, VFWCVT_F_XU_V, VFWCVT_RTZ_X_F_V, VFWCVT_RTZ_XU_F_V, VFWCVT_X_F_V, VFWCVT_XU_F_V,
+    VFWMACC_VF, VFWMACC_VV, VFWMACCBF16_VF, VFWMACCBF16_VV, VFWMSAC_VF, VFWMSAC_VV, VFWNMACC_VF, VFWNMACC_VV, VFWNMSAC_VF, VFWNMSAC_VV,
+    VFWCVT_F_F_V, VFWCVTBF16_F_F_V, VFWCVT_F_X_V, VFWCVT_F_XU_V, VFWCVT_RTZ_X_F_V, VFWCVT_RTZ_XU_F_V, VFWCVT_X_F_V, VFWCVT_XU_F_V,
     // zvbb
     VWSLL_VV, VWSLL_VX, VWSLL_VI,
   ).map(_ === inst.ALL).reduce(_ || _)
@@ -108,7 +109,11 @@ class VecExceptionGen(implicit p: Parameters) extends XSModule{
     VNCLIP_WI, VNCLIP_WV, VNCLIP_WX, VNCLIPU_WI, VNCLIPU_WV, VNCLIPU_WX, 
     VNSRA_WI, VNSRA_WV, VNSRA_WX, VNSRL_WI, VNSRL_WV, VNSRL_WX, 
     //fp
-    VFNCVT_F_F_W, VFNCVT_F_X_W, VFNCVT_F_XU_W, VFNCVT_ROD_F_F_W, VFNCVT_RTZ_X_F_W, VFNCVT_RTZ_XU_F_W, VFNCVT_X_F_W, VFNCVT_XU_F_W
+    VFNCVT_F_F_W, VFNCVTBF16_F_F_W, VFNCVT_F_X_W, VFNCVT_F_XU_W, VFNCVT_ROD_F_F_W, VFNCVT_RTZ_X_F_W, VFNCVT_RTZ_XU_F_W, VFNCVT_X_F_W, VFNCVT_XU_F_W
+  ).map(_ === inst.ALL).reduce(_ || _)
+
+  private val bf16VectorInst = Seq(
+    VFWCVTBF16_F_F_V, VFNCVTBF16_F_F_W, VFWMACCBF16_VF, VFWMACCBF16_VV
   ).map(_ === inst.ALL).reduce(_ || _)
 
   private val intExtInst = Seq(
@@ -191,8 +196,9 @@ class VecExceptionGen(implicit p: Parameters) extends XSModule{
                                  intExt8 && SEW <= 2.U
 
   private val wnEewIllegal = (vdWideningInst || narrowingInst || redWideningInst) && SEW === 3.U
+  private val bf16EewIllegal = bf16VectorInst && SEW =/= 1.U
 
-  private val eewIllegal = fpEewIllegal || intExtEewIllegal || wnEewIllegal
+  private val eewIllegal = fpEewIllegal || intExtEewIllegal || wnEewIllegal || bf16EewIllegal
 
   // 4. EMUL Illegal
   private val lsEmulIllegal = (lsStrideInst || lsIndexInst) && (LMUL +& inst.WIDTH(1, 0) < SEW +& 1.U || LMUL +& inst.WIDTH(1, 0) > SEW +& 7.U)

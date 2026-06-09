@@ -24,6 +24,7 @@ class VFMA(cfg: FuConfig)(implicit p: Parameters) extends VecPipedFuncUnit(cfg) 
   // io alias
   private val opcode  = fuOpType(3,0)
   private val resWiden  = fuOpType(4)
+  private val isBf16Widen = fuOpType === VfmaType.vfwmaccbf16
 
   // modules
   private val vfmas = Seq.fill(numVecModule)(Module(new VectorFloatFMA))
@@ -67,7 +68,7 @@ class VFMA(cfg: FuConfig)(implicit p: Parameters) extends VecPipedFuncUnit(cfg) 
       mod.io.uop_idx      := vuopIdx(0)
       mod.io.is_vec       := true.B // Todo
       mod.io.round_mode   := rm
-      mod.io.fp_format    := Mux(resWiden, vsew + 1.U, vsew)
+      mod.io.fp_format    := Mux(isBf16Widen, 0.U(2.W), Mux(resWiden, vsew + 1.U, vsew))
       mod.io.res_widening := resWiden
       mod.io.op_code      := opcode
       resultData(i) := mod.io.fp_result
