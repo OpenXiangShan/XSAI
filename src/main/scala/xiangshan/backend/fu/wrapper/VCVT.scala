@@ -9,7 +9,7 @@ import xiangshan.backend.fu.FuConfig
 import xiangshan.backend.fu.vector.{Mgu, VecPipedFuncUnit}
 import xiangshan.ExceptionNO
 import xiangshan.FuOpType
-import yunsuan.VfpuType
+import yunsuan.{VfcvtType, VfpuType}
 import yunsuan.vector.VectorConvert.VectorCvt
 import yunsuan.util._
 
@@ -25,9 +25,11 @@ class VCVT(cfg: FuConfig)(implicit p: Parameters) extends VecPipedFuncUnit(cfg) 
   // io alias
   private val opcode = fuOpType(8, 0)
   private val sew = vsew
+  private val isVfwCvtBf16 = opcode(7, 0) === VfcvtType.vfwcvtbf16_ffv
+  private val isVfnCvtBf16 = opcode(7, 0) === VfcvtType.vfncvtbf16_ffw
 
   private val isRtz = opcode(2) & opcode(1)
-  private val isRod = opcode(2) & !opcode(1) & opcode(0)
+  private val isRod = opcode(2) & !opcode(1) & opcode(0) & !isVfnCvtBf16
   private val isFrm = !isRtz && !isRod
   private val vfcvtRm = Mux1H(
     Seq(isRtz, isRod, isFrm),
@@ -38,14 +40,14 @@ class VCVT(cfg: FuConfig)(implicit p: Parameters) extends VecPipedFuncUnit(cfg) 
 
   val widen = opcode(4, 3) // 0->single 1->widen 2->norrow => width of result
   val isSingleCvt = !widen(1) & !widen(0)
-  val isWidenCvt = !widen(1) & widen(0)
-  val isNarrowCvt = widen(1) & !widen(0)
+  val isWidenCvt = (!widen(1) & widen(0)) || isVfwCvtBf16
+  val isNarrowCvt = (widen(1) & !widen(0)) || isVfnCvtBf16
   val fire = io.in.valid
   val fireReg = GatedValidRegNext(fire)
 
   // output width 8， 16， 32， 64
   val output1H = Wire(UInt(4.W))
-  output1H := chisel3.util.experimental.decode.decoder(
+  val commonOutput1H = chisel3.util.experimental.decode.decoder(
     widen ## sew,
     TruthTable(
       Seq(
@@ -64,6 +66,7 @@ class VCVT(cfg: FuConfig)(implicit p: Parameters) extends VecPipedFuncUnit(cfg) 
       BitPat.N(4)
     )
   )
+  output1H := Mux(isVfnCvtBf16, "b0010".U, Mux(isVfwCvtBf16, "b0100".U, commonOutput1H))
   if(backendParams.debugEn) {
     dontTouch(output1H)
   }
@@ -251,5 +254,4 @@ class VectorCvtTop(vlen: Int, xlen: Int) extends Module{
     vectorCvt1.io.fflags(4,0) ## vectorCvt0.io.fflags(4,0)
   ))
 }
-
 
