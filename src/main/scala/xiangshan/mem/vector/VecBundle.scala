@@ -231,6 +231,11 @@ class storeMisaignIO(implicit p: Parameters) extends Bundle{
 
 }
 
+class mergebufferThresholdIO(implicit p: Parameters) extends Bundle{
+  val robIdx = Input(new RobPtr)
+  val uopIdx = Input(UopIdx())
+}
+
 class VSplitIO(isVStore: Boolean=false)(implicit p: Parameters) extends VLSUBundle{
   val redirect            = Flipped(ValidIO(new Redirect))
   val in                  = Flipped(Decoupled(new MemExuInput(isVector = true))) // from iq
@@ -238,7 +243,7 @@ class VSplitIO(isVStore: Boolean=false)(implicit p: Parameters) extends VLSUBund
   val out                 = Decoupled(new VecPipeBundle(isVStore))// to scala pipeline
   val vstd                = OptionWrapper(isVStore, Valid(new MemExuOutput(isVector = true)))
   val vstdMisalign        = OptionWrapper(isVStore, new storeMisaignIO)
-  val threshold            = OptionWrapper(!isVStore, Flipped(ValidIO(new LqPtr)))
+  val threshold            = OptionWrapper(!isVStore, Flipped(ValidIO(new mergebufferThresholdIO)))
   val fromPipeline        = OptionWrapper(!isVStore, Vec(LoadPipelineWidth, Flipped(ValidIO(new VecPipelineFeedbackIO(isVStore)))))
 }
 

@@ -1650,7 +1650,8 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
                               vLoadCanAccept(i) && !isSegment && !isFixVlUop(i)
     vlSplit(i).io.toMergeBuffer <> vlMergeBuffer.io.fromSplit(i)
     vlSplit(i).io.threshold.get.valid := vlMergeBuffer.io.toSplit.get.threshold
-    vlSplit(i).io.threshold.get.bits  := lsq.io.lqDeqPtr
+    vlSplit(i).io.threshold.get.bits.robIdx := lsq.io.lqDeqRobIdx
+    vlSplit(i).io.threshold.get.bits.uopIdx := lsq.io.lqDeqUopIdx
     vlSplit(i).io.fromPipeline.get.zipWithIndex.foreach { case (sink, j) =>
       if (j == MisalignWBPort) {
         when(loadUnits(j).io.vecldout.valid) {
