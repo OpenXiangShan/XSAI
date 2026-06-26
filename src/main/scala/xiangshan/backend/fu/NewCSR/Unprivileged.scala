@@ -20,26 +20,22 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
   // Matrix CSR read-only fields: enum reset literals follow p(XSCoreParamsKey) (same as HasXSParameter.coreParams).
   private val matrixCp: XSCoreParameters = self.coreParams
 
-  object XmisaField extends CSREnum with ROApply {
-    val init = Value(0x2e6.U)
-  }
-
-  object XtlenbField extends CSREnum with ROApply {
+  object TlenbField extends CSREnum with ROApply {
     val init = Value((matrixCp.TLEN / 8).U)
   }
 
-  object XtrlenbField extends CSREnum with ROApply {
+  object TrlenbField extends CSREnum with ROApply {
     val init = Value((matrixCp.TRLEN / 8).U)
   }
 
-  object XalenbField extends CSREnum with ROApply {
+  object AlenbField extends CSREnum with ROApply {
     val init = Value(
       (((matrixCp.TLEN / matrixCp.TRLEN) * (matrixCp.TLEN / matrixCp.TRLEN) * matrixCp.MELEN) / 8).U
     )
   }
 
-  object MtokField extends CSREnum with ROApply {
-    val init = Value(matrixCp.MTOK.U)
+  object MsyncField extends CSREnum with ROApply {
+    val init = Value(matrixCp.MsyncRegs.U)
   }
 
   val fcsr = Module(new CSRModule("Fcsr", new CSRBundle {
@@ -156,35 +152,35 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
   }))
     .setAddr(CSRs.vlenb)
 
-  val xmcsr = Module(new CSRModule("Xmcsr", new CSRBundle {
-    val XMXRM    = RW(1,  0).withReset(0.U)
-    val XMSAT    = RW(    2).withReset(0.U)
-    val XMFFLAGS = RW(7,  3).withReset(0.U)
-    val XMFRM    = RW(10, 8).withReset(0.U)
-    val XMSATEN  = RW(11).withReset(0.U)
+  val mcsr = Module(new CSRModule("Mcsr", new CSRBundle {
+    val MXRM    = RW(1,  0).withReset(0.U)
+    val MSAT    = RW(    2).withReset(0.U)
+    val MFFLAGS = RW(7,  3).withReset(0.U)
+    val MFRM    = RW(10, 8).withReset(0.U)
+    val MSATEN  = RW(11).withReset(0.U)
   }) with HasRobCommitBundle {
-    val wAliasXmxrm = IO(Input(new CSRAddrWriteBundle(new CSRBundle {
-      val XMXRM = RW(1, 0)
+    val wAliasMxrm = IO(Input(new CSRAddrWriteBundle(new CSRBundle {
+      val MXRM = RW(1, 0)
     })))
-    val wAliasXmsat = IO(Input(new CSRAddrWriteBundle(new CSRBundle {
-      val XMSAT = RW(2)
+    val wAliasMsat = IO(Input(new CSRAddrWriteBundle(new CSRBundle {
+      val MSAT = RW(2)
     })))
-    val wAliasXmflags = IO(Input(new CSRAddrWriteBundle(new CSRBundle {
-      val XMFFLAGS = RW(7, 3)
+    val wAliasMflags = IO(Input(new CSRAddrWriteBundle(new CSRBundle {
+      val MFFLAGS = RW(7, 3)
     })))
-    val wAliasXmfrm = IO(Input(new CSRAddrWriteBundle(new CSRBundle {
-      val XMFRM = RW(10, 8)
+    val wAliasMfrm = IO(Input(new CSRAddrWriteBundle(new CSRBundle {
+      val MFRM = RW(10, 8)
     })))
-    val wAliasXmsaten = IO(Input(new CSRAddrWriteBundle(new CSRBundle {
-      val XMSATEN = RW(11)
+    val wAliasMsaten = IO(Input(new CSRAddrWriteBundle(new CSRBundle {
+      val MSATEN = RW(11)
     })))
-    val xmxrm = IO(Output(Xmxrm()))
-    val xmsat = IO(Output(Xmsat()))
-    val xmfflags = IO(Output(Xmfflags()))
-    val xmfrm = IO(Output(Xmfrm()))
-    val xmsaten = IO(Output(Xmsaten()))
+    val mxrm = IO(Output(Mxrm()))
+    val msat = IO(Output(Msat()))
+    val mfflags = IO(Output(Mfflags()))
+    val mfrm = IO(Output(Mfrm()))
+    val msaten = IO(Output(Msaten()))
 
-    for (wAlias <- Seq(wAliasXmxrm, wAliasXmsat, wAliasXmflags, wAliasXmfrm, wAliasXmsaten)) {
+    for (wAlias <- Seq(wAliasMxrm, wAliasMsat, wAliasMflags, wAliasMfrm, wAliasMsaten)) {
       for ((name, field) <- wAlias.wdataFields.elements) {
         reg.elements(name).asInstanceOf[CSREnumType].addOtherUpdate(
           wAlias.wen && field.asInstanceOf[CSREnumType].isLegal,
@@ -205,12 +201,12 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
     // TODO: How to update xmsat and xmfflags from CUTE?
 
     // read connection
-    xmxrm := reg.XMXRM.asUInt
-    xmsat := reg.XMSAT.asUInt
-    xmfflags := reg.XMFFLAGS.asUInt
-    xmfrm := reg.XMFRM.asUInt
-    xmsaten := reg.XMSATEN.asUInt
-  }).setAddr(CSRs.xmcsr)
+    mxrm := reg.MXRM.asUInt
+    msat := reg.MSAT.asUInt
+    mfflags := reg.MFFLAGS.asUInt
+    mfrm := reg.MFRM.asUInt
+    msaten := reg.MSATEN.asUInt
+  }).setAddr(CSRs.mcsr)
 
   // Matrix tile size registers, read-only.
   // They can be updated only by msettilem/n/k instructions.
@@ -229,30 +225,25 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
   }))
     .setAddr(CSRs.mtilek)
 
-  val xmisa = Module(new CSRModule("Xmisa", new CSRBundle {
-    val XMISA = XmisaField(63, 0).withReset(XmisaField.init)
+  val tlenb = Module(new CSRModule("Tlenb", new CSRBundle {
+    val TLENB = TlenbField(63, 0).withReset(TlenbField.init)
   }))
-    .setAddr(CSRs.xmisa)
+    .setAddr(CSRs.tlenb)
 
-  val xtlenb = Module(new CSRModule("Xtlenb", new CSRBundle {
-    val XTLENB = XtlenbField(63, 0).withReset(XtlenbField.init)
+  val trlenb = Module(new CSRModule("Trlenb", new CSRBundle {
+    val TRLENB = TrlenbField(63, 0).withReset(TrlenbField.init)
   }))
-    .setAddr(CSRs.xtlenb)
+    .setAddr(CSRs.trlenb)
 
-  val xtrlenb = Module(new CSRModule("Xtrlenb", new CSRBundle {
-    val XTRLENB = XtrlenbField(63, 0).withReset(XtrlenbField.init)
+  val alenb = Module(new CSRModule("Alenb", new CSRBundle {
+    val ALENB = AlenbField(63, 0).withReset(AlenbField.init)
   }))
-    .setAddr(CSRs.xtrlenb)
+    .setAddr(CSRs.alenb)
 
-  val xalenb = Module(new CSRModule("Xalenb", new CSRBundle {
-    val XALENB = XalenbField(63, 0).withReset(XalenbField.init)
+  val msync = Module(new CSRModule("Msync", new CSRBundle {
+    val MSYNC = MsyncField(63, 0).withReset(MsyncField.init)
   }))
-    .setAddr(CSRs.xalenb)
-
-  val mtok = Module(new CSRModule("Mtok", new CSRBundle {
-    val MTOK = MtokField(63, 0).withReset(MtokField.init)
-  }))
-    .setAddr(CSRs.mtok)
+    .setAddr(CSRs.msync)
 
   val cycle = Module(new CSRModule("cycle", new CSRBundle {
     val cycle = RO(63, 0)
@@ -328,20 +319,19 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
     CSRs.vl       -> (vl.w              -> vl.rdata),
     CSRs.vtype    -> (vtype.w           -> vtype.rdata),
     CSRs.vlenb    -> (vlenb.w           -> vlenb.rdata),
-    CSRs.xmcsr    -> (xmcsr.w           -> xmcsr.rdata),
-    CSRs.xmxrm    -> (xmcsr.wAliasXmxrm   -> xmcsr.xmxrm),
-    CSRs.xmsat    -> (xmcsr.wAliasXmsat   -> xmcsr.xmsat),
-    CSRs.xmfflags -> (xmcsr.wAliasXmflags -> xmcsr.xmfflags),
-    CSRs.xmfrm    -> (xmcsr.wAliasXmfrm   -> xmcsr.xmfrm),
-    CSRs.xmsaten  -> (xmcsr.wAliasXmsaten -> xmcsr.xmsaten),
+    CSRs.mcsr     -> (mcsr.w            -> mcsr.rdata),
+    CSRs.mxrm     -> (mcsr.wAliasMxrm   -> mcsr.mxrm),
+    CSRs.msat     -> (mcsr.wAliasMsat   -> mcsr.msat),
+    CSRs.mfflags  -> (mcsr.wAliasMflags -> mcsr.mfflags),
+    CSRs.mfrm     -> (mcsr.wAliasMfrm   -> mcsr.mfrm),
+    CSRs.msaten   -> (mcsr.wAliasMsaten -> mcsr.msaten),
     CSRs.mtilem   -> (mtilem.w          -> mtilem.rdata),
     CSRs.mtilen   -> (mtilen.w          -> mtilen.rdata),
     CSRs.mtilek   -> (mtilek.w          -> mtilek.rdata),
-    CSRs.xmisa    -> (xmisa.w           -> xmisa.rdata),
-    CSRs.xtlenb   -> (xtlenb.w          -> xtlenb.rdata),
-    CSRs.xtrlenb  -> (xtrlenb.w         -> xtrlenb.rdata),
-    CSRs.xalenb   -> (xalenb.w          -> xalenb.rdata),
-    CSRs.mtok     -> (mtok.w            -> mtok.rdata),
+    CSRs.tlenb    -> (tlenb.w           -> tlenb.rdata),
+    CSRs.trlenb   -> (trlenb.w          -> trlenb.rdata),
+    CSRs.alenb    -> (alenb.w           -> alenb.rdata),
+    CSRs.msync    -> (msync.w           -> msync.rdata),
     CSRs.cycle    -> (cycle.w           -> cycle.rdata),
     CSRs.time     -> (time.w            -> time.rdata),
     CSRs.instret  -> (instret.w         -> instret.rdata),
@@ -354,15 +344,14 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
     vl,
     vtype,
     vlenb,
-    xmcsr,
-    xmisa,
-    xtlenb,
-    xtrlenb,
-    xalenb,
-    mtok,
+    mcsr,
+    tlenb,
+    trlenb,
+    alenb,
     mtilem,
     mtilen,
     mtilek,
+    msync,
     cycle,
     time,
     instret,
@@ -379,20 +368,19 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
     CSRs.vl      -> vl.rdata.asUInt,
     CSRs.vtype   -> vtype.rdata.asUInt,
     CSRs.vlenb   -> vlenb.rdata.asUInt,
-    CSRs.xmcsr   -> xmcsr.rdata.asUInt,
-    CSRs.xmxrm   -> xmcsr.xmxrm.asUInt,
-    CSRs.xmsat   -> xmcsr.xmsat.asUInt,
-    CSRs.xmfflags -> xmcsr.xmfflags.asUInt,
-    CSRs.xmfrm   -> xmcsr.xmfrm.asUInt,
-    CSRs.xmsaten -> xmcsr.xmsaten.asUInt,
-    CSRs.xmisa   -> xmisa.rdata.asUInt,
-    CSRs.xtlenb  -> xtlenb.rdata.asUInt,
-    CSRs.xtrlenb -> xtrlenb.rdata.asUInt,
-    CSRs.xalenb  -> xalenb.rdata.asUInt,
-    CSRs.mtok    -> mtok.rdata.asUInt,
+    CSRs.mcsr    -> mcsr.rdata.asUInt,
+    CSRs.mxrm    -> mcsr.mxrm.asUInt,
+    CSRs.msat    -> mcsr.msat.asUInt,
+    CSRs.mfflags -> mcsr.mfflags.asUInt,
+    CSRs.mfrm    -> mcsr.mfrm.asUInt,
+    CSRs.msaten  -> mcsr.msaten.asUInt,
+    CSRs.tlenb   -> tlenb.rdata.asUInt,
+    CSRs.trlenb  -> trlenb.rdata.asUInt,
+    CSRs.alenb   -> alenb.rdata.asUInt,
     CSRs.mtilem  -> mtilem.rdata.asUInt,
     CSRs.mtilen  -> mtilen.rdata.asUInt,
     CSRs.mtilek  -> mtilek.rdata.asUInt,
+    CSRs.msync   -> msync.rdata.asUInt,
     CSRs.cycle   -> cycle.rdata,
     CSRs.time    -> time.rdata,
     CSRs.instret -> instret.rdata,

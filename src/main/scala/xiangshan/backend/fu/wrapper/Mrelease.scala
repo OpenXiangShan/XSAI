@@ -16,7 +16,7 @@ class Mrelease(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUnit(cfg)
   io.in.ready := io.out.ready
   
   val output = Wire(new AmuReleaseIO2CUTE)
-  output.tokenRd := in.data.imm
+  output.msyncRd := in.data.imm
 
   out.res.data := 0.U
   out.ctrl.amuCtrl.get.op   := AmuCtrlIO.releaseOp()

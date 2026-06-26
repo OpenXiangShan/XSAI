@@ -7,6 +7,7 @@ import utility._
 import xiangshan._
 import xiangshan.backend.Bundles._
 import xiangshan.backend.ctrlblock.{DebugLsInfoBundle, LsTopdownInfo}
+import xiangshan.backend.decode.McfgHelpers
 import xiangshan.backend.fu._
 import xiangshan.backend.fu.FuConfig._
 import xiangshan.backend.fu.matrix.Bundles.{AmuLsuIO, AmuCtrlIO}
@@ -226,30 +227,31 @@ class MlsUnit(implicit p: Parameters) extends XSModule
     MldstOpType.isMatrixC(s0_uop.fuOpType)  -> (s0_mtile0 > ROWNUM.U),
     MldstOpType.isWholeReg(s0_uop.fuOpType) -> false.B,
   ))
+  val s0_mcfgEntry = s0_uop.mcfgReadView.get.entry
+  val s0_mcfgTypeCode = s0_mcfgEntry.typeCode
+  val s0_mcfgWidth = McfgHelpers.msew(s0_mcfgTypeCode)
+  val s0_arlenElems = Mux1H(Seq(
+    (s0_mcfgWidth === MSew.e4)  -> (ARLEN / 4).U,
+    (s0_mcfgWidth === MSew.e8)  -> (ARLEN / 8).U,
+    (s0_mcfgWidth === MSew.e16) -> (ARLEN / 16).U,
+    (s0_mcfgWidth === MSew.e32) -> (ARLEN / 32).U,
+  ))
+  val s0_trlenElems = Mux1H(Seq(
+    (s0_mcfgWidth === MSew.e4)  -> (coreParams.TRLEN / 4).U,
+    (s0_mcfgWidth === MSew.e8)  -> (coreParams.TRLEN / 8).U,
+    (s0_mcfgWidth === MSew.e16) -> (coreParams.TRLEN / 16).U,
+    (s0_mcfgWidth === MSew.e32) -> (coreParams.TRLEN / 32).U,
+  ))
+  val s0_nonWholeMls = !MldstOpType.isWholeReg(s0_uop.fuOpType)
   val illegal_mtilen = Mux1H(Seq(
     MldstOpType.isMatrixA(s0_uop.fuOpType) -> false.B,
     MldstOpType.isMatrixB(s0_uop.fuOpType) -> (s0_mtile1 > ROWNUM.U),
-    MldstOpType.isMatrixC(s0_uop.fuOpType) -> Mux1H(Seq(
-      MldstOpType.isE8(s0_uop.fuOpType)  -> (s0_mtile1 > (ARLEN / 8).U),
-      MldstOpType.isE16(s0_uop.fuOpType) -> (s0_mtile1 > (ARLEN / 16).U),
-      MldstOpType.isE32(s0_uop.fuOpType) -> (s0_mtile1 > (ARLEN / 32).U),
-      MldstOpType.isE64(s0_uop.fuOpType) -> (s0_mtile1 > (ARLEN / 64).U),
-    )),
+    MldstOpType.isMatrixC(s0_uop.fuOpType) -> (s0_mtile1 > s0_arlenElems),
     MldstOpType.isWholeReg(s0_uop.fuOpType) -> false.B,
   ))
   val illegal_mtilek = Mux1H(Seq(
-    MldstOpType.isMatrixA(s0_uop.fuOpType) -> Mux1H(Seq(
-      MldstOpType.isE8(s0_uop.fuOpType)  -> (s0_mtile1 > (TRLEN / 8).U),
-      MldstOpType.isE16(s0_uop.fuOpType) -> (s0_mtile1 > (TRLEN / 16).U),
-      MldstOpType.isE32(s0_uop.fuOpType) -> (s0_mtile1 > (TRLEN / 32).U),
-      MldstOpType.isE64(s0_uop.fuOpType) -> (s0_mtile1 > (TRLEN / 64).U),
-    )),
-    MldstOpType.isMatrixB(s0_uop.fuOpType) -> Mux1H(Seq(
-      MldstOpType.isE8(s0_uop.fuOpType)  -> (s0_mtile0 > (TRLEN / 8).U),
-      MldstOpType.isE16(s0_uop.fuOpType) -> (s0_mtile0 > (TRLEN / 16).U),
-      MldstOpType.isE32(s0_uop.fuOpType) -> (s0_mtile0 > (TRLEN / 32).U),
-      MldstOpType.isE64(s0_uop.fuOpType) -> (s0_mtile0 > (TRLEN / 64).U),
-    )),
+    MldstOpType.isMatrixA(s0_uop.fuOpType) -> (s0_mtile1 > s0_trlenElems),
+    MldstOpType.isMatrixB(s0_uop.fuOpType) -> (s0_mtile0 > s0_trlenElems),
     MldstOpType.isMatrixC(s0_uop.fuOpType) -> false.B,
     MldstOpType.isWholeReg(s0_uop.fuOpType) -> false.B,
   ))
@@ -546,13 +548,12 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   }
 
   val amuCtrl = Wire(new AmuLsuIO)
+  val s3_mcfgEntry = s3_in.uop.mcfgReadView.get.entry
+  val s3_mcfgTypeCode = s3_mcfgEntry.typeCode
+  val s3_mcfgWidth = McfgHelpers.msew(s3_mcfgTypeCode)
   amuCtrl.ls := MldstOpType.isStore(s3_in.uop.fuOpType)
   amuCtrl.ms := s3_in.uop.imm(2, 0)
-  amuCtrl.widths    := Mux1H(Seq(
-    MldstOpType.isE8(s3_in.uop.fuOpType)  -> MSew.e8,
-    MldstOpType.isE16(s3_in.uop.fuOpType) -> MSew.e16,
-    MldstOpType.isE32(s3_in.uop.fuOpType) -> MSew.e32,
-  ))
+  amuCtrl.widths    := Mux(MldstOpType.isWholeReg(s3_in.uop.fuOpType), MSew.e8, s3_mcfgWidth)
   amuCtrl.baseAddr  := s3_in.paddr
   amuCtrl.stride    := s3_in.stride
   amuCtrl.transpose := MldstOpType.isTransposed(s3_in.uop.fuOpType)
@@ -561,18 +562,10 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   amuCtrl.isB       := MldstOpType.isMatrixB(s3_in.uop.fuOpType)
   when (MldstOpType.isWholeReg(s3_in.uop.fuOpType)) {
     amuCtrl.row     := ROWNUM.U
-    when (s3_in.uop.imm(2)) {
-      amuCtrl.column := Mux1H(Seq(
-        MldstOpType.isE8(s3_in.uop.fuOpType)  -> (ARLEN / 8).U,
-        MldstOpType.isE16(s3_in.uop.fuOpType) -> (ARLEN / 16).U,
-        MldstOpType.isE32(s3_in.uop.fuOpType) -> (ARLEN / 32).U,
-      ))
-    } .otherwise { // MldstOpType.isTile(s3_in.uop.fuOpType)
-      amuCtrl.column := Mux1H(Seq(
-        MldstOpType.isE8(s3_in.uop.fuOpType)  -> (coreParams.TRLEN / 8).U,
-        MldstOpType.isE16(s3_in.uop.fuOpType) -> (coreParams.TRLEN / 16).U,
-        MldstOpType.isE32(s3_in.uop.fuOpType) -> (coreParams.TRLEN / 32).U,
-      ))
+    when (s3_in.uop.imm(2)) { // for acc registers
+      amuCtrl.column := (ARLEN / 8).U
+    } .otherwise { // for tile registers
+      amuCtrl.column := (TRLEN / 8).U
     }
   } .otherwise {
     amuCtrl.row     := s3_in.mtile0

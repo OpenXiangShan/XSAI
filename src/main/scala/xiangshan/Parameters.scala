@@ -66,7 +66,6 @@ case class XSCoreParameters
   TLEN: Int = 128 * 64 * 8,   // Expect TMMAX 128 TNMAX 128 TKMAX 64 with e8
   TRLEN: Int = 64 * 8,         // 64 * e8
   MELEN: Int = 32,
-  MTOK: Int = 32,             // 8 or 16 or 32
   MTILEXLEN: Int = 9,         // 9 bits is sufficient
   HasMExtension: Boolean = true,
   HasCExtension: Boolean = true,
@@ -170,7 +169,7 @@ case class XSCoreParameters
   V0LogicRegs: Int = 1, // V0
   VlLogicRegs: Int = 1, // Vl
   MxLogicRegs: Int = 3, // Mtilem, Mtilen, Mtilek
-  TokenRegs: Int = 32,  // 8 / 16 / 32
+  MsyncRegs: Int = 32,  // 8 / 16 / 32
   V0_IDX: Int = 0,
   Vl_IDX: Int = 0,
   Mtilem_IDX: Int = 0,
@@ -433,7 +432,7 @@ case class XSCoreParameters
       ), numEntries = IssueQueueSize, numEnq = 2, numComp = IssueQueueCompEntrySize),
       IssueBlockParams(Seq(
         ExeUnitParams("ALU3", Seq(AluCfg), Seq(IntWB(port = 3, 0)), Seq(Seq(IntRD(6, 0)), Seq(IntRD(7, 0))), true, 2),
-        ExeUnitParams("BJU3", Seq(CsrCfg, FenceCfg, DivCfg), Seq(IntWB(port = 4, 1)), Seq(Seq(IntRD(0, 1)), Seq(IntRD(1, 1)))),
+        ExeUnitParams("BJU3", Seq(CsrCfg, FenceCfg, DivCfg) ++ (if (HasMatrixExtension) Seq(McfgCfg) else Nil), Seq(IntWB(port = 4, 1)), Seq(Seq(IntRD(0, 1)), Seq(IntRD(1, 1)))),
       ), numEntries = IssueQueueSize, numEnq = 2, numComp = IssueQueueCompEntrySize),
     ) ++ (
       if (HasMatrixExtension) Seq(
@@ -673,7 +672,6 @@ trait HasXSParameter {
   def ROWNUM = TLEN / TRLEN
   def ARLEN = ROWNUM * MELEN
   def ALEN = ARLEN * ROWNUM
-  def MTOK = coreParams.MTOK
 
   def DEV_FIXED_MTYPE = false
 
@@ -827,7 +825,7 @@ trait HasXSParameter {
   def VlLogicRegs = coreParams.VlLogicRegs
   def MxLogicRegs = coreParams.MxLogicRegs
   def MaxLogicRegs = Set(IntLogicRegs, FpLogicRegs, VecLogicRegs, V0LogicRegs, VlLogicRegs).max
-  def TokenRegs = coreParams.TokenRegs
+  def MsyncRegs = coreParams.MsyncRegs
   def LogicRegsWidth = log2Ceil(MaxLogicRegs)
   def V0_IDX = coreParams.V0_IDX
   def Vl_IDX = coreParams.Vl_IDX

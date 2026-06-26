@@ -805,9 +805,9 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
   fpExuBlock.io.vxrm.foreach(_ := csrio.vpu.vxrm)
   vfExuBlock.io.frm.foreach(_ := csrio.fpu.frm)
   vfExuBlock.io.vxrm.foreach(_ := csrio.vpu.vxrm)
-  mfExuBlock.foreach(_.io.xmxrm.foreach(_ := csrio.mpu.xmxrm))
-  mfExuBlock.foreach(_.io.xmfrm.foreach(_ := csrio.mpu.xmfrm))
-  mfExuBlock.foreach(_.io.xmsaten.foreach(_ := csrio.mpu.xmsaten))
+  mfExuBlock.foreach(_.io.mxrm.foreach(_ := csrio.mpu.mxrm))
+  mfExuBlock.foreach(_.io.mfrm.foreach(_ := csrio.mpu.mfrm))
+  mfExuBlock.foreach(_.io.msaten.foreach(_ := csrio.mpu.msaten))
 
   wbDataPath.io.flush := ctrlBlock.io.redirect
   wbDataPath.io.fromTop.hartId := io.fromTop.hartId
@@ -973,6 +973,7 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
     sink.bits.uop.vpu            := source.bits.vpu.getOrElse(0.U.asTypeOf(new VPUCtrlSignals))
     sink.bits.uop.preDecodeInfo  := source.bits.preDecode.getOrElse(0.U.asTypeOf(new PreDecodeInfo))
     sink.bits.uop.numLsElem      := source.bits.numLsElem.getOrElse(0.U) // Todo: remove this bundle, keep only the one below
+    sink.bits.uop.mcfgReadView.foreach(_.entry.raw := source.bits.mcfgReadRaw.get)
     sink.bits.flowNum.foreach(_  := source.bits.numLsElem.get)
   }
   io.mem.loadFastMatch := memScheduler.io.toMem.get.loadFastMatch.map(_.fastMatch)

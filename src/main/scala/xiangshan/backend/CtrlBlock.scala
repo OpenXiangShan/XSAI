@@ -399,6 +399,10 @@ class CtrlBlockImp(
   decode.io.fromRob.walkToArchVType := rob.io.toDecode.walkToArchVType
   decode.io.fromRob.commitVType := rob.io.toDecode.commitVType
   decode.io.fromRob.walkVType := rob.io.toDecode.walkVType
+  decode.io.fromRob.isResumeMcfg := rob.io.toDecode.isResumeMcfg
+  decode.io.fromRob.walkToArchMcfg := rob.io.toDecode.walkToArchMcfg
+  decode.io.fromRob.commitMcfg := rob.io.toDecode.commitMcfg
+  decode.io.fromRob.walkMcfg := rob.io.toDecode.walkMcfg
 
   decode.io.redirect := s1_s3_redirect.valid || s2_s4_pendingRedirectValid
 
@@ -805,6 +809,7 @@ class CtrlBlockImp(
 
   // rob to backend
   io.robio.commitVType := rob.io.toDecode.commitVType
+  io.robio.commitMcfg := rob.io.toDecode.commitMcfg
   // exu block to decode
   decode.io.vsetvlVType := io.toDecode.vsetvlVType
   // backend to decode
@@ -969,6 +974,7 @@ class CtrlBlockIO()(implicit p: Parameters, params: BackendParams) extends XSBun
       val vtype = Output(ValidIO(VType()))
       val hasVsetvl = Output(Bool())
     }
+    val commitMcfg = Output(Vec(CommitWidth, ValidIO(new xiangshan.backend.decode.McfgCommit)))
 
     // store event difftest information
     val storeDebugInfo = Vec(EnsbufferWidth, new Bundle {

@@ -45,9 +45,9 @@ class ExuBlockImp(
     exu.io.vlIsZero.foreach(exuio => io.vlIsZero.get := exuio)
     exu.io.vlIsVlmax.foreach(exuio => io.vlIsVlmax.get := exuio)
     exu.io.vtype.foreach(exuio => io.vtype.get := exuio)
-    exu.io.xmxrm.foreach(exuio => io.xmxrm.get <> exuio)
-    exu.io.xmfrm.foreach(exuio => io.xmfrm.get <> exuio)
-    exu.io.xmsaten.foreach(exuio => io.xmsaten.get <> exuio)
+    exu.io.mxrm.foreach(exuio => io.mxrm.get <> exuio)
+    exu.io.mfrm.foreach(exuio => io.mfrm.get <> exuio)
+    exu.io.msaten.foreach(exuio => io.msaten.get <> exuio)
     exu.io.in <> input
     output <> exu.io.out
     io.csrToDecode.foreach(toDecode => exu.io.csrToDecode.foreach(exuOut => toDecode := exuOut))
@@ -88,7 +88,7 @@ class ExuBlockIO(implicit p: Parameters, params: SchdBlockParams) extends XSBund
   val vtype = Option.when(params.writeVConfig)((Valid(new VType)))
   val vlIsZero = Option.when(params.writeVConfig)(Output(Bool()))
   val vlIsVlmax = Option.when(params.writeVConfig)(Output(Bool()))
-  val xmxrm = Option.when(params.needSrcXmcsr)(Input(UInt(2.W)))
-  val xmfrm = Option.when(params.needSrcXmcsr)(Input(UInt(3.W)))
-  val xmsaten = Option.when(params.needSrcXmcsr)(Input(UInt(1.W)))
+  val mxrm = Option.when(params.needSrcMcsr)(Input(UInt(2.W)))
+  val mfrm = Option.when(params.needSrcMcsr)(Input(UInt(3.W)))
+  val msaten = Option.when(params.needSrcMcsr)(Input(UInt(1.W)))
 }

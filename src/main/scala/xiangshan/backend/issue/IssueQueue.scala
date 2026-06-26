@@ -822,6 +822,8 @@ class IssueQueueImp(override val wrapper: IssueQueue)(implicit p: Parameters, va
     deq.bits.common.loadDependency.foreach(_.zip(finalLoadDependency(i)).foreach { case (sink, source) => sink := source})
     deq.bits.common.src := DontCare
     deq.bits.common.preDecode.foreach(_ := deqEntryVec(i).bits.payload.preDecodeInfo)
+    deq.bits.common.mcfgReadRaw.foreach(_ := deqEntryVec(i).bits.payload.mcfgReadView.get.entry.raw)
+    deq.bits.common.mmaMcfgReadRaw.foreach(_ := deqEntryVec(i).bits.payload.mmaMcfgReadRaw.get)
 
     deq.bits.rf.zip(deqEntryVec(i).bits.status.srcStatus.map(_.psrc)).zip(deqEntryVec(i).bits.status.srcStatus.map(_.srcType)).foreach { case ((rf, psrc), srcType) =>
       // psrc in status array can be pregIdx of IntRegFile or VfRegFile
