@@ -1276,11 +1276,12 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     decodedInst.lsrc(4) := Mtilek_IDX.U
   }.elsewhen (isMls) {
     decodedInst.srcType(0) := SrcType.xp
-    decodedInst.srcType(1) := SrcType.xp
     when (MldstOpType.isWholeReg(decodedInst.fuOpType)) {
+      decodedInst.srcType(1) := SrcType.no
       decodedInst.srcType(2) := SrcType.no
       decodedInst.srcType(3) := SrcType.no
     }.otherwise {
+      decodedInst.srcType(1) := SrcType.xp
       decodedInst.srcType(2) := SrcType.mx
       decodedInst.srcType(3) := SrcType.mx
     }
