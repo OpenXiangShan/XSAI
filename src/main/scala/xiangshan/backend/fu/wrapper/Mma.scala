@@ -48,7 +48,7 @@ class Mma(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUnit(cfg) {
 
   val illegal_regidx = !in.data.imm(2) || in.data.imm(5) || in.data.imm(8)
   val illegal_mtilem = mtilem > ROWNUM.U
-  val illegal_mtilen = mtilen > ROWNUM.U && mtilek > elementLimit(ARLEN, cTypeCode)
+  val illegal_mtilen = mtilen > ROWNUM.U || mtilen > elementLimit(ARLEN, cTypeCode)
   val illegal_mtilek = mtilek > elementLimit(TRLEN, aTypeCode)
 
   val output = Wire(new AmuMmaIO)
