@@ -273,9 +273,6 @@ class MinimalMatrixConfig(n: Int) extends Config(
         MatrixExtension = MatrixIsaParams(
           enableInt8Int32 = true,
           enableFp8Fp32 = true,
-          enableFp8Fp16 = true,
-          enableFp8Bf16 = true,
-          enableFp16Fp16 = true,
           enableBf16Fp32 = true,
         ),
         l2tlbParameters = p.l2tlbParameters.copy(
@@ -539,9 +536,6 @@ class DefaultMatrixConfig(n: Int = 1) extends Config(
         MatrixExtension = MatrixIsaParams(
           enableInt8Int32 = true,
           enableFp8Fp32 = true,
-          enableFp8Fp16 = true,
-          enableFp8Bf16 = true,
-          enableFp16Fp16 = true,
           enableBf16Fp32 = true,
         ),
         l2tlbParameters = p.l2tlbParameters.copy(
