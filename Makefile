@@ -44,7 +44,7 @@ TOP_V = $(RTL_DIR)/$(TOP).$(RTL_SUFFIX)
 SIM_TOP_V = $(RTL_DIR)/$(SIM_TOP).$(RTL_SUFFIX)
 JAR = $(BUILD_DIR)/xsgen.jar
 
-SCALA_DIRS = ./src/main/scala $(wildcard ./CUTE/src/main/scala)
+SCALA_DIRS = ./src/main/scala $(wildcard ./CUTE/src/main/scala) $(wildcard ./CUTE/cute-fpe/fpe/src/main/scala/top)
 SCALA_FILE = $(shell find $(SCALA_DIRS) -name '*.scala')
 TEST_FILE = $(shell find ./src/test/scala -name '*.scala')
 

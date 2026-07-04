@@ -240,6 +240,20 @@ object CUTE extends $file.CUTE.common.CUTEModule with HasChisel {
 
   override def millSourcePath = pwd / "CUTE"
 
+  override def sources = T.sources {
+    val cuteSourceRoot = millSourcePath / "src" / "main" / "scala"
+    val cuteSources = os.walk(cuteSourceRoot)
+      .filter(p => os.isFile(p) && p.ext == "scala")
+      .map(PathRef(_))
+
+    val cuteFpeSourceRoot = millSourcePath / "cute-fpe" / "fpe" / "src" / "main" / "scala" / "top"
+    val cuteFpeSources = os.list(cuteFpeSourceRoot)
+      .filter(p => os.isFile(p) && p.ext == "scala" && p.last != "main.scala")
+      .map(PathRef(_))
+
+    cuteSources ++ cuteFpeSources
+  }
+
   def rocketModule: ScalaModule = rocketchip
 
   def utilityModule: ScalaModule = utility
