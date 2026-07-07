@@ -260,9 +260,7 @@ class DecodeStage(implicit p: Parameters) extends XSModule
       SrcType.isVp(s) && (l === 0.U)
     }.reduce(_ || _)
     inst.bits.srcType(3) := Mux(srcType0123HasV0, SrcType.v0, finalDecodedInst(i).srcType(3))
-    when (inst.bits.uopIdx =/= 0.U) {
-      inst.bits.debug_seqNum := 0.U.asTypeOf(new InstSeqNum)
-    }
+    inst.bits.debug_seqNum.uopIdx := inst.bits.uopIdx
   }
 
   io.out.map(x =>
