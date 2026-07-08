@@ -518,6 +518,7 @@ class CtrlBlockImp(
   decode.io.mxRat.foreach(_ <> rat.io.mxReadPorts.get)
   decode.io.fusion := 0.U.asTypeOf(decode.io.fusion) // Todo
   decode.io.stallReason.in <> io.frontend.stallReason
+  decode.io.backendCanAccept := io.frontend.canAccept
 
   // snapshot check
   class CFIRobIdx extends Bundle {
