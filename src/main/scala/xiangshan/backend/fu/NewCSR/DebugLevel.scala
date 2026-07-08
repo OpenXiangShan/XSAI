@@ -57,9 +57,7 @@ trait DebugLevel { self: NewCSR =>
     .setAddr(CSRs.tinfo)
 
   val dcsr = Module(new CSRModule("Dcsr", new DcsrBundle) with TrapEntryDEventSinkBundle with DretEventSinkBundle with HasNmipBundle {
-    when(nmip){
-      reg.NMIP := nmip
-    }
+    regOut.NMIP := nmip
   })
     .setAddr(CSRs.dcsr)
 
@@ -261,10 +259,14 @@ class Tdata2Bundle extends OneFieldBundle
 
 // Tinfo
 class TinfoBundle extends CSRBundle{
-  // Version isn't in version 0.13
-  val VERSION     = RO(31, 24).withReset(0.U)
+  val VERSION     = TriggerVer(31, 24).withReset(TriggerVer.Spec_1dot0)
   // only support mcontrol6
   val MCONTROL6EN = RO(6).withReset(1.U)
+}
+
+object TriggerVer extends CSREnum with ROApply {
+  val Spec_2302  = Value(0.U)
+  val Spec_1dot0 = Value(1.U)
 }
 
 // Dscratch
