@@ -262,6 +262,14 @@ object CUTE extends $file.CUTE.common.CUTEModule with HasChisel {
   
   def difftestModule: ScalaModule = difftest
 
+  object test extends SbtTests with TestModule.ScalaTest {
+    override def ivyDeps = Agg(
+      ivy"edu.berkeley.cs::chiseltest:6.0.0",
+      ivy"org.scalatest::scalatest:3.2.17"
+    )
+    override def moduleDeps = super.moduleDeps ++ Seq(difftest.test)
+  }
+
 }
 
 // extends this trait to use XiangShan in other projects

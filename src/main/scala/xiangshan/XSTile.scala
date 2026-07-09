@@ -82,7 +82,9 @@ class XSTile()(implicit p: Parameters) extends LazyModule
   }
 
   cuteOpt.foreach(
-    l2top.inner.misc_l2_pmu := l2top.inner.cute_logger := _.node
+    _.node.zipWithIndex.foreach { case (node, i) =>
+      l2top.inner.misc_l2_pmu := l2top.inner.cute_logger := node
+    }
   )
 
   l2top.inner.misc_l2_pmu := l2top.inner.l1i_logger := memBlock.frontendBridge.icache_node
@@ -257,7 +259,44 @@ class XSTile()(implicit p: Parameters) extends LazyModule
       }
 
       val matrix_data_out = l2top.module.io.matrixDataOut512L2
-      cute.module.io.matrix_data_in <> matrix_data_out
+      val matrix_data_in = cute.module.io.matrix_data_in
+      val outCount = matrix_data_out.length
+      val inCount = matrix_data_in.length
+
+      require(outCount > 0, "matrix_data_out must have at least one channel")
+      require(inCount > 0, "matrix_data_in must have at least one channel")
+
+      matrix_data_out.foreach(_.ready := false.B)
+      matrix_data_in.foreach { in =>
+        in.valid := false.B
+        in.bits := DontCare
+      }
+
+      if (inCount >= outCount) {
+        (matrix_data_in zip matrix_data_out) foreach { case (in, out) =>
+          in <> out
+        }
+      }
+      else {
+        val baseGroupSize = outCount / inCount
+        val largerGroupCount = outCount % inCount
+
+        for (inIdx <- 0 until inCount) {
+          // Split consecutive output channels into nearly-even groups.
+          // The first `largerGroupCount` groups take one extra channel so the remainder
+          // is distributed to the front, e.g. 10 outputs over 3 inputs becomes 4/3/3.
+          val groupStart = inIdx * baseGroupSize + (inIdx min largerGroupCount)
+          val groupSize = baseGroupSize + (if (inIdx < largerGroupCount) 1 else 0)
+          val groupEnd = groupStart + groupSize
+
+          val arb = Module(new Arbiter(chiselTypeOf(matrix_data_out(0).bits), groupSize))
+          for ((outIdx, arbIdx) <- (groupStart until groupEnd).zipWithIndex) {
+            arb.io.in(arbIdx) <> matrix_data_out(outIdx)
+          }
+          matrix_data_in(inIdx) <> arb.io.out
+        }
+      }
+
       core.module.io.cutePerf.foreach(_ <> cute.module.io.cute.perf)
 
       cute.module.io.hartId := io.hartId
