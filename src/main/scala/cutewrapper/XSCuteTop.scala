@@ -189,6 +189,31 @@ class XSCuteImp(wrapper: XSCute)(implicit p: Parameters) extends LazyModuleImp(w
     // Use wrapper.node.in(0) instead of wrapper.cute_tl.node.out(0)
     // because wrapper.node is connected to cute_tl.node and is visible in this module
     val (tl_in, _) = wrapper.node(0).in(0)
+
+    // Match LocalMMU's RequestSourceID encoding:
+    // encodedId = (reqLlcOrigId << SourceTagWidth) | sourceTag
+    val sourceTagWidth = 3
+    val cWriteTag = 3.U(sourceTagWidth.W)
+    val allocatedOrigIdFlagBit = 60
+
+    def isAllocatedOrigId(id: UInt): Bool = id.pad(64)(allocatedOrigIdFlagBit)
+    def restoreLoaderSourceId(id: UInt): UInt = {
+      val id64 = id.pad(64)
+      Mux(
+        isAllocatedOrigId(id64),
+        Cat(0.U((64 - LLCSourceMaxNumBitSize).W), id64(LLCSourceMaxNumBitSize - 1, 0)),
+        id64
+      )
+    }
+
+    def decodeEncodedSourceId(encodedId: UInt): (UInt, UInt, UInt, Bool) = {
+      val tag = encodedId(sourceTagWidth - 1, 0)
+      val reqLlcOrigId = encodedId >> sourceTagWidth
+      val loaderSourceId = restoreLoaderSourceId(reqLlcOrigId)
+      val loaderSourceIdInRange = loaderSourceId < LLCSourceMaxNum.U
+      val loaderSourceIdx = loaderSourceId(LLCSourceMaxNumBitSize - 1, 0)
+      (tag, reqLlcOrigId, loaderSourceIdx, loaderSourceIdInRange)
+    }
     
     // Record write request information when it's sent
     val writeReqTable = Reg(Vec(LLCSourceMaxNum, new Bundle {
@@ -198,31 +223,47 @@ class XSCuteImp(wrapper: XSCute)(implicit p: Parameters) extends LazyModuleImp(w
       val valid = Bool()
     }))
     dontTouch(writeReqTable)
+
+    val writeReq = mmu.Request(0)
+    val reqEncodedSourceId = writeReq.bits.RequestSourceID
+    val (reqSourceTag, _, reqLoaderSourceIdx, reqLoaderSourceIdInRange) = decodeEncodedSourceId(reqEncodedSourceId)
+    val reqWriteReqEntry = writeReqTable(reqLoaderSourceIdx)
+
+    // Record write request when it fires
+    when(writeReq.fire && writeReq.bits.RequestType_isWrite) {
+      assert(reqSourceTag === cWriteTag, cf"CUTE store request has unexpected source tag ${reqSourceTag}")
+      assert(reqLoaderSourceIdInRange, cf"CUTE store request source id out of range: encoded=${reqEncodedSourceId}")
+      reqWriteReqEntry.addr := writeReq.bits.RequestAddr
+      reqWriteReqEntry.data := writeReq.bits.RequestData.asTypeOf(Vec(64, UInt(8.W)))
+      reqWriteReqEntry.mask := writeReq.bits.RequestMask
+      reqWriteReqEntry.valid := true.B
+    }
+
+
+    val respEncodedSourceId = tl_in.d.bits.user.lift(AmeIndexKey).get  // Force to contain AmeIndexKey in the path.
+    val (respSourceTag, _, respLoaderSourceIdx, respLoaderSourceIdInRange) = decodeEncodedSourceId(respEncodedSourceId)
+    val respWriteReqEntry = writeReqTable(respLoaderSourceIdx)
+
+    val ackFire = tl_in.d.fire
+    val isStoreAck = tl_in.d.bits.opcode === TLMessages.AccessAck || tl_in.d.bits.opcode === TLMessages.ReleaseAck
+    val hasStoreTag = respSourceTag === cWriteTag
+    val hasValidWriteReq = respLoaderSourceIdInRange && respWriteReqEntry.valid
     
     // Clear valid when response comes back
-    when(tl_in.d.fire && tl_in.d.bits.opcode === TLMessages.AccessAck) {
-      writeReqTable(tl_in.d.bits.source).valid := false.B
-    }
-    
-    // Record write request when it fires
-    when(mmu.Request(0).fire && mmu.Request(0).bits.RequestType_isWrite) {
-      val sourceId = mmu.ConherentRequsetSourceID.bits
-      writeReqTable(sourceId).addr := mmu.Request(0).bits.RequestAddr
-      writeReqTable(sourceId).data := mmu.Request(0).bits.RequestData.asTypeOf(Vec(64, UInt(8.W)))
-      writeReqTable(sourceId).mask := mmu.Request(0).bits.RequestMask
-      writeReqTable(sourceId).valid := true.B
+    when(ackFire && isStoreAck) {
+      assert(respSourceTag === cWriteTag, cf"CUTE store response has unexpected source tag ${respSourceTag}")
+      assert(respLoaderSourceIdInRange, cf"CUTE store response source id out of range: encoded=${respEncodedSourceId}")
+      respWriteReqEntry.valid := false.B
     }
     
     // Trigger DiffTest event when write response comes back
     val difftest = DifftestModule(new DiffMatrixStoreEvent, delay = 1)
     difftest.coreid := io.hartId
     difftest.index  := 0.U
-    difftest.valid  := tl_in.d.fire && writeReqTable(tl_in.d.bits.source).valid &&
-                       (tl_in.d.bits.opcode === TLMessages.AccessAck || tl_in.d.bits.opcode === TLMessages.ReleaseAck)
-                        
-    difftest.addr   := writeReqTable(tl_in.d.bits.source).addr
-    difftest.data   := writeReqTable(tl_in.d.bits.source).data
-    difftest.mask   := writeReqTable(tl_in.d.bits.source).mask
+    difftest.valid  := ackFire && isStoreAck && hasStoreTag && hasValidWriteReq
+    difftest.addr   := respWriteReqEntry.addr
+    difftest.data   := respWriteReqEntry.data
+    difftest.mask   := respWriteReqEntry.mask
   }
 }
 
