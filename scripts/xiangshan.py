@@ -379,6 +379,12 @@ class XiangShan(object):
         rvh_tests = map(lambda x: os.path.join(base_dir, x), workloads)
         return rvh_tests
 
+    def __get_ci_ametests(self, bench=None):
+        base_dir = "/nfs/home/share/ci-workloads/"
+        bench_list = ["ame-gemm", "ame-ls-ab", "bf16"]
+        bench_path_list = [os.path.join(base_dir, bench, f"{bench}.bin") for bench in bench_list]
+        return bench_path_list
+
     def __get_ci_rvvbench(self, name=None):
         base_dir = "/nfs/home/share/ci-workloads"
         workloads = [
@@ -578,6 +584,7 @@ class XiangShan(object):
             "microbench": self.__am_apps_path,
             "coremark": self.__am_apps_path,
             "coremark-1-iteration": self.__am_apps_path,
+            "ame-tests": self.__get_ci_ametests,
             "rvv-bench": self.__get_ci_rvvbench,
             "rvv-test": self.__get_ci_rvvtest,
             "f16_test": self.__get_ci_F16test,
@@ -608,6 +615,7 @@ class XiangShan(object):
             "microbench": self.__am_apps_path,
             "coremark": self.__am_apps_path,
             "coremark-1-iteration": self.__am_apps_path,
+            "ame-tests": self.__get_ci_ametests,
             "rvv-bench": self.__get_ci_rvvbench,
             "rvv-test": self.__get_ci_rvvtest,
             "f16_test": self.__get_ci_F16test,
