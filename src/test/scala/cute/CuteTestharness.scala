@@ -26,7 +26,7 @@ import cute._
 
 // Provide default values for all signals assigned within state machines
 object StateMachineDefaults {
-  def applyDefaults(top: XSCuteTestTopImpl): Unit = {
+  def applyDefaults(top: XSCuteTopImpl): Unit = {
     // ConfigStateMachine default assignments
     top.reset := false.B
     top.io.ctrl2top.amuCtrl.valid := false.B
@@ -53,7 +53,7 @@ object StateMachineDefaults {
 }
 
 // Configuration state machine class
-class ConfigStateMachine(top: XSCuteTestTopImpl)(implicit p: Parameters) extends CuteConsts {
+class ConfigStateMachine(top: XSCuteTopImpl)(implicit p: Parameters) extends CuteConsts {
   // State definitions
   object ConfigState extends ChiselEnum {
     val sIdle, sReset, sInit, sLoadATensor, sLoadBTensor, sLoadCTensor, sComputeMMA, sStoreDTensor, sRelease, sConfigDone = Value
@@ -516,7 +516,7 @@ class MMUMonitorStateMachine(
 }
 
 // Observation state machine class
-class ObserveStateMachine(top: XSCuteTestTopImpl)(implicit p: Parameters) {
+class ObserveStateMachine(top: XSCuteTopImpl)(implicit p: Parameters) {
   // State definitions
   object ObserveState extends ChiselEnum {
     val sIdle, sObserving, sDone = Value
@@ -577,7 +577,7 @@ class CuteTestHarness(implicit p: Parameters) extends Module {
     val resp = Vec(8, Input(new DutMemResp))
   })
 
-  val top = Module(LazyModule(new XSCuteTestTop).module)
+  val top = Module(LazyModule(new XSCuteTop).module)
 
   top.io := DontCare
   top.tls.map(_(0)).foreach(_ := DontCare)
