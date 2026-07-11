@@ -19,7 +19,7 @@ package xiangshan
 import org.chipsalliance.cde.config.{Field, Parameters}
 import chisel3._
 import chisel3.util._
-import huancun._
+import xscache.common._
 import system.{CVMParamsKey, SoCParamsKey}
 import xiangshan.backend.datapath.RdConfig._
 import xiangshan.backend.datapath.WbConfig._
@@ -38,11 +38,10 @@ import xiangshan.frontend.icache.ICacheParameters
 import freechips.rocketchip.diplomacy.AddressSet
 import freechips.rocketchip.tile.MaxHartIdBits
 import system.SoCParamsKey
-import huancun._
-import huancun.debug._
+import xscache.common._
 import xiangshan.cache.wpu.WPUParameters
-import coupledL2._
-import coupledL2.tl2chi._
+import xscache.coupledL2._
+import xscache.chi._
 import cute.MatrixIsaParams
 import xiangshan.backend.datapath.WakeUpConfig
 import xiangshan.mem.prefetch.{PrefetcherParams, SMSParams}
@@ -368,8 +367,7 @@ case class XSCoreParameters
     name = "l2",
     ways = 8,
     sets = 1024, // default 512KB L2
-    prefetch = Seq(coupledL2.prefetch.PrefetchReceiverParams(), coupledL2.prefetch.BOPParameters(),
-      coupledL2.prefetch.TPParameters()),
+    prefetch = Seq(xscache.coupledL2.prefetch.PrefetchReceiverParams(), xscache.coupledL2.prefetch.BOPParameters()),
   )),
   L2NBanks: Int = 1,
   usePTWRepeater: Boolean = false,
@@ -935,7 +933,7 @@ trait HasXSParameter {
   def EnableAtCommitMissTrigger = coreParams.EnableAtCommitMissTrigger
   def EnableStorePrefetchSMS = coreParams.EnableStorePrefetchSMS
   def EnableStorePrefetchSPB = coreParams.EnableStorePrefetchSPB
-  def HasCMO = coreParams.HasCMO && p(EnableCHI)
+  def HasCMO = coreParams.HasCMO
   require(LoadPipelineWidth == backendParams.LduCnt + backendParams.HyuCnt, "LoadPipelineWidth must be equal exuParameters.LduCnt + HyuCnt!")
   require(StorePipelineWidth == backendParams.StaCnt, "StorePipelineWidth must be equal exuParameters.StuCnt!")
   def Enable3Load3Store = (LoadPipelineWidth == 3 && StorePipelineWidth == 3)

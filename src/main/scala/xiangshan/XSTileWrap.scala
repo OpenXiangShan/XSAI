@@ -25,7 +25,7 @@ import freechips.rocketchip.interrupts._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util._
 import system.HasSoCParameter
-import coupledL2.tl2chi.{AsyncPortIO, CHIAsyncBridgeSource, PortIO}
+import xscache.chi.{AsyncPortIO, CHIAsyncBridgeSource, PortIO}
 import utility.sram.SramBroadcastBundle
 import utility.{DFTResetSignals, IntBuffer, ResetGen}
 import xiangshan.backend.trace.TraceCoreInterface

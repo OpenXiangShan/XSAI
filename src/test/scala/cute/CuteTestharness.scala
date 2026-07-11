@@ -12,7 +12,7 @@ import org.chipsalliance.cde.config._
 import xiangshan.backend.fu.matrix.Bundles._
 import xiangshan.{XSCoreParamsKey, XSCoreParameters, XSBundle}
 import system.{SoCParamsKey, SoCParameters}
-import coupledL2.AmeIndexKey
+import xscache.coupledL2.AmeIndexKey
 
 import cute._
 

@@ -19,10 +19,6 @@ package xiangshan.frontend.icache
 
 import chisel3._
 import chisel3.util._
-import coupledL2.MemBackTypeMM
-import coupledL2.MemBackTypeMMField
-import coupledL2.MemPageTypeNC
-import coupledL2.MemPageTypeNCField
 import freechips.rocketchip.diplomacy.IdRange
 import freechips.rocketchip.diplomacy.LazyModule
 import freechips.rocketchip.diplomacy.LazyModuleImp
@@ -37,6 +33,10 @@ import org.chipsalliance.cde.config.Parameters
 import utils._
 import xiangshan.WfiReqBundle
 import xiangshan.frontend._
+import xscache.coupledL2.MemBackTypeMM
+import xscache.coupledL2.MemBackTypeMMField
+import xscache.coupledL2.MemPageTypeNC
+import xscache.coupledL2.MemPageTypeNCField
 
 class InsUncacheReq(implicit p: Parameters) extends ICacheBundle {
   val addr:          UInt = UInt(PAddrBits.W)

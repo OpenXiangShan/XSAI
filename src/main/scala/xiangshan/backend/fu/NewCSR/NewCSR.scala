@@ -1304,7 +1304,7 @@ class NewCSR(implicit val p: Parameters) extends Module
   
   /**
    * perf_begin
-   * perf number: 29 (frontend 8, ctrlblock 8, memblock 8, huancun 5)
+   * perf number: 29 (frontend 8, ctrlblock 8, memblock 8, cache 5)
    */
   val csrevents = mhpmevents.slice(24, 29).map(_.rdata)
 

@@ -27,15 +27,15 @@ import org.chipsalliance.cde.config._
 import freechips.rocketchip.tile.{BusErrorUnit, BusErrorUnitParams, MaxHartIdBits, XLen}
 import xiangshan.frontend.icache.ICacheParameters
 import freechips.rocketchip.devices.debug._
-import openLLC.OpenLLCParam
+import xscache.openLLC.OpenLLCParam
 import freechips.rocketchip.diplomacy._
 import xiangshan.backend.regfile.{IntPregParams, VfPregParams}
 import xiangshan.cache.DCacheParameters
 import xiangshan.cache.mmu.{L2TLBParameters, TLBParameters}
 import device.EnableJtag
-import huancun._
-import coupledL2._
-import coupledL2.prefetch._
+import xscache.coupledL2._
+import xscache.coupledL2.prefetch._
+import xscache.common.DirtyField
 import cute.{CuteParamsKey, CuteParams, CuteDebugParams, Cutev3extParams, MatrixIsaParams}
 
 class BaseConfig(n: Int) extends Config((site, here, up) => {
@@ -203,7 +203,7 @@ class MinimalConfig(n: Int = 1) extends Config(
           name = "L2",
           ways = 8,
           sets = 128,
-          echoField = Seq(huancun.DirtyField()),
+          echoField = Seq(DirtyField()),
           prefetch = Nil,
           clientCaches = Seq(L1Param(
             "dcache",
@@ -215,26 +215,13 @@ class MinimalConfig(n: Int = 1) extends Config(
       )
     )
     case SoCParamsKey =>
-      val tiles = site(XSTileKey)
       up(SoCParamsKey).copy(
-        L3CacheParamsOpt = Option.when(!up(EnableCHI))(up(SoCParamsKey).L3CacheParamsOpt.get.copy(
-          sets = 1024,
-          inclusive = false,
-          clientCaches = tiles.map{ core =>
-            val clientDirBytes = tiles.map{ t =>
-              t.L2NBanks * t.L2CacheParamsOpt.map(_.toCacheParams.capacity).getOrElse(0)
-            }.sum
-            val l2params = core.L2CacheParamsOpt.get.toCacheParams
-            l2params.copy(sets = 2 * clientDirBytes / core.L2NBanks / l2params.ways / 64)
-          },
-          simulation = !site(DebugOptionsKey).FPGAPlatform,
-          prefetch = None
-        )),
-        OpenLLCParamsOpt = Option.when(up(EnableCHI))(OpenLLCParam(
+        OpenLLCParamsOpt = Some(OpenLLCParam(
           name = "LLC",
           ways = 8,
           sets = 2048,
           banks = 4,
+          fullAddressBits = 48,
           clientCaches = Seq(L2Param())
         )),
         L3NBanks = 1
@@ -311,7 +298,6 @@ class MinimalSimConfig(n: Int = 1) extends Config(
       softPTW = true
     ))
     case SoCParamsKey => up(SoCParamsKey).copy(
-      L3CacheParamsOpt = None,
       OpenLLCParamsOpt = None
     )
   })
@@ -343,7 +329,7 @@ case class L2CacheConfig
   ways: Int = 8,
   inclusive: Boolean = true,
   banks: Int = 1,
-  tp: Boolean = true,
+  tp: Boolean = false,
   enableFlush: Boolean = false,
   enableCHIAsyncBridge: Option[Boolean] = None
 ) extends Config((site, here, up) => {
@@ -369,7 +355,7 @@ case class L2CacheConfig
           isKeywordBitsOpt = p.dcacheParametersOpt.get.isKeywordBitsOpt
         )),
         reqField = Seq(utility.ReqSourceField()),
-        echoField = Seq(huancun.DirtyField()),
+        echoField = Seq(DirtyField()),
         tagECC = Some("secded"),
         dataECC = Some("secded"),
         enableTagECC = true,
@@ -392,7 +378,7 @@ case class L2CacheConfig
     ))
 })
 
-case class L3CacheConfig(size: String, ways: Int = 8, inclusive: Boolean = true, banks: Int = 1) extends Config((site, here, up) => {
+case class OpenLLCConfig(size: String, ways: Int = 8, banks: Int = 1) extends Config((site, here, up) => {
   case SoCParamsKey =>
     val nKB = size.toUpperCase() match {
       case s"${k}KB" => k.trim().toInt
@@ -405,31 +391,7 @@ case class L3CacheConfig(size: String, ways: Int = 8, inclusive: Boolean = true,
     }.sum
     up(SoCParamsKey).copy(
       L3NBanks = banks,
-      L3CacheParamsOpt = Option.when(!up(EnableCHI))(HCCacheParameters(
-        name = "L3",
-        level = 3,
-        ways = ways,
-        sets = sets,
-        inclusive = inclusive,
-        clientCaches = tiles.map{ core =>
-          val l2params = core.L2CacheParamsOpt.get.toCacheParams
-          l2params.copy(sets = 2 * clientDirBytes / core.L2NBanks / l2params.ways / 64, ways = l2params.ways + 2)
-        },
-        enablePerf = !site(DebugOptionsKey).FPGAPlatform && site(DebugOptionsKey).EnablePerfDebug,
-        ctrl = Some(CacheCtrl(
-          address = 0x39000000,
-          numCores = tiles.size
-        )),
-        reqField = Seq(utility.ReqSourceField()),
-        sramClkDivBy2 = true,
-        sramDepthDiv = 4,
-        tagECC = Some("secded"),
-        dataECC = Some("secded"),
-        simulation = !site(DebugOptionsKey).FPGAPlatform,
-        prefetch = Some(huancun.prefetch.L3PrefetchReceiverParams()),
-        tpmeta = Some(huancun.prefetch.DefaultTPmetaParameters())
-      )),
-      OpenLLCParamsOpt = Option.when(up(EnableCHI))(OpenLLCParam(
+      OpenLLCParamsOpt = Some(OpenLLCParam(
         name = "LLC",
         ways = ways,
         sets = sets,
@@ -446,7 +408,7 @@ case class L3CacheConfig(size: String, ways: Int = 8, inclusive: Boolean = true,
 })
 
 class WithL3DebugConfig extends Config(
-  L3CacheConfig("256KB", inclusive = false) ++ L2CacheConfig("64KB")
+  OpenLLCConfig("256KB") ++ L2CacheConfig("64KB")
 )
 
 class MinimalL3DebugConfig(n: Int = 1) extends Config(
@@ -462,9 +424,6 @@ class WithFuzzer extends Config((site, here, up) => {
     EnablePerfDebug = false,
   )
   case SoCParamsKey => up(SoCParamsKey).copy(
-    L3CacheParamsOpt = up(SoCParamsKey).L3CacheParamsOpt.map(_.copy(
-      enablePerf = false,
-    )),
     OpenLLCParamsOpt = up(SoCParamsKey).OpenLLCParamsOpt.map(_.copy(
       enablePerf = false,
     )),
@@ -501,15 +460,15 @@ class CVMTestCompile extends Config((site, here, up) => {
 })
 
 class MinimalAliasDebugConfig(n: Int = 1) extends Config(
-  L3CacheConfig("512KB", inclusive = false)
-    ++ L2CacheConfig("256KB", inclusive = true)
+  OpenLLCConfig("512KB")
+    ++ L2CacheConfig("256KB")
     ++ WithNKBL1D(128)
     ++ new MinimalConfig(n)
 )
 
 class MediumConfig(n: Int = 1) extends Config(
-  L3CacheConfig("4MB", inclusive = false, banks = 4)
-    ++ L2CacheConfig("512KB", inclusive = true)
+  OpenLLCConfig("4MB", banks = 4)
+    ++ L2CacheConfig("512KB")
     ++ WithNKBL1D(128)
     ++ new BaseConfig(n)
 )
@@ -520,8 +479,8 @@ class FuzzConfig(dummy: Int = 0) extends Config(
 )
 
 class DefaultConfig(n: Int = 1) extends Config(
-  L3CacheConfig("16MB", inclusive = false, banks = 4, ways = 16)
-    ++ L2CacheConfig("1MB", inclusive = true, banks = 4)
+  OpenLLCConfig("16MB", banks = 4, ways = 16)
+    ++ L2CacheConfig("1MB", banks = 4)
     ++ WithNKBL1D(64, ways = 4)
     ++ new BaseConfig(n)
 )
@@ -575,10 +534,7 @@ class FpgaDiffDefaultMatrixConfig(n: Int = 1) extends Config(
       )
     case SoCParamsKey =>
       up(SoCParamsKey).copy(
-        UseXSTileDiffTop = true,
-        L3CacheParamsOpt = Some(up(SoCParamsKey).L3CacheParamsOpt.get.copy(
-          sramClkDivBy2 = false,
-        )),
+        UseXSTileDiffTop = true
       )
   })
 )
@@ -592,10 +548,7 @@ class FpgaDiffMinimalMatrixConfig(n: Int = 1) extends Config(
       )
     case SoCParamsKey =>
       up(SoCParamsKey).copy(
-        UseXSTileDiffTop = true,
-        L3CacheParamsOpt = Some(up(SoCParamsKey).L3CacheParamsOpt.get.copy(
-          sramClkDivBy2 = false,
-        )),
+        UseXSTileDiffTop = true
       )
   })
 )
@@ -610,21 +563,15 @@ class CVMTestConfig(n: Int = 1) extends Config(
     ++ new DefaultConfig(n)
 )
 
-class WithCHI extends Config((_, _, _) => {
-  case EnableCHI => true
-})
-
 class KunminghuV2Config(n: Int = 1) extends Config(
-  L2CacheConfig("1MB", inclusive = true, banks = 4, tp = false)
+  L2CacheConfig("1MB", banks = 4, tp = false)
     ++ new DefaultConfig(n)
-    ++ new WithCHI
 )
 
 class KunminghuV2MinimalConfig(n: Int = 1) extends Config(
-  L2CacheConfig("128KB", inclusive = true, banks = 1, tp = false)
+  L2CacheConfig("128KB", banks = 1, tp = false)
     ++ WithNKBL1D(32, ways = 4)
     ++ new MinimalConfig(n)
-    ++ new WithCHI
 )
 
 class XSNoCTopConfig(n: Int = 1) extends Config(
@@ -652,25 +599,20 @@ class XSNoCDiffTopMinimalConfig(n: Int = 1) extends Config(
 )
 
 class FpgaDefaultConfig(n: Int = 1) extends Config(
-  (L3CacheConfig("3MB", inclusive = false, banks = 1, ways = 6)
-    ++ L2CacheConfig("1MB", inclusive = true, banks = 4)
+  (OpenLLCConfig("3MB", banks = 1, ways = 6)
+    ++ L2CacheConfig("1MB", banks = 4)
     ++ WithNKBL1D(64, ways = 4)
     ++ new BaseConfig(n)).alter((site, here, up) => {
     case DebugOptionsKey => up(DebugOptionsKey).copy(
       AlwaysBasicDiff = false,
       AlwaysBasicDB = false
     )
-    case SoCParamsKey => up(SoCParamsKey).copy(
-      L3CacheParamsOpt = Some(up(SoCParamsKey).L3CacheParamsOpt.get.copy(
-        sramClkDivBy2 = false,
-      )),
-    )
   })
 )
 
 class FpgaDiffDefaultConfig(n: Int = 1) extends Config(
-  (L3CacheConfig("3MB", inclusive = false, banks = 1, ways = 6)
-    ++ L2CacheConfig("1MB", inclusive = true, banks = 4)
+  (OpenLLCConfig("3MB", banks = 1, ways = 6)
+    ++ L2CacheConfig("1MB", banks = 4)
     ++ WithNKBL1D(64, ways = 4)
     ++ new BaseConfig(n)).alter((site, here, up) => {
     case DebugOptionsKey => up(DebugOptionsKey).copy(
@@ -678,10 +620,7 @@ class FpgaDiffDefaultConfig(n: Int = 1) extends Config(
       AlwaysBasicDB = false
     )
     case SoCParamsKey => up(SoCParamsKey).copy(
-      UseXSTileDiffTop = true,
-      L3CacheParamsOpt = Some(up(SoCParamsKey).L3CacheParamsOpt.get.copy(
-        sramClkDivBy2 = false,
-      )),
+      UseXSTileDiffTop = true
     )
   })
 )
@@ -693,10 +632,7 @@ class FpgaDiffMinimalConfig(n: Int = 1) extends Config(
       AlwaysBasicDB = false
     )
     case SoCParamsKey => up(SoCParamsKey).copy(
-      UseXSTileDiffTop = true,
-      L3CacheParamsOpt = Some(up(SoCParamsKey).L3CacheParamsOpt.get.copy(
-        sramClkDivBy2 = false,
-      )),
+      UseXSTileDiffTop = true
     )
   })
 )
