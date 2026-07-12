@@ -267,7 +267,8 @@ class MinimalMatrixConfig(n: Int) extends Config(
         ),
         L2CacheParamsOpt = p.L2CacheParamsOpt.map(_.copy(
           sets = 512,
-          enableMCP2 = false
+          enableMCP2 = false,
+          respField = Seq(AmeIndexField())
         )),
       )
     }
@@ -501,7 +502,8 @@ class DefaultMatrixConfig(n: Int = 1) extends Config(
           dfilterSize = 48
         ),
         L2CacheParamsOpt = Some(p.L2CacheParamsOpt.get.copy(
-          enableMCP2 = false
+          enableMCP2 = false,
+          respField = Seq(AmeIndexField())
         )),
         L2NBanks = 8
       )
