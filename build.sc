@@ -22,9 +22,7 @@ import $packages._
 import $file.`rocket-chip`.common
 import $file.`rocket-chip`.cde.common
 import $file.`rocket-chip`.hardfloat.common
-import $file.huancun.common
-import $file.coupledL2.common
-import $file.openLLC.common
+import $file.XSAICache.common
 import $file.CUTE.common
 
 /* for publishVersion */
@@ -143,31 +141,9 @@ object yunsuan extends HasChisel {
 
 }
 
-object huancun extends $file.huancun.common.HuanCunModule with HasChisel {
-
-  override def millSourcePath = pwd / "huancun"
-
-  def rocketModule: ScalaModule = rocketchip
-
-  def utilityModule: ScalaModule = utility
-
-}
-
-object coupledL2 extends $file.coupledL2.common.CoupledL2Module with HasChisel {
-
-  override def millSourcePath = pwd / "coupledL2"
-
-  def rocketModule: ScalaModule = rocketchip
-
-  def utilityModule: ScalaModule = utility
-
-  def huancunModule: ScalaModule = huancun
-
-}
-
 object openNCB extends SbtModule with HasChisel {
 
-  override def millSourcePath = pwd / "openLLC" / "openNCB"
+  override def millSourcePath = pwd / "XSAICache" / "OpenNCB"
 
   override def moduleDeps = super.moduleDeps ++ Seq(
     rocketchip
@@ -175,17 +151,15 @@ object openNCB extends SbtModule with HasChisel {
 
 }
 
-object openLLC extends $file.openLLC.common.OpenLLCModule with HasChisel {
+object XSAICache extends $file.XSAICache.common.XSCacheModule with HasChisel {
 
-  override def millSourcePath = pwd / "openLLC"
+  override def millSourcePath = pwd / "XSAICache"
 
-  def coupledL2Module: ScalaModule = coupledL2
+  def openNCBModule: ScalaModule = openNCB
 
   def rocketModule: ScalaModule = rocketchip
 
   def utilityModule: ScalaModule = utility
-
-  def openNCBModule: ScalaModule = openNCB
 
 }
 
@@ -258,7 +232,7 @@ object CUTE extends $file.CUTE.common.CUTEModule with HasChisel {
 
   def utilityModule: ScalaModule = utility
 
-  def coupledL2Module: ScalaModule = coupledL2
+  def coupledL2Module: ScalaModule = XSAICache
   
   def difftestModule: ScalaModule = difftest
 
@@ -279,11 +253,7 @@ trait XiangShanModule extends ScalaModule {
 
   def difftestModule: ScalaModule
 
-  def huancunModule: ScalaModule
-
-  def coupledL2Module: ScalaModule
-
-  def openLLCModule: ScalaModule
+  def xsaiCacheModule: ScalaModule
 
   def fudianModule: ScalaModule
 
@@ -302,9 +272,7 @@ trait XiangShanModule extends ScalaModule {
   override def moduleDeps = super.moduleDeps ++ Seq(
     rocketModule,
     difftestModule,
-    huancunModule,
-    coupledL2Module,
-    openLLCModule,
+    xsaiCacheModule,
     yunsuanModule,
     fudianModule,
     utilityModule,
@@ -328,11 +296,7 @@ object xiangshan extends XiangShanModule with HasChisel with ScalafmtModule {
 
   def difftestModule = difftest
 
-  def huancunModule = huancun
-
-  def coupledL2Module = coupledL2
-
-  def openLLCModule = openLLC
+  def xsaiCacheModule = XSAICache
 
   def fudianModule = fudian
 

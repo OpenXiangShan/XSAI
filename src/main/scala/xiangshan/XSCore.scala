@@ -20,7 +20,7 @@ import org.chipsalliance.cde.config
 import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
-import coupledL2.PrefetchCtrlFromCore
+import xscache.coupledL2.PrefetchCtrlFromCore
 import freechips.rocketchip.diplomacy.{BundleBridgeSource, LazyModule, LazyModuleImp}
 import freechips.rocketchip.tile.HasFPUParameters
 import system.{HasSoCParameter, SoCParamsKey}

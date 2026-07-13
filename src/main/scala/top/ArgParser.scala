@@ -80,7 +80,7 @@ object ArgParser {
           nextOption(getConfigByName(confString), tail)
         case "--issue" :: issueString :: tail =>
           nextOption(config.alter((site, here, up) => {
-            case coupledL2.tl2chi.CHIIssue => issueString
+            case xscache.chi.CHIIssue => issueString
           }), tail)
         case "--num-cores" :: value :: tail =>
           nextOption(config.alter((site, here, up) => {
@@ -160,7 +160,7 @@ object ArgParser {
           }), tail)
         case "--enable-ns" :: tail =>
           nextOption(config.alter((site, here, up) => {
-            case coupledL2.tl2chi.NonSecureKey => true
+            case xscache.chi.NonSecureKey => true
           }), tail)
         case "--firtool-opt" :: option :: tail =>
           firtoolOpts ++= option.split(" ").filter(_.nonEmpty)
@@ -187,19 +187,13 @@ object ArgParser {
           nextOption(config.alter((site, here, up) => {
             case SoCParamsKey =>
               val socParam = up(SoCParamsKey)
-              val banks = socParam.L3NBanks
-              val l3Ways = socParam.L3CacheParamsOpt.map(_.ways)
-              val l3Sets = l3Ways.map(value.toInt * 1024 / banks / _ / 64)
+              val banks = socParam.OpenLLCParamsOpt.map(_.banks).getOrElse(socParam.L3NBanks)
               val openLLCWays = socParam.OpenLLCParamsOpt.map(_.ways)
               val openLLCSets = openLLCWays.map(value.toInt * 1024 / banks / _ / 64)
-              val newL3Param = socParam.L3CacheParamsOpt.map(_.copy(
-                sets = l3Sets.get
-              ))
               val openLLCParam = socParam.OpenLLCParamsOpt.map(_.copy(
                 sets = openLLCSets.get
               ))
               socParam.copy(
-                L3CacheParamsOpt = newL3Param,
                 OpenLLCParamsOpt = openLLCParam
               )
           }), tail)
@@ -229,7 +223,7 @@ object ArgParser {
           }), tail)
         case "--chi-addr-width" :: value :: tail =>
           nextOption(config.alter((site, here, up) => {
-            case coupledL2.tl2chi.CHIAddrWidthKey => value.toInt
+            case xscache.chi.CHIAddrWidthKey => value.toInt
           }), tail)
         case "--wfi-resume" :: value :: tail =>
           nextOption(config.alter((site, here, up) => {

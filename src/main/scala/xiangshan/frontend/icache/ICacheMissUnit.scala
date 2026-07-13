@@ -19,12 +19,12 @@ package xiangshan.frontend.icache
 
 import chisel3._
 import chisel3.util._
-import coupledL2.MemBackTypeMM
 import difftest._
 import freechips.rocketchip.tilelink._
 import org.chipsalliance.cde.config.Parameters
 import utility._
 import xiangshan._
+import xscache.coupledL2.MemBackTypeMM
 
 class DeMultiplexerIO[T <: Data](gen: T, n: Int) extends Bundle {
   val in:     DecoupledIO[T]      = Flipped(DecoupledIO(gen))

@@ -7,10 +7,10 @@ import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import org.chipsalliance.cde.config._
-import coupledL2.MatrixDataBundle
+import xscache.coupledL2.MatrixDataBundle
 import utility.{ChiselDB, TLLoggerM}
 import xiangshan.HasXSParameter
-import coupledL2.{AmeIndexKey,AmeIndexField}
+import xscache.coupledL2.{AmeIndexField, AmeIndexKey}
 
 /**
  * A simple wrapper demonstration that integrates CUTEV2Top and Cute2TL,
@@ -20,7 +20,7 @@ import coupledL2.{AmeIndexKey,AmeIndexField}
 // Import CUTEImplParameters to access ABMatrixRegNBanks
 trait XSCuteParameters extends CUTEImplParameters
 
-class XSCuteTestTopImpl(wrapper: XSCuteTestTop) extends LazyModuleImp(wrapper) {
+class XSCuteTopImpl(wrapper: XSCuteTop) extends LazyModuleImp(wrapper) {
   val cute = Module(new CUTEV2Top)
   val nBanks = wrapper.cuteParams.ABMatrixRegNBanks
   val io = IO(new CUTETopIO {
@@ -33,6 +33,8 @@ class XSCuteTestTopImpl(wrapper: XSCuteTestTop) extends LazyModuleImp(wrapper) {
   io.mmu2llc := DontCare
   val tls = wrapper.node.zipWithIndex.map{ case(x, i) => x.makeIOs()(ValName(s"tl$i")) }
   val edgeIns = wrapper.node.map(_.edges.in(0))
+  val tl = tls.map(_.head)
+  val edgeIn = edgeIns.head
 }
 
 // Add a LazyModule with TLAdapterNode between TLWidthWidget and cute_tl.node
@@ -114,7 +116,7 @@ object CuteDebugAdapter {
   }
 }
 
-class XSCuteTestTop(implicit p: Parameters) extends LazyModule with XSCuteParameters {
+class XSCuteTop(implicit p: Parameters) extends LazyModule with XSCuteParameters {
   val beatBytes = 32
   val transferBytes = 64
   val cute_tl = LazyModule(new Cute2TL)
@@ -139,7 +141,7 @@ class XSCuteTestTop(implicit p: Parameters) extends LazyModule with XSCuteParame
     }
   }
 
-  lazy val module = new XSCuteTestTopImpl(this)
+  lazy val module = new XSCuteTopImpl(this)
 }
 
 class XSCuteIO(implicit p: Parameters) extends CuteBundle {

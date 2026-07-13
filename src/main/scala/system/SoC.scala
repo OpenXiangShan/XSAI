@@ -22,11 +22,10 @@ import chisel3.util._
 import device.{AXI4MemEncrypt, DebugModule, SYSCNT, SYSCNTConsts, SYSCNTParams, TIMER, TIMERConsts, TIMERParams, TLPMA, TLPMAIO}
 
 
-import huancun._
 import utility.{ReqSourceKey, TLClientsMerger, TLEdgeBuffer, TLLogger}
-import coupledL2.{EnableCHI, L2Param}
-import coupledL2.tl2chi.CHIIssue
-import openLLC.OpenLLCParam
+import xscache.coupledL2.L2Param
+import xscache.chi.CHIIssue
+import xscache.openLLC.OpenLLCParam
 import freechips.rocketchip.amba.axi4._
 import freechips.rocketchip.devices.debug.DebugModuleKey
 import freechips.rocketchip.devices.tilelink._
@@ -85,12 +84,6 @@ case class SoCParameters
   UARTLiteForDTS: Boolean = true, // should be false in SimMMIO
   extIntrs: Int = 64,
   L3NBanks: Int = 4,
-  L3CacheParamsOpt: Option[HCCacheParameters] = Some(HCCacheParameters(
-    name = "L3",
-    level = 3,
-    ways = 8,
-    sets = 2048 // 1MB per bank
-  )),
   OpenLLCParamsOpt: Option[OpenLLCParam] = None,
   XSTopPrefix: Option[String] = None,
   NodeIDWidthList: Map[String, Int] = Map(
@@ -133,10 +126,6 @@ case class SoCParameters
     "HasTEEIMSIC only can be set true with IMSICBusType == AXI"
   )
   require(
-    L3CacheParamsOpt.isDefined ^ OpenLLCParamsOpt.isDefined || L3CacheParamsOpt.isEmpty && OpenLLCParamsOpt.isEmpty,
-    "Atmost one of L3CacheParamsOpt and OpenLLCParamsOpt should be defined"
-  )
-  require(
     !UsePrivateClint || (SeperateBus != top.SeperatedBusType.NONE),
     "SeperateBus should not be None when UsePrivateClint is true"
   )
@@ -156,7 +145,7 @@ trait HasSoCParameter {
   val cvm = p(CVMParamsKey)
   val debugOpts = p(DebugOptionsKey)
   val tiles = p(XSTileKey)
-  val enableCHI = p(EnableCHI)
+  val enableCHI = true
   val issue = p(CHIIssue)
 
   val NumCores = tiles.size
@@ -228,11 +217,6 @@ trait HasPeripheralRanges {
     "UART16550" -> soc.UART16550Range,
     "DEBUG" -> dm.get.address,
     "MMPMA" -> AddressSet(mmpma.address, mmpma.mask)
-  ) ++ (
-    if (soc.L3CacheParamsOpt.map(_.ctrl.isDefined).getOrElse(false))
-      Map("L3CTL" -> AddressSet(soc.L3CacheParamsOpt.get.ctrl.get.address, 0xffff))
-    else
-      Map()
   ) ++ (
     if (cvm.HasMEMencryption)
       Map("MEMENC"  -> cvm.MEMENCRange)
@@ -478,10 +462,6 @@ class MemMisc()(implicit p: Parameters) extends BaseSoC
     case None =>
   }
 
-  if(soc.L3CacheParamsOpt.isEmpty){
-    l3_out :*= l3_in
-  }
-
   if (!enableCHI) {
     for (port <- peripheral_ports.get) {
       peripheralXbar.get := TLBuffer.chainNode(2, Some("L2_to_L3_peripheral_buffer")) := port
@@ -659,4 +639,3 @@ class MemMisc()(implicit p: Parameters) extends BaseSoC
 
 class SoCMisc()(implicit p: Parameters) extends MemMisc
   with HaveSlaveAXI4Port
-

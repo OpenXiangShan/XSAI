@@ -315,7 +315,7 @@ GIT_FORCE_FLAG := $(if $(GIT_FORCE_INIT),--force)
 init:
 	git submodule update --init $(GIT_FORCE_FLAG)
 	cd rocket-chip && git submodule update --init $(GIT_FORCE_FLAG) cde hardfloat
-	cd openLLC && git submodule update --init $(GIT_FORCE_FLAG) openNCB
+	cd XSAICache && git submodule update --init $(GIT_FORCE_FLAG) OpenNCB
 	cd CUTE && git submodule update --init $(GIT_FORCE_FLAG) cute-fpe
 
 # Initialize necessary submodules (force)

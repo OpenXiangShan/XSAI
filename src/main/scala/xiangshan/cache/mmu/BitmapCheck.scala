@@ -23,7 +23,7 @@ import xiangshan.cache.{HasDCacheParameters, MemoryOpConstants}
 import utils._
 import utility._
 import utility.mbist.MbistPipeline
-import coupledL2.utils.SplittedSRAM
+import xscache.coupledL2.utils.SplittedSRAM
 import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
 import freechips.rocketchip.tilelink._
 import xiangshan.backend.fu.{PMPReqBundle, PMPRespBundle}
