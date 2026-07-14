@@ -79,6 +79,10 @@ jobs:
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
       - name: build MinimalMatrixConfig Release emu
         run: |
+          sed -i \
+            -e 's/--output-split 30000/--output-split 10000/' \
+            -e 's/--output-split-cfuncs 30000/--output-split-cfuncs 10000/' \
+            $GITHUB_WORKSPACE/difftest/verilator.mk
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --build \
             --threads 8 --config MinimalMatrixConfig --release --trace-fst
       - name: run MinimalMatrixConfig - Linux
@@ -116,6 +120,10 @@ jobs:
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
       - name: Build EMU
         run: |
+          sed -i \
+            -e 's/--output-split 30000/--output-split 10000/' \
+            -e 's/--output-split-cfuncs 30000/--output-split-cfuncs 10000/' \
+            $GITHUB_WORKSPACE/difftest/verilator.mk
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --build --threads 8 \
             --config DefaultMatrixConfig --pgo $GITHUB_WORKSPACE/ready-to-run/coremark-2-iteration.bin --llvm-profdata llvm-profdata --trace-fst
       - name: Basic Test - cputest
@@ -230,6 +238,10 @@ jobs:
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
       - name: Build EMU
         run: |
+          sed -i \
+            -e 's/--output-split 30000/--output-split 10000/' \
+            -e 's/--output-split-cfuncs 30000/--output-split-cfuncs 10000/' \
+            $GITHUB_WORKSPACE/difftest/verilator.mk
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --build \
             --dramsim3 /nfs/home/share/ci-workloads/DRAMsim3 --with-dramsim3 --threads 8 \
             --config DefaultMatrixConfig \
@@ -340,6 +352,10 @@ jobs:
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
       - name: Build MC EMU
         run: |
+          sed -i \
+            -e 's/--output-split 30000/--output-split 10000/' \
+            -e 's/--output-split-cfuncs 30000/--output-split-cfuncs 10000/' \
+            $GITHUB_WORKSPACE/difftest/verilator.mk
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --build \
             --num-cores 2 --emu-optimize "" --config DefaultMatrixConfig \
             --dramsim3 /nfs/home/share/ci-workloads/DRAMsim3 --with-dramsim3 --threads 8 \
@@ -381,6 +397,10 @@ jobs:
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
       - name: Build EMU
         run: |
+          sed -i \
+            -e 's/--output-split 30000/--output-split 10000/' \
+            -e 's/--output-split-cfuncs 30000/--output-split-cfuncs 10000/' \
+            $GITHUB_WORKSPACE/difftest/verilator.mk
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --build \
             --config DefaultConfig \
             --dramsim3 /nfs/home/share/ci-workloads/DRAMsim3 --with-dramsim3 --threads 8 \
