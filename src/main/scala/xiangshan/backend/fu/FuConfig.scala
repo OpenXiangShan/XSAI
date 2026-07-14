@@ -11,105 +11,156 @@ import xiangshan.backend.Bundles.ExuInput
 import xiangshan.backend.datapath.DataConfig._
 import xiangshan.mem.Std
 
-/**
-  *
-  * @param name [[String]] name of fuConfig
-  * @param fuType [[Int]] type of func, select from [[xiangshan.backend.fu.FuType]]
-  * @param fuGen how to create $fu
-  * @param srcData type of src data used by this $fu
-  * @param piped if the $fu is pipelined
-  * @param maybeBlock the $fu need ready signal to block internal pipeline
-  * @param writeIntRf the $fu write int regfiles
-  * @param writeFpRf the $fu write float regfiles
-  * @param writeVecRf the $fu write vector regfiles
-  * @param writeV0Rf the $fu write v0 regfiles
-  * @param writeVlRf the $fu write vl regfiles
-  * @param writeMxRf the $fu write mx regfiles
-  * @param writeFflags the $fu write fflags csr
-  * @param writeVxsat the $fu write vxsat csr
-  * @param needAmuCtrl the $fu need amu ctrl signal
-  * @param destDataBits the width of output data in the $fu
-  * @param srcDataBits the width of input data in the $fu, the default value is destDataBits
-  * @param latency the latency of instuction executed in the $fu
-  * @param hasInputBuffer if the $fu has input buffer
-  * @param exceptionOut the $fu can produce these exception
-  * @param hasLoadError if the $fu has load error out
-  * @param flushPipe if the instuction executed in the $fu need flush out
-  * @param replayInst if the instuction executed in the $fu can replay in some condition
-  * @param trigger if the $fu need trigger out
-  * @param needSrcFrm if the $fu need float rounding mode signal
-  * @param needSrcVxrm if the $fu need vector fixed-point rounding mode signal
-  * @param immType the immediate type of this $fu
+/** @param name
+  *   [[String]] name of fuConfig
+  * @param fuType
+  *   [[Int]] type of func, select from [[xiangshan.backend.fu.FuType]]
+  * @param fuGen
+  *   how to create $fu
+  * @param srcData
+  *   type of src data used by this $fu
+  * @param piped
+  *   if the $fu is pipelined
+  * @param maybeBlock
+  *   the $fu need ready signal to block internal pipeline
+  * @param writeIntRf
+  *   the $fu write int regfiles
+  * @param writeFpRf
+  *   the $fu write float regfiles
+  * @param writeVecRf
+  *   the $fu write vector regfiles
+  * @param writeV0Rf
+  *   the $fu write v0 regfiles
+  * @param writeVlRf
+  *   the $fu write vl regfiles
+  * @param writeMxRf
+  *   the $fu write mx regfiles
+  * @param writeFflags
+  *   the $fu write fflags csr
+  * @param writeVxsat
+  *   the $fu write vxsat csr
+  * @param needAmuCtrl
+  *   the $fu need amu ctrl signal
+  * @param destDataBits
+  *   the width of output data in the $fu
+  * @param srcDataBits
+  *   the width of input data in the $fu, the default value is destDataBits
+  * @param latency
+  *   the latency of instuction executed in the $fu
+  * @param hasInputBuffer
+  *   if the $fu has input buffer
+  * @param exceptionOut
+  *   the $fu can produce these exception
+  * @param hasLoadError
+  *   if the $fu has load error out
+  * @param flushPipe
+  *   if the instuction executed in the $fu need flush out
+  * @param replayInst
+  *   if the instuction executed in the $fu can replay in some condition
+  * @param trigger
+  *   if the $fu need trigger out
+  * @param needSrcFrm
+  *   if the $fu need float rounding mode signal
+  * @param needSrcVxrm
+  *   if the $fu need vector fixed-point rounding mode signal
+  * @param immType
+  *   the immediate type of this $fu
   * @param vconfigWakeUp
   * @param maskWakeUp
   *
-  * @define fu function unit
+  * @define fu
+  *   function unit
   */
-case class FuConfig (
-  name          : String,
-  fuType        : FuType.OHType,
-  fuGen         : (Parameters, FuConfig) => FuncUnit,
-  srcData       : Seq[Seq[DataConfig]],
-  piped         : Boolean,
-  maybeBlock    : Boolean = false,
-  writeIntRf    : Boolean = false,
-  writeFpRf     : Boolean = false,
-  writeVecRf    : Boolean = false,
-  writeV0Rf     : Boolean = false,
-  writeVlRf     : Boolean = false,
-  writeMxRf     : Boolean = false,
-  writeFakeIntRf: Boolean = false,
-  writeFflags   : Boolean = false,
-  writeVxsat    : Boolean = false,
-  needAmuCtrl   : Boolean = false,
-  destDataBits  : Int = 64,
-  srcDataBits   : Option[Int] = None,
-  srcNeedCopy   : Boolean = false,
-  latency       : HasFuLatency = CertainLatency(0),// two field (base latency, extra latency(option))
-  hasInputBuffer: (Boolean, Int, Boolean) = (false, 0, false),
-  exceptionOut  : Seq[Int] = Seq(),
-  hasLoadError  : Boolean = false,
-  flushPipe     : Boolean = false,
-  replayInst    : Boolean = false,
-  trigger       : Boolean = false,
-  needSrcFrm    : Boolean = false,
-  needSrcVxrm   : Boolean = false,
-  writeVType    : Boolean = false,
-  needSrcMcsr   : Boolean = false,
-  immType       : Set[UInt] = Set(),
-  // vector
-  vconfigWakeUp : Boolean = false,
-  maskWakeUp    : Boolean = false,
+case class FuConfig(
+    name: String,
+    fuType: FuType.OHType,
+    fuGen: (Parameters, FuConfig) => FuncUnit,
+    srcData: Seq[Seq[DataConfig]],
+    piped: Boolean,
+    maybeBlock: Boolean = false,
+    writeIntRf: Boolean = false,
+    writeFpRf: Boolean = false,
+    writeVecRf: Boolean = false,
+    writeV0Rf: Boolean = false,
+    writeVlRf: Boolean = false,
+    writeMxRf: Boolean = false,
+    writeFakeIntRf: Boolean = false,
+    writeFflags: Boolean = false,
+    writeVxsat: Boolean = false,
+    needAmuCtrl: Boolean = false,
+    destDataBits: Int = 64,
+    srcDataBits: Option[Int] = None,
+    srcNeedCopy: Boolean = false,
+    latency: HasFuLatency = CertainLatency(
+      0
+    ), // two field (base latency, extra latency(option))
+    hasInputBuffer: (Boolean, Int, Boolean) = (false, 0, false),
+    exceptionOut: Seq[Int] = Seq(),
+    hasLoadError: Boolean = false,
+    flushPipe: Boolean = false,
+    replayInst: Boolean = false,
+    trigger: Boolean = false,
+    needSrcFrm: Boolean = false,
+    needSrcVxrm: Boolean = false,
+    writeVType: Boolean = false,
+    needSrcMcsr: Boolean = false,
+    immType: Set[UInt] = Set(),
+    // vector
+    vconfigWakeUp: Boolean = false,
+    maskWakeUp: Boolean = false
 ) {
   def needIntWen: Boolean = writeIntRf || writeFakeIntRf
-  def needFpWen:  Boolean = writeFpRf
+  def needFpWen: Boolean = writeFpRf
   def needVecWen: Boolean = writeVecRf
-  def needV0Wen:  Boolean = writeV0Rf
-  def needVlWen:  Boolean = writeVlRf
+  def needV0Wen: Boolean = writeV0Rf
+  def needVlWen: Boolean = writeVlRf
   def needMxWen: Boolean = writeMxRf
   var vconfigIdx = -1
   var maskSrcIdx = -1
   if (vconfigWakeUp) {
-    vconfigIdx = getSpecialSrcIdx(VlData(), "when vconfigWakeUp is true, srcData must always contains VlData()")
+    vconfigIdx = getSpecialSrcIdx(
+      VlData(),
+      "when vconfigWakeUp is true, srcData must always contains VlData()"
+    )
   }
   if (maskWakeUp) {
-    maskSrcIdx = getSpecialSrcIdx(V0Data(), "when maskWakeUp is true, srcData must always contains V0Data()")
+    maskSrcIdx = getSpecialSrcIdx(
+      V0Data(),
+      "when maskWakeUp is true, srcData must always contains V0Data()"
+    )
   }
 
-  require(!piped || piped && latency.latencyVal.isDefined, "The latency value must be set when piped is enable")
-  require(!vconfigWakeUp || vconfigWakeUp && vconfigIdx >= 0, "The index of vl src must be set when vlWakeUp is enable")
-  require(!maskWakeUp || maskWakeUp && maskSrcIdx >= 0, "The index of mask src must be set when vlWakeUp is enable")
+  require(
+    !piped || piped && latency.latencyVal.isDefined,
+    "The latency value must be set when piped is enable"
+  )
+  require(
+    !vconfigWakeUp || vconfigWakeUp && vconfigIdx >= 0,
+    "The index of vl src must be set when vlWakeUp is enable"
+  )
+  require(
+    !maskWakeUp || maskWakeUp && maskSrcIdx >= 0,
+    "The index of mask src must be set when vlWakeUp is enable"
+  )
 
-  def numIntSrc : Int = srcData.map(_.count(x => IntRegSrcDataSet.contains(x))).fold(0)(_ max _)
-  def numFpSrc  : Int = srcData.map(_.count(x => FpRegSrcDataSet.contains(x))).fold(0)(_ max _)
-  def numVecSrc : Int = srcData.map(_.count(x => VecRegSrcDataSet.contains(x))).fold(0)(_ max _)
-  def numVfSrc  : Int = srcData.map(_.count(x => VecRegSrcDataSet.contains(x))).fold(0)(_ max _)
-  def numV0Src  : Int = srcData.map(_.count(x => V0RegSrcDataSet.contains(x))).fold(0)(_ max _)
-  def numVlSrc  : Int = srcData.map(_.count(x => VlRegSrcDataSet.contains(x))).fold(0)(_ max _)
-  def numMxSrc  : Int = srcData.map(_.count(x => MxRegSrcDataSet.contains(x))).fold(0)(_ max _)
+  def numIntSrc: Int =
+    srcData.map(_.count(x => IntRegSrcDataSet.contains(x))).fold(0)(_ max _)
+  def numFpSrc: Int =
+    srcData.map(_.count(x => FpRegSrcDataSet.contains(x))).fold(0)(_ max _)
+  def numVecSrc: Int =
+    srcData.map(_.count(x => VecRegSrcDataSet.contains(x))).fold(0)(_ max _)
+  def numVfSrc: Int =
+    srcData.map(_.count(x => VecRegSrcDataSet.contains(x))).fold(0)(_ max _)
+  def numV0Src: Int =
+    srcData.map(_.count(x => V0RegSrcDataSet.contains(x))).fold(0)(_ max _)
+  def numVlSrc: Int =
+    srcData.map(_.count(x => VlRegSrcDataSet.contains(x))).fold(0)(_ max _)
+  def numMxSrc: Int =
+    srcData.map(_.count(x => MxRegSrcDataSet.contains(x))).fold(0)(_ max _)
   // def numMfSrc  : Int = srcData.map(_.count(x => MatrixRegSrcDataSet.contains(x))).fold(0)(_ max _)
-  def numRegSrc : Int = srcData.map(_.count(x => RegSrcDataSet.contains(x))).fold(0)(_ max _)
-  def numSrc    : Int = srcData.map(_.length).fold(0)(_ max _)
+  def numRegSrc: Int =
+    srcData.map(_.count(x => RegSrcDataSet.contains(x))).fold(0)(_ max _)
+  def numSrc: Int = srcData.map(_.length).fold(0)(_ max _)
 
   def readFp: Boolean = numFpSrc > 0
 
@@ -119,20 +170,22 @@ case class FuConfig (
     uop.fuType === this.fuType.U
   }
 
-  /**
-    * params(i): data type set of the ith src port
+  /** params(i): data type set of the ith src port
     * @return
     */
   def getRfReadDataCfgSet: Seq[Set[DataConfig]] = {
     val numSrcMax = srcData.map(_.length).fold(0)(_ max _)
     // make srcData is uniform sized to avoid exception when transpose
-    val alignedSrcData: Seq[Seq[DataConfig]] = srcData.map(x => x ++ Seq.fill(numSrcMax - x.length)(null))
+    val alignedSrcData: Seq[Seq[DataConfig]] =
+      srcData.map(x => x ++ Seq.fill(numSrcMax - x.length)(null))
     alignedSrcData.transpose.map(_.toSet.intersect(RegSrcDataSet))
   }
 
   def getSrcDataType(srcIdx: Int): Set[DataConfig] = {
     srcData
-      .map((x: Seq[DataConfig]) => if(x.isDefinedAt(srcIdx)) Some(x(srcIdx)) else None)
+      .map((x: Seq[DataConfig]) =>
+        if (x.isDefinedAt(srcIdx)) Some(x(srcIdx)) else None
+      )
       .filter(_.nonEmpty)
       .map(_.get)
       .toSet
@@ -151,14 +204,17 @@ case class FuConfig (
   }
 
   // csr's redirect also uses redirect bundle
-  def hasRedirect: Boolean = Seq(FuType.jmp, FuType.brh, FuType.csr).contains(fuType)
+  def hasRedirect: Boolean =
+    Seq(FuType.jmp, FuType.brh, FuType.csr).contains(fuType)
 
-  def hasPredecode: Boolean = Seq(FuType.jmp, FuType.brh, FuType.csr, FuType.ldu).contains(fuType)
+  def hasPredecode: Boolean =
+    Seq(FuType.jmp, FuType.brh, FuType.csr, FuType.ldu).contains(fuType)
 
   def needTargetPc: Boolean = Seq(FuType.jmp, FuType.brh).contains(fuType)
 
   // predict info
-  def needPdInfo: Boolean = Seq(FuType.jmp, FuType.brh, FuType.csr).contains(fuType)
+  def needPdInfo: Boolean =
+    Seq(FuType.jmp, FuType.brh, FuType.csr).contains(fuType)
 
   def needPc: Boolean = Seq(FuType.jmp, FuType.brh, FuType.ldu).contains(fuType)
 
@@ -169,7 +225,21 @@ case class FuConfig (
 
   def needVecCtrl: Boolean = {
     import FuType._
-    Seq(vipu, vialuF, vimac, vidiv, vfpu, vppu, vfalu, vfma, vfdiv, vfcvt, vldu, vstu).contains(fuType)
+    Seq(
+      vipu,
+      vialuF,
+      vimac,
+      vidiv,
+      vfpu,
+      vppu,
+      vfalu,
+      vfma,
+      vfdiv,
+      vfcvt,
+      vfexp2,
+      vldu,
+      vstu
+    ).contains(fuType)
   }
 
   def needCriticalErrors: Boolean = Seq(FuType.csr).contains(fuType)
@@ -187,13 +257,13 @@ case class FuConfig (
   def isFence: Boolean = fuType == FuType.fence
 
   def isVecArith: Boolean = fuType == FuType.vialuF || fuType == FuType.vimac ||
-                            fuType == FuType.vppu || fuType == FuType.vipu ||
-                            fuType == FuType.vfalu || fuType == FuType.vfma ||
-                            fuType == FuType.vfdiv || fuType == FuType.vfcvt ||
-                            fuType == FuType.vidiv
+    fuType == FuType.vppu || fuType == FuType.vipu ||
+    fuType == FuType.vfalu || fuType == FuType.vfma ||
+    fuType == FuType.vfdiv || fuType == FuType.vfcvt ||
+    fuType == FuType.vidiv || fuType == FuType.vfexp2
 
   def isVecMem: Boolean = fuType == FuType.vldu || fuType == FuType.vstu ||
-                          fuType == FuType.vsegldu || fuType == FuType.vsegstu
+    fuType == FuType.vsegldu || fuType == FuType.vsegstu
 
   def needOg2: Boolean = isVecArith || fuType == FuType.vsetfwf || isVecMem
 
@@ -203,12 +273,14 @@ case class FuConfig (
 
   def ckAlwaysEn: Boolean = isCsr || isFence
 
-  /**
-    * Get index of special src data, like [[VlData]], [[V0Data]]
-   *
-    * @param data [[DataConfig]]
-    * @param tips tips if get failed
-    * @return the index of special src data
+  /** Get index of special src data, like [[VlData]], [[V0Data]]
+    *
+    * @param data
+    *   [[DataConfig]]
+    * @param tips
+    *   tips if get failed
+    * @return
+    *   the index of special src data
     */
   protected def getSpecialSrcIdx(data: DataConfig, tips: String): Int = {
     val srcIdxVec = srcData.map(x => x.indexOf(data))
@@ -230,49 +302,53 @@ case class FuConfig (
 }
 
 object FuConfig {
-  val JmpCfg: FuConfig = FuConfig (
+  val JmpCfg: FuConfig = FuConfig(
     name = "jmp",
     fuType = FuType.jmp,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new JumpUnit(cfg)(p)).suggestName("jmp"),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new JumpUnit(cfg)(p)).suggestName("jmp"),
     srcData = Seq(
-      Seq(IntData()), // jal
+      Seq(IntData()) // jal
     ),
     piped = true,
     writeIntRf = true,
-    immType = Set(SelImm.IMM_I, SelImm.IMM_UJ, SelImm.IMM_U),
+    immType = Set(SelImm.IMM_I, SelImm.IMM_UJ, SelImm.IMM_U)
   )
 
-  val BrhCfg: FuConfig = FuConfig (
+  val BrhCfg: FuConfig = FuConfig(
     name = "brh",
     fuType = FuType.brh,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new BranchUnit(cfg)(p).suggestName("brh")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new BranchUnit(cfg)(p).suggestName("brh")),
     srcData = Seq(
-      Seq(IntData(), IntData()),
+      Seq(IntData(), IntData())
     ),
     piped = true,
-    immType = Set(SelImm.IMM_SB),
+    immType = Set(SelImm.IMM_SB)
   )
 
-  val I2fCfg: FuConfig = FuConfig (
+  val I2fCfg: FuConfig = FuConfig(
     name = "i2f",
     FuType.i2f,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new IntToFP(cfg)(p).suggestName("i2f")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new IntToFP(cfg)(p).suggestName("i2f")),
     srcData = Seq(
-      Seq(IntData()),
+      Seq(IntData())
     ),
     piped = true,
     writeFpRf = true,
     writeFflags = true,
     latency = CertainLatency(2),
-    needSrcFrm = true,
+    needSrcFrm = true
   )
 
-  val I2vCfg: FuConfig = FuConfig (
+  val I2vCfg: FuConfig = FuConfig(
     name = "i2v",
     FuType.i2v,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new IntFPToVec(cfg)(p).suggestName("i2v")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new IntFPToVec(cfg)(p).suggestName("i2v")),
     srcData = Seq(
-      Seq(IntData(), IntData()),
+      Seq(IntData(), IntData())
     ),
     piped = true,
     writeFpRf = true,
@@ -281,16 +357,17 @@ object FuConfig {
     latency = CertainLatency(0),
     destDataBits = 128,
     srcDataBits = Some(64),
-    immType = Set(SelImm.IMM_OPIVIU, SelImm.IMM_OPIVIS, SelImm.IMM_VRORVI),
+    immType = Set(SelImm.IMM_OPIVIU, SelImm.IMM_OPIVIS, SelImm.IMM_VRORVI)
   )
 
-  val F2vCfg: FuConfig = FuConfig (
+  val F2vCfg: FuConfig = FuConfig(
     name = "f2v",
     FuType.f2v,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new IntFPToVec(cfg)(p).suggestName("f2v")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new IntFPToVec(cfg)(p).suggestName("f2v")),
     srcData = Seq(
       Seq(FpData(), FpData()),
-      Seq(FpData()),
+      Seq(FpData())
     ),
     piped = true,
     writeFpRf = true,
@@ -298,53 +375,66 @@ object FuConfig {
     writeV0Rf = true,
     latency = CertainLatency(0),
     destDataBits = 128,
-    srcDataBits = Some(64),
+    srcDataBits = Some(64)
   )
 
-  val CsrCfg: FuConfig = FuConfig (
+  val CsrCfg: FuConfig = FuConfig(
     name = "csr",
     fuType = FuType.csr,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new CSR(cfg)(p).suggestName("csr")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new CSR(cfg)(p).suggestName("csr")),
     srcData = Seq(
-      Seq(IntData()),
+      Seq(IntData())
     ),
     piped = false,
     writeIntRf = true,
     latency = UncertainLatency(),
-    exceptionOut = Seq(illegalInstr, virtualInstr, breakPoint, ecallU, ecallS, ecallVS, ecallM),
-    flushPipe = true,
+    exceptionOut = Seq(
+      illegalInstr,
+      virtualInstr,
+      breakPoint,
+      ecallU,
+      ecallS,
+      ecallVS,
+      ecallM
+    ),
+    flushPipe = true
   )
 
-  val AluCfg: FuConfig = FuConfig (
+  val AluCfg: FuConfig = FuConfig(
     name = "alu",
     fuType = FuType.alu,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new Alu(cfg)(p).suggestName("Alu")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new Alu(cfg)(p).suggestName("Alu")),
     srcData = Seq(
-      Seq(IntData(), IntData()),
+      Seq(IntData(), IntData())
     ),
     piped = true,
     writeIntRf = true,
-    immType = Set(SelImm.IMM_I, SelImm.IMM_U, SelImm.IMM_LUI32, SelImm.IMM_CSRCONST),
+    immType =
+      Set(SelImm.IMM_I, SelImm.IMM_U, SelImm.IMM_LUI32, SelImm.IMM_CSRCONST)
   )
 
-  val MulCfg: FuConfig = FuConfig (
+  val MulCfg: FuConfig = FuConfig(
     name = "mul",
     fuType = FuType.mul,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new MulUnit(cfg)(p).suggestName("Mul")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new MulUnit(cfg)(p).suggestName("Mul")),
     srcData = Seq(
-      Seq(IntData(), IntData()),
+      Seq(IntData(), IntData())
     ),
     piped = true,
     writeIntRf = true,
-    latency = CertainLatency(2),
+    latency = CertainLatency(2)
   )
 
-  val DivCfg: FuConfig = FuConfig (
+  val DivCfg: FuConfig = FuConfig(
     name = "div",
     fuType = FuType.div,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new DivUnit(cfg)(p).suggestName("Div")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new DivUnit(cfg)(p).suggestName("Div")),
     srcData = Seq(
-      Seq(IntData(), IntData()),
+      Seq(IntData(), IntData())
     ),
     piped = false,
     writeIntRf = true,
@@ -352,12 +442,13 @@ object FuConfig {
     hasInputBuffer = (true, 4, true)
   )
 
-  val FenceCfg: FuConfig = FuConfig (
+  val FenceCfg: FuConfig = FuConfig(
     name = "fence",
     FuType.fence,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new Fence(cfg)(p).suggestName("Fence")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new Fence(cfg)(p).suggestName("Fence")),
     srcData = Seq(
-      Seq(IntData(), IntData()),
+      Seq(IntData(), IntData())
     ),
     piped = false,
     latency = UncertainLatency(),
@@ -366,12 +457,13 @@ object FuConfig {
     immType = Set(SelImm.IMM_MSETVAL)
   )
 
-  val MreleaseCfg: FuConfig = FuConfig (
+  val MreleaseCfg: FuConfig = FuConfig(
     name = "mrelease",
     FuType.mrelease,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new Mrelease(cfg)(p).suggestName("Mrelease")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new Mrelease(cfg)(p).suggestName("Mrelease")),
     srcData = Seq(
-      Seq(IntData()),
+      Seq(IntData())
     ),
     piped = true,
     writeIntRf = false,
@@ -381,64 +473,75 @@ object FuConfig {
   )
 
   // Todo: split it to simple bitmap exu and complex bku
-  val BkuCfg: FuConfig = FuConfig (
+  val BkuCfg: FuConfig = FuConfig(
     name = "bku",
     fuType = FuType.bku,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new Bku(cfg)(p).suggestName("Bku")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new Bku(cfg)(p).suggestName("Bku")),
     srcData = Seq(
-      Seq(IntData(), IntData()),
+      Seq(IntData(), IntData())
     ),
     piped = true,
     writeIntRf = true,
-    latency = CertainLatency(2),
+    latency = CertainLatency(2)
   )
 
   val VSetRvfWvfCfg: FuConfig = FuConfig(
     name = "vsetrvfwvf",
     fuType = FuType.vsetfwf,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new VSetRvfWvf(cfg)(p).suggestName("VSetRvfWvf")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new VSetRvfWvf(cfg)(p).suggestName("VSetRvfWvf")),
     srcData = Seq(
-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()),  // vs1, vs2, vd_old, v0, vtype&vl
+      Seq(
+        VecData(),
+        VecData(),
+        VecData(),
+        V0Data(),
+        VlData()
+      ) // vs1, vs2, vd_old, v0, vtype&vl
     ),
     piped = true,
     writeVlRf = true,
     writeVType = true,
     writeIntRf = true,
     latency = CertainLatency(0),
-    immType = Set(SelImm.IMM_VSETVLI, SelImm.IMM_VSETIVLI),
+    immType = Set(SelImm.IMM_VSETVLI, SelImm.IMM_VSETIVLI)
   )
 
   val VSetRiWvfCfg: FuConfig = FuConfig(
     name = "vsetriwvf",
     fuType = FuType.vsetiwf,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new VSetRiWvf(cfg)(p).suggestName("VSetRiWvf")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new VSetRiWvf(cfg)(p).suggestName("VSetRiWvf")),
     srcData = Seq(
-      Seq(IntData(), IntData()),
+      Seq(IntData(), IntData())
     ),
     piped = true,
     writeVlRf = true,
     writeVType = true,
     latency = CertainLatency(0),
-    immType = Set(SelImm.IMM_VSETVLI, SelImm.IMM_VSETIVLI),
+    immType = Set(SelImm.IMM_VSETVLI, SelImm.IMM_VSETIVLI)
   )
 
   val VSetRiWiCfg: FuConfig = FuConfig(
     name = "vsetriwi",
     fuType = FuType.vsetiwi,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new VSetRiWi(cfg)(p).suggestName("VSetRiWi")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new VSetRiWi(cfg)(p).suggestName("VSetRiWi")),
     srcData = Seq(
-      Seq(IntData(), IntData()),
+      Seq(IntData(), IntData())
     ),
     piped = true,
     writeIntRf = true,
     latency = CertainLatency(0),
-    immType = Set(SelImm.IMM_VSETVLI, SelImm.IMM_VSETIVLI),
+    immType = Set(SelImm.IMM_VSETVLI, SelImm.IMM_VSETIVLI)
   )
 
   val MSetMtilexRiWmfCfg: FuConfig = FuConfig(
     name = "msetmtilexriwmf",
     fuType = FuType.msetmtilexiwf,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new MSetMtilexRiWmf(cfg)(p).suggestName("MSetMtilexRiWmf")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new MSetMtilexRiWmf(cfg)(p).suggestName("MSetMtilexRiWmf")),
     srcData = Seq(
       // src(0): atx
       Seq(IntData())
@@ -446,42 +549,45 @@ object FuConfig {
     piped = true,
     writeMxRf = true,
     latency = CertainLatency(0),
-    immType = Set(SelImm.IMM_MSET),
+    immType = Set(SelImm.IMM_MSET)
   )
 
   val MSetMtilexRmfWmfCfg: FuConfig = FuConfig(
     name = "msetmtilexrmfwmf",
     fuType = FuType.msetmtilexfwf,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new MSetMtilexRmfWmf(cfg)(p).suggestName("MSetMtilexRmfWmf")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new MSetMtilexRmfWmf(cfg)(p).suggestName("MSetMtilexRmfWmf")),
     srcData = Seq(
       // src(0): old mtilex
-      Seq(IntData(), IntData(), MxData()),
+      Seq(IntData(), IntData(), MxData())
     ),
     piped = true,
     writeIntRf = true,
     latency = CertainLatency(0),
-    immType = Set(SelImm.IMM_MSET),
+    immType = Set(SelImm.IMM_MSET)
   )
 
   val McfgCfg: FuConfig = FuConfig(
     name = "mcfg",
     fuType = FuType.mcfg,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new Mcfg(cfg)(p).suggestName("Mcfg")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new Mcfg(cfg)(p).suggestName("Mcfg")),
     srcData = Seq(
-      Seq(IntData()),
+      Seq(IntData())
     ),
     piped = true,
     writeIntRf = true,
     latency = CertainLatency(0),
-    exceptionOut = Seq(illegalInstr),
+    exceptionOut = Seq(illegalInstr)
   )
 
-  val MmaCfg: FuConfig = FuConfig (
+  val MmaCfg: FuConfig = FuConfig(
     name = "mma",
     fuType = FuType.mma,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new Mma(cfg)(p).suggestName("Mma")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new Mma(cfg)(p).suggestName("Mma")),
     srcData = Seq(
-      Seq(IntData(), IntData(), MxData(), MxData(), MxData()),
+      Seq(IntData(), IntData(), MxData(), MxData(), MxData())
     ),
     piped = true,
     needAmuCtrl = true,
@@ -491,12 +597,13 @@ object FuConfig {
     immType = Set(SelImm.IMM_MATRIXREG)
   )
 
-  val MarithCfg: FuConfig = FuConfig (
+  val MarithCfg: FuConfig = FuConfig(
     name = "marith",
     fuType = FuType.marith,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new Marith(cfg)(p).suggestName("Marith")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new Marith(cfg)(p).suggestName("Marith")),
     srcData = Seq(
-      Seq(IntData(), IntData(), MxData(), MxData()),
+      Seq(IntData(), IntData(), MxData(), MxData())
     ),
     piped = true,
     needAmuCtrl = true,
@@ -504,93 +611,129 @@ object FuConfig {
     immType = Set(SelImm.IMM_MATRIXREG)
   )
 
-  val LduCfg: FuConfig = FuConfig (
+  val LduCfg: FuConfig = FuConfig(
     name = "ldu",
     fuType = FuType.ldu,
     fuGen = null, // Todo
     srcData = Seq(
-      Seq(IntData()),
+      Seq(IntData())
     ),
     piped = false, // Todo: check it
     writeIntRf = true,
     writeFpRf = true,
     latency = UncertainLatency(3),
-    exceptionOut = Seq(loadAddrMisaligned, loadAccessFault, loadPageFault, loadGuestPageFault, breakPoint, hardwareError),
+    exceptionOut = Seq(
+      loadAddrMisaligned,
+      loadAccessFault,
+      loadPageFault,
+      loadGuestPageFault,
+      breakPoint,
+      hardwareError
+    ),
     flushPipe = true,
     replayInst = true,
     hasLoadError = true,
     trigger = true,
-    immType = Set(SelImm.IMM_I),
+    immType = Set(SelImm.IMM_I)
   )
 
-  val StaCfg: FuConfig = FuConfig (
+  val StaCfg: FuConfig = FuConfig(
     name = "sta",
     fuType = FuType.stu,
     fuGen = null, // Todo
     srcData = Seq(
-      Seq(IntData()),
+      Seq(IntData())
     ),
     piped = false,
     latency = UncertainLatency(),
-    exceptionOut = Seq(storeAddrMisaligned, storeAccessFault, storePageFault, storeGuestPageFault, breakPoint, hardwareError),
+    exceptionOut = Seq(
+      storeAddrMisaligned,
+      storeAccessFault,
+      storePageFault,
+      storeGuestPageFault,
+      breakPoint,
+      hardwareError
+    ),
     flushPipe = true,
     trigger = true,
-    immType = Set(SelImm.IMM_S),
+    immType = Set(SelImm.IMM_S)
   )
 
-  val StdCfg: FuConfig = FuConfig (
+  val StdCfg: FuConfig = FuConfig(
     name = "std",
     fuType = FuType.stu,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new Std(cfg)(p).suggestName("Std")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new Std(cfg)(p).suggestName("Std")),
     srcData = Seq(
       Seq(IntData()),
-      Seq(FpData()),
+      Seq(FpData())
     ),
     piped = true,
     latency = CertainLatency(0)
   )
 
-  val HyldaCfg = FuConfig (
+  val HyldaCfg = FuConfig(
     name = "hylda",
     fuType = FuType.ldu,
     fuGen = null, // Todo
     srcData = Seq(
-      Seq(IntData()),
+      Seq(IntData())
     ),
     piped = false, // Todo: check it
     writeIntRf = true,
     writeFpRf = true,
     latency = UncertainLatency(3),
-    exceptionOut = Seq(loadAddrMisaligned, loadAccessFault, loadPageFault, loadGuestPageFault, breakPoint, hardwareError),
+    exceptionOut = Seq(
+      loadAddrMisaligned,
+      loadAccessFault,
+      loadPageFault,
+      loadGuestPageFault,
+      breakPoint,
+      hardwareError
+    ),
     flushPipe = true,
     replayInst = true,
     hasLoadError = true,
-    immType = Set(SelImm.IMM_I),
+    immType = Set(SelImm.IMM_I)
   )
 
-  val HystaCfg = FuConfig (
+  val HystaCfg = FuConfig(
     name = "hysta",
     fuType = FuType.stu,
     fuGen = null, // Todo
     srcData = Seq(
-      Seq(IntData()),
+      Seq(IntData())
     ),
     piped = false,
     latency = UncertainLatency(),
-    exceptionOut = Seq(storeAddrMisaligned, storeAccessFault, storePageFault, storeGuestPageFault, breakPoint, hardwareError),
-    immType = Set(SelImm.IMM_S),
+    exceptionOut = Seq(
+      storeAddrMisaligned,
+      storeAccessFault,
+      storePageFault,
+      storeGuestPageFault,
+      breakPoint,
+      hardwareError
+    ),
+    immType = Set(SelImm.IMM_S)
   )
 
-  val MlsCfg: FuConfig = FuConfig (
+  val MlsCfg: FuConfig = FuConfig(
     name = "mls",
     fuType = FuType.mls,
     fuGen = null,
     srcData = Seq(
-      Seq(IntData(), IntData(), MxData(), MxData()),
+      Seq(IntData(), IntData(), MxData(), MxData())
     ),
     piped = false, // Todo: check it
     needAmuCtrl = true,
-    exceptionOut = Seq(loadAddrMisaligned, loadAccessFault, loadPageFault, loadGuestPageFault, hardwareError, illegalInstr),
+    exceptionOut = Seq(
+      loadAddrMisaligned,
+      loadAccessFault,
+      loadPageFault,
+      loadGuestPageFault,
+      hardwareError,
+      illegalInstr
+    ),
     replayInst = true,
     hasLoadError = true,
     // If TLB hits, it will take 3 cycle.
@@ -599,48 +742,61 @@ object FuConfig {
     immType = Set(SelImm.IMM_MATRIXREG)
   )
 
-  val FakeHystaCfg = FuConfig (
+  val FakeHystaCfg = FuConfig(
     name = "hysta",
     fuType = FuType.stu,
     fuGen = null, // Todo
     srcData = Seq(),
     piped = false,
     latency = UncertainLatency(),
-    exceptionOut = Seq(storeAddrMisaligned, storeAccessFault, storePageFault, storeGuestPageFault),
-    immType = Set(),
+    exceptionOut = Seq(
+      storeAddrMisaligned,
+      storeAccessFault,
+      storePageFault,
+      storeGuestPageFault
+    ),
+    immType = Set()
   )
 
-  val MouCfg: FuConfig = FuConfig (
+  val MouCfg: FuConfig = FuConfig(
     name = "mou",
     fuType = FuType.mou,
     fuGen = null, // Todo
     srcData = Seq(
-      Seq(IntData()),
+      Seq(IntData())
     ),
     piped = false, // Todo: check it
     writeFakeIntRf = true,
     latency = UncertainLatency(),
-    exceptionOut = (LduCfg.exceptionOut ++ StaCfg.exceptionOut ++ StdCfg.exceptionOut).distinct,
-    trigger = true,
+    exceptionOut =
+      (LduCfg.exceptionOut ++ StaCfg.exceptionOut ++ StdCfg.exceptionOut).distinct,
+    trigger = true
   )
 
-  val MoudCfg: FuConfig = FuConfig (
+  val MoudCfg: FuConfig = FuConfig(
     name = "moud",
     fuType = FuType.mou,
     fuGen = null, // Todo
     srcData = Seq(
-      Seq(IntData()),
+      Seq(IntData())
     ),
     piped = true,
-    latency = CertainLatency(0),
+    latency = CertainLatency(0)
   )
 
-  val VialuCfg = FuConfig (
+  val VialuCfg = FuConfig(
     name = "vialuFix",
     fuType = FuType.vialuF,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new VIAluFix(cfg)(p).suggestName("VialuFix")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new VIAluFix(cfg)(p).suggestName("VialuFix")),
     srcData = Seq(
-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()),  // vs1, vs2, vd_old, v0, vtype&vl
+      Seq(
+        VecData(),
+        VecData(),
+        VecData(),
+        V0Data(),
+        VlData()
+      ) // vs1, vs2, vd_old, v0, vtype&vl
     ),
     piped = true,
     writeVecRf = true,
@@ -651,15 +807,22 @@ object FuConfig {
     vconfigWakeUp = true,
     maskWakeUp = true,
     destDataBits = 128,
-    exceptionOut = Seq(illegalInstr),
+    exceptionOut = Seq(illegalInstr)
   )
 
-  val VimacCfg = FuConfig (
+  val VimacCfg = FuConfig(
     name = "vimac",
     fuType = FuType.vimac,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new VIMacU(cfg)(p).suggestName("Vimac")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new VIMacU(cfg)(p).suggestName("Vimac")),
     srcData = Seq(
-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()), // vs1, vs2, vd_old, v0, vtype&vl
+      Seq(
+        VecData(),
+        VecData(),
+        VecData(),
+        V0Data(),
+        VlData()
+      ) // vs1, vs2, vd_old, v0, vtype&vl
     ),
     piped = true,
     writeVecRf = true,
@@ -670,15 +833,22 @@ object FuConfig {
     vconfigWakeUp = true,
     maskWakeUp = true,
     destDataBits = 128,
-    exceptionOut = Seq(illegalInstr),
+    exceptionOut = Seq(illegalInstr)
   )
 
-  val VidivCfg = FuConfig (
+  val VidivCfg = FuConfig(
     name = "vidiv",
     fuType = FuType.vidiv,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new VIDiv(cfg)(p).suggestName("Vidiv")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new VIDiv(cfg)(p).suggestName("Vidiv")),
     srcData = Seq(
-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()), // vs1, vs2, vd_old, v0, vtype&vl
+      Seq(
+        VecData(),
+        VecData(),
+        VecData(),
+        V0Data(),
+        VlData()
+      ) // vs1, vs2, vd_old, v0, vtype&vl
     ),
     piped = false,
     writeVecRf = true,
@@ -687,15 +857,22 @@ object FuConfig {
     vconfigWakeUp = true,
     maskWakeUp = true,
     destDataBits = 128,
-    exceptionOut = Seq(illegalInstr),
+    exceptionOut = Seq(illegalInstr)
   )
 
-  val VppuCfg = FuConfig (
+  val VppuCfg = FuConfig(
     name = "vppu",
     fuType = FuType.vppu,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new VPPU(cfg)(p).suggestName("Vppu")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new VPPU(cfg)(p).suggestName("Vppu")),
     srcData = Seq(
-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()),  // vs1, vs2, vd_old, v0, vtype&vl
+      Seq(
+        VecData(),
+        VecData(),
+        VecData(),
+        V0Data(),
+        VlData()
+      ) // vs1, vs2, vd_old, v0, vtype&vl
     ),
     piped = true,
     writeVecRf = true,
@@ -704,15 +881,22 @@ object FuConfig {
     vconfigWakeUp = true,
     maskWakeUp = true,
     destDataBits = 128,
-    exceptionOut = Seq(illegalInstr),
+    exceptionOut = Seq(illegalInstr)
   )
 
-  val VipuCfg: FuConfig = FuConfig (
+  val VipuCfg: FuConfig = FuConfig(
     name = "vipu",
     fuType = FuType.vipu,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new VIPU(cfg)(p).suggestName("Vipu")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new VIPU(cfg)(p).suggestName("Vipu")),
     srcData = Seq(
-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()),  // vs1, vs2, vd_old, v0
+      Seq(
+        VecData(),
+        VecData(),
+        VecData(),
+        V0Data(),
+        VlData()
+      ) // vs1, vs2, vd_old, v0
     ),
     piped = true,
     writeIntRf = true,
@@ -722,15 +906,22 @@ object FuConfig {
     vconfigWakeUp = true,
     maskWakeUp = true,
     destDataBits = 128,
-    exceptionOut = Seq(illegalInstr),
+    exceptionOut = Seq(illegalInstr)
   )
 
-  val VfaluCfg = FuConfig (
+  val VfaluCfg = FuConfig(
     name = "vfalu",
     fuType = FuType.vfalu,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new VFAlu(cfg)(p).suggestName("Vfalu")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new VFAlu(cfg)(p).suggestName("Vfalu")),
     srcData = Seq(
-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()), // vs1, vs2, vd_old, v0, vtype&vl
+      Seq(
+        VecData(),
+        VecData(),
+        VecData(),
+        V0Data(),
+        VlData()
+      ) // vs1, vs2, vd_old, v0, vtype&vl
     ),
     piped = true,
     writeVecRf = true,
@@ -742,15 +933,22 @@ object FuConfig {
     maskWakeUp = true,
     destDataBits = 128,
     exceptionOut = Seq(illegalInstr),
-    needSrcFrm = true,
+    needSrcFrm = true
   )
 
-  val VfmaCfg = FuConfig (
+  val VfmaCfg = FuConfig(
     name = "vfma",
     fuType = FuType.vfma,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new VFMA(cfg)(p).suggestName("Vfma")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new VFMA(cfg)(p).suggestName("Vfma")),
     srcData = Seq(
-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()), // vs1, vs2, vd_old, v0, vtype&vl
+      Seq(
+        VecData(),
+        VecData(),
+        VecData(),
+        V0Data(),
+        VlData()
+      ) // vs1, vs2, vd_old, v0, vtype&vl
     ),
     piped = true,
     writeVecRf = true,
@@ -761,15 +959,22 @@ object FuConfig {
     maskWakeUp = true,
     destDataBits = 128,
     exceptionOut = Seq(illegalInstr),
-    needSrcFrm = true,
+    needSrcFrm = true
   )
 
   val VfdivCfg = FuConfig(
     name = "vfdiv",
     fuType = FuType.vfdiv,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new VFDivSqrt(cfg)(p).suggestName("Vfdiv")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new VFDivSqrt(cfg)(p).suggestName("Vfdiv")),
     srcData = Seq(
-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()), // vs1, vs2, vd_old, v0, vtype&vl
+      Seq(
+        VecData(),
+        VecData(),
+        VecData(),
+        V0Data(),
+        VlData()
+      ) // vs1, vs2, vd_old, v0, vtype&vl
     ),
     piped = false,
     writeVecRf = true,
@@ -780,15 +985,22 @@ object FuConfig {
     maskWakeUp = true,
     destDataBits = 128,
     exceptionOut = Seq(illegalInstr),
-    needSrcFrm = true,
+    needSrcFrm = true
   )
 
   val VfcvtCfg = FuConfig(
     name = "vfcvt",
     fuType = FuType.vfcvt,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new VCVT(cfg)(p).suggestName("Vfcvt")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new VCVT(cfg)(p).suggestName("Vfcvt")),
     srcData = Seq(
-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()), // vs1, vs2, vd_old, v0, vtype&vl
+      Seq(
+        VecData(),
+        VecData(),
+        VecData(),
+        V0Data(),
+        VlData()
+      ) // vs1, vs2, vd_old, v0, vtype&vl
     ),
     piped = true,
     writeVecRf = true,
@@ -799,15 +1011,76 @@ object FuConfig {
     maskWakeUp = true,
     destDataBits = 128,
     exceptionOut = Seq(illegalInstr),
-    needSrcFrm = true,
+    needSrcFrm = true
+  )
+
+  val Vfexp2Cfg = FuConfig(
+    name = "vfexp2",
+    fuType = FuType.vfexp2,
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new VFExp2(cfg)(p).suggestName("Vfexp2")),
+    srcData = Seq(
+      Seq(VecData(), VecData(), VecData(), V0Data(), VlData())
+    ),
+    piped = true,
+    writeVecRf = true,
+    writeV0Rf = true,
+    writeFflags = true,
+    latency = CertainLatency(6),
+    vconfigWakeUp = true,
+    maskWakeUp = true,
+    destDataBits = 128,
+    exceptionOut = Seq(illegalInstr),
+    needSrcFrm = true
+  )
+
+  val Vfexp2Cfg = FuConfig(
+    name = "vfexp2",
+    fuType = FuType.vfexp2,
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new VFExp2(cfg)(p).suggestName("Vfexp2")),
+    srcData = Seq(
+      Seq(VecData(), VecData(), VecData(), V0Data(), VlData())
+    ),
+    piped = true,
+    writeVecRf = true,
+    writeV0Rf = true,
+    writeFflags = true,
+    latency = CertainLatency(6),
+    vconfigWakeUp = true,
+    maskWakeUp = true,
+    destDataBits = 128,
+    exceptionOut = Seq(illegalInstr),
+    needSrcFrm = true
+  )
+
+  val Vfexp2Cfg = FuConfig(
+    name = "vfexp2",
+    fuType = FuType.vfexp2,
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new VFExp2(cfg)(p).suggestName("Vfexp2")),
+    srcData = Seq(
+      Seq(VecData(), VecData(), VecData(), V0Data(), VlData())
+    ),
+    piped = true,
+    writeVecRf = true,
+    writeV0Rf = true,
+    writeFflags = true,
+    latency = CertainLatency(6),
+    vconfigWakeUp = true,
+    maskWakeUp = true,
+    destDataBits = 128,
+    exceptionOut = Seq(illegalInstr),
+    needSrcFrm = true
   )
 
   val FaluCfg = FuConfig(
     name = "falu",
     fuType = FuType.falu,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new FAlu(cfg)(p).suggestName("Falu")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new FAlu(cfg)(p).suggestName("Falu")),
     srcData = Seq(
-      Seq(FpData(), FpData()),
+      Seq(FpData(), FpData())
     ),
     piped = true,
     writeFpRf = true,
@@ -815,45 +1088,48 @@ object FuConfig {
     writeFflags = true,
     latency = CertainLatency(1),
     destDataBits = 64,
-    needSrcFrm = true,
+    needSrcFrm = true
   )
 
   val FmacCfg = FuConfig(
     name = "fmac",
     fuType = FuType.fmac,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new FMA(cfg)(p).suggestName("Fmac")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new FMA(cfg)(p).suggestName("Fmac")),
     srcData = Seq(
-      Seq(FpData(), FpData(), FpData()),
+      Seq(FpData(), FpData(), FpData())
     ),
     piped = true,
     writeFpRf = true,
     writeFflags = true,
     latency = CertainLatency(3),
     destDataBits = 64,
-    needSrcFrm = true,
+    needSrcFrm = true
   )
 
   val FdivCfg = FuConfig(
     name = "fdiv",
     fuType = FuType.fDivSqrt,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new FDivSqrt(cfg)(p).suggestName("Fdiv")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new FDivSqrt(cfg)(p).suggestName("Fdiv")),
     srcData = Seq(
-      Seq(FpData(), FpData()),
+      Seq(FpData(), FpData())
     ),
     piped = false,
     writeFpRf = true,
     writeFflags = true,
     latency = UncertainLatency(),
     destDataBits = 64,
-    needSrcFrm = true,
+    needSrcFrm = true
   )
 
   val FcvtCfg = FuConfig(
     name = "fcvt",
     fuType = FuType.fcvt,
-    fuGen = (p: Parameters, cfg: FuConfig) => Module(new FCVT(cfg)(p).suggestName("Fcvt")),
+    fuGen = (p: Parameters, cfg: FuConfig) =>
+      Module(new FCVT(cfg)(p).suggestName("Fcvt")),
     srcData = Seq(
-      Seq(FpData()),
+      Seq(FpData())
     ),
     piped = true,
     writeFpRf = true,
@@ -861,70 +1137,108 @@ object FuConfig {
     writeFflags = true,
     latency = CertainLatency(2),
     destDataBits = 64,
-    needSrcFrm = true,
+    needSrcFrm = true
   )
 
-  val VlduCfg: FuConfig = FuConfig (
+  val VlduCfg: FuConfig = FuConfig(
     name = "vldu",
     fuType = FuType.vldu,
     fuGen = null,
     srcData = Seq(
-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()),  //vs1, vs2, vd_old, v0, vconfig
+      Seq(
+        VecData(),
+        VecData(),
+        VecData(),
+        V0Data(),
+        VlData()
+      ) // vs1, vs2, vd_old, v0, vconfig
     ),
     piped = false, // Todo: check it
     writeVecRf = true,
     writeV0Rf = true,
     writeVlRf = true,
     latency = UncertainLatency(),
-    exceptionOut = Seq(loadAddrMisaligned, loadAccessFault, loadPageFault, loadGuestPageFault, breakPoint, hardwareError),
+    exceptionOut = Seq(
+      loadAddrMisaligned,
+      loadAccessFault,
+      loadPageFault,
+      loadGuestPageFault,
+      breakPoint,
+      hardwareError
+    ),
     flushPipe = true,
     replayInst = true,
     trigger = true,
     hasLoadError = true,
     vconfigWakeUp = true,
     maskWakeUp = true,
-    destDataBits = 128,
+    destDataBits = 128
   )
 
-  val VstuCfg: FuConfig = FuConfig (
+  val VstuCfg: FuConfig = FuConfig(
     name = "vstu",
     fuType = FuType.vstu,
     fuGen = null,
     srcData = Seq(
-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()),  //vs1, vs2, vd_old, v0, vconfig
+      Seq(
+        VecData(),
+        VecData(),
+        VecData(),
+        V0Data(),
+        VlData()
+      ) // vs1, vs2, vd_old, v0, vconfig
     ),
     piped = false,
     latency = UncertainLatency(),
-    exceptionOut = Seq(storeAddrMisaligned, storeAccessFault, storePageFault, storeGuestPageFault, breakPoint, hardwareError),
+    exceptionOut = Seq(
+      storeAddrMisaligned,
+      storeAccessFault,
+      storePageFault,
+      storeGuestPageFault,
+      breakPoint,
+      hardwareError
+    ),
     flushPipe = true,
     replayInst = true,
     trigger = true,
     hasLoadError = true,
     vconfigWakeUp = true,
     maskWakeUp = true,
-    destDataBits = 128,
+    destDataBits = 128
   )
 
-  val VseglduSeg: FuConfig = FuConfig (
+  val VseglduSeg: FuConfig = FuConfig(
     name = "vsegldu",
     fuType = FuType.vsegldu,
     fuGen = null,
     srcData = Seq(
-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()), //vs1, vs2, vd_old, v0, vconfig
+      Seq(
+        VecData(),
+        VecData(),
+        VecData(),
+        V0Data(),
+        VlData()
+      ) // vs1, vs2, vd_old, v0, vconfig
     ),
     piped = false, // Todo: check it
     writeVecRf = true,
     writeV0Rf = true,
     writeVlRf = true,
     latency = UncertainLatency(),
-    exceptionOut = Seq(loadAddrMisaligned, loadAccessFault, loadPageFault, breakPoint, hardwareError),
+    exceptionOut = Seq(
+      loadAddrMisaligned,
+      loadAccessFault,
+      loadPageFault,
+      breakPoint,
+      hardwareError
+    ),
     flushPipe = true,
     replayInst = true,
     trigger = true,
     hasLoadError = true,
     vconfigWakeUp = true,
     maskWakeUp = true,
-    destDataBits = 128,
+    destDataBits = 128
   )
 
   val VsegstuCfg: FuConfig = FuConfig(
@@ -932,30 +1246,84 @@ object FuConfig {
     fuType = FuType.vsegstu,
     fuGen = null,
     srcData = Seq(
-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()), //vs1, vs2, vd_old, v0, vconfig
+      Seq(
+        VecData(),
+        VecData(),
+        VecData(),
+        V0Data(),
+        VlData()
+      ) // vs1, vs2, vd_old, v0, vconfig
     ),
     piped = false,
     latency = UncertainLatency(),
-    exceptionOut = Seq(storeAddrMisaligned, storeAccessFault, storePageFault, breakPoint, hardwareError),
+    exceptionOut = Seq(
+      storeAddrMisaligned,
+      storeAccessFault,
+      storePageFault,
+      breakPoint,
+      hardwareError
+    ),
     flushPipe = true,
     replayInst = true,
     trigger = true,
     hasLoadError = true,
     vconfigWakeUp = true,
     maskWakeUp = true,
-    destDataBits = 128,
+    destDataBits = 128
   )
 
   def allConfigs = Seq(
-    JmpCfg, BrhCfg, I2fCfg, I2vCfg, F2vCfg, CsrCfg, AluCfg, MulCfg, DivCfg, FenceCfg, BkuCfg, VSetRvfWvfCfg, VSetRiWvfCfg, VSetRiWiCfg,
-    LduCfg, StaCfg, StdCfg, MouCfg, MoudCfg, VialuCfg, VipuCfg, VlduCfg, VstuCfg, VseglduSeg, VsegstuCfg,
-    FaluCfg, FmacCfg, FcvtCfg, FdivCfg,
-    VfaluCfg, VfmaCfg, VfcvtCfg, HyldaCfg, HystaCfg,
-    MSetMtilexRiWmfCfg, MSetMtilexRmfWmfCfg, McfgCfg,
-    MmaCfg, MarithCfg, MlsCfg,
+    JmpCfg,
+    BrhCfg,
+    I2fCfg,
+    I2vCfg,
+    F2vCfg,
+    CsrCfg,
+    AluCfg,
+    MulCfg,
+    DivCfg,
+    FenceCfg,
+    BkuCfg,
+    VSetRvfWvfCfg,
+    VSetRiWvfCfg,
+    VSetRiWiCfg,
+    LduCfg,
+    StaCfg,
+    StdCfg,
+    MouCfg,
+    MoudCfg,
+    VialuCfg,
+    VipuCfg,
+    VlduCfg,
+    VstuCfg,
+    VseglduSeg,
+    VsegstuCfg,
+    FaluCfg,
+    FmacCfg,
+    FcvtCfg,
+    FdivCfg,
+    VfaluCfg,
+    VfmaCfg,
+    VfcvtCfg,
+    Vfexp2Cfg,
+    HyldaCfg,
+    HystaCfg,
+    MSetMtilexRiWmfCfg,
+    MSetMtilexRmfWmfCfg,
+    McfgCfg,
+    MmaCfg,
+    MarithCfg,
+    MlsCfg
   )
 
   def VecArithFuConfigs = Seq(
-    VialuCfg, VimacCfg, VppuCfg, VipuCfg, VfaluCfg, VfmaCfg, VfcvtCfg
+    VialuCfg,
+    VimacCfg,
+    VppuCfg,
+    VipuCfg,
+    VfaluCfg,
+    VfmaCfg,
+    VfcvtCfg,
+    Vfexp2Cfg
   )
 }
