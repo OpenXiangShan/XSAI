@@ -18,8 +18,8 @@ jobs:
     outputs:
       core: ${{ steps.filter.outputs.core }}
     steps:
-    - uses: actions/checkout@v4
-    - uses: dorny/paths-filter@v3
+    - uses: actions/checkout@v7
+    - uses: dorny/paths-filter@v4
       id: filter
       with:
         predicate-quantifier: 'every'
@@ -33,7 +33,7 @@ jobs:
     timeout-minutes: 900
     name: Generate XSAI Verilog
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           submodules: true
@@ -94,7 +94,7 @@ jobs:
     timeout-minutes: 900
     name: EMU - XSAI Basics
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           submodules: true
@@ -192,7 +192,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build docker image
         run: make image
@@ -208,7 +208,7 @@ jobs:
     timeout-minutes: 900
     name: EMU - XSAI General-Purpose Performance
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           submodules: true
@@ -319,7 +319,7 @@ jobs:
     timeout-minutes: 900
     name: EMU - XSAI MC
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           submodules: true
@@ -359,7 +359,7 @@ jobs:
     timeout-minutes: 900
     name: EMU - XS without Matrix
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           submodules: true
@@ -406,7 +406,7 @@ jobs:
     timeout-minutes: 900
     name: Check Format
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: 'recursive'
       - uses: actions/setup-java@v4
