@@ -34,10 +34,11 @@ import freechips.rocketchip.interrupts.{IntSourceNode, IntSourcePortSimple}
 import freechips.rocketchip.regmapper.{RegField, RegFieldDesc, RegFieldGroup}
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.{AsyncQueueParams}
-import top.BusPerfMonitor
+import top.{BusPerfMonitor, LLCType}
 import xiangshan.backend.fu.{MemoryRange, PMAConfigEntry, PMAConst}
 import xiangshan.{DebugOptionsKey, PMParameKey, XSTileKey}
 import device.SYSCNTConsts.timeWidth
+import zhujiang.ZJParameters
 
 case object SoCParamsKey extends Field[SoCParameters]
 case object CVMParamsKey extends Field[CVMParameters]
@@ -84,7 +85,9 @@ case class SoCParameters
   UARTLiteForDTS: Boolean = true, // should be false in SimMMIO
   extIntrs: Int = 64,
   L3NBanks: Int = 4,
+  LLC: LLCType.Value = LLCType.OpenLLC,
   OpenLLCParamsOpt: Option[OpenLLCParam] = None,
+  ZhuJiangParams: ZJParameters = ZJParameters(),
   XSTopPrefix: Option[String] = None,
   NodeIDWidthList: Map[String, Int] = Map(
     "B" -> 7,
@@ -147,6 +150,26 @@ trait HasSoCParameter {
   val tiles = p(XSTileKey)
   val enableCHI = true
   val issue = p(CHIIssue)
+  val isOpenLLC = soc.LLC == LLCType.OpenLLC
+  val isZhuJiang = soc.LLC == LLCType.ZhuJiang
+
+  if (isZhuJiang) {
+    require(issue == xscache.chi.Issue.Eb, "LLC=ZhuJiang only supports CHI issue E.b or newer")
+    require(
+      soc.EnableCHIAsyncBridge.isEmpty,
+      "LLC=ZhuJiang does not support EnableCHIAsyncBridge"
+    )
+    require(!soc.EnablePowerDown, "LLC=ZhuJiang does not support power-down flows")
+    require(!soc.WFIClockGate, "LLC=ZhuJiang does not support WFI clock gating")
+    require(
+      !tiles.exists(_.L2CacheParamsOpt.exists(_.enableL2Flush)),
+      "LLC=ZhuJiang does not support flushL2"
+    )
+    require(
+      !tiles.exists(_.L2CacheParamsOpt.exists(l2 => l2.dataCheck.nonEmpty || l2.enablePoison)),
+      "LLC=ZhuJiang requires CoupledL2 DataCheck and Poison disabled"
+    )
+  }
 
   val NumCores = tiles.size
   val EnableILA = soc.EnableILA
@@ -180,8 +203,7 @@ trait HasSoCParameter {
   val SeperateBus = soc.SeperateBus
   val SeperateBusRanges = soc.SeperateBusRanges
 
-  val EnableCHIAsyncBridge = if (enableCHI && soc.EnableCHIAsyncBridge.isDefined)
-    soc.EnableCHIAsyncBridge else None
+  val EnableCHIAsyncBridge = soc.EnableCHIAsyncBridge
   val EnableClintAsyncBridge = soc.EnableClintAsyncBridge
   val SeperateBusAsyncBridge = soc.SeperateBusAsyncBridge
 
