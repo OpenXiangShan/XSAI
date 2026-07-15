@@ -186,6 +186,10 @@ class XSCuteImp(wrapper: XSCute)(implicit p: Parameters) extends LazyModuleImp(w
 
   // DiffTest: Monitor CUTE write requests to L2 Cache
   if (env.EnableDifftest) {
+    DifftestModule.addCppMacro(
+      "CONFIG_DIFF_MMA_REDUCE_WIDTH_BYTES",
+      BigInt(wrapper.cuteParams.ReduceWidthByte)
+    )
 
     val mmu = wrapper.cute_tl.module.io.mmu
     // Use wrapper.node.in(0) instead of wrapper.cute_tl.node.out(0)
