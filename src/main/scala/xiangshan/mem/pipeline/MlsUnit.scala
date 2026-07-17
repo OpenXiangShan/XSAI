@@ -553,17 +553,19 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   val s3_mcfgWidth = McfgHelpers.msew(s3_mcfgTypeCode)
   amuCtrl.ls := MldstOpType.isStore(s3_in.uop.fuOpType)
   amuCtrl.ms := s3_in.uop.imm(2, 0)
-  amuCtrl.widths    := Mux(MldstOpType.isWholeReg(s3_in.uop.fuOpType), MSew.e8, s3_mcfgWidth)
+  val s3_wholeReg = MldstOpType.isWholeReg(s3_in.uop.fuOpType)
+  val s3_wholeAcc = s3_wholeReg && MldstOpType.isMatrixC(s3_in.uop.fuOpType)
+  amuCtrl.widths    := Mux(s3_wholeReg, Mux(s3_wholeAcc, MSew.e32, MSew.e8), s3_mcfgWidth)
   amuCtrl.baseAddr  := s3_in.paddr
   amuCtrl.stride    := s3_in.stride
   amuCtrl.transpose := MldstOpType.isTransposed(s3_in.uop.fuOpType)
   amuCtrl.isacc     := MldstOpType.isMatrixC(s3_in.uop.fuOpType)
   amuCtrl.isA       := MldstOpType.isMatrixA(s3_in.uop.fuOpType)
   amuCtrl.isB       := MldstOpType.isMatrixB(s3_in.uop.fuOpType)
-  when (MldstOpType.isWholeReg(s3_in.uop.fuOpType)) {
+  when (s3_wholeReg) {
     amuCtrl.row     := ROWNUM.U
-    when (s3_in.uop.imm(2)) { // for acc registers
-      amuCtrl.column := (ARLEN / 8).U
+    when (s3_wholeAcc) { // for acc registers
+      amuCtrl.column := (ARLEN / 32).U
     } .otherwise { // for tile registers
       amuCtrl.column := (TRLEN / 8).U
     }

@@ -19,7 +19,7 @@ EnableCHIAsyncBridge: true
 
 L2CacheConfig: { size: 1 MB, ways: 8, inclusive: true, banks: 4, tp: true, enableFlush: false }
 
-L3CacheConfig: { size: 16 MB, ways: 16, inclusive: false, banks: 4 }
+OpenLLCConfig: { size: 16 MB, ways: 16, banks: 4 }
 
 HartIDBits: 6
 

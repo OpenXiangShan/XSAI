@@ -33,8 +33,6 @@ import freechips.rocketchip.diplomacy.LazyModule
 import freechips.rocketchip.diplomacy.LazyModuleImp
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.BundleFieldBase
-import huancun.AliasField
-import huancun.PrefetchField
 import org.chipsalliance.cde.config.Parameters
 import system.SoCParamsKey
 import utility._
@@ -48,6 +46,8 @@ import xiangshan._
 import xiangshan.cache._
 import xiangshan.cache.mmu.TlbRequestIO
 import xiangshan.frontend._
+import xscache.common.AliasField
+import xscache.common.PrefetchField
 
 case class ICacheParameters(
     nSets:               Int = 256,

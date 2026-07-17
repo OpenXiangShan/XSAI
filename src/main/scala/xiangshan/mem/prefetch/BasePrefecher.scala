@@ -26,7 +26,7 @@ import xiangshan.backend.fu.PMPRespBundle
 import xiangshan.mem.L1PrefetchReq
 import xiangshan.mem.Bundles.LsPrefetchTrainBundle
 import xiangshan.cache.mmu.TlbRequestIO
-import coupledL2.PrefetchCtrlFromCore
+import xscache.coupledL2.PrefetchCtrlFromCore
 
 class PrefetchCtrl(implicit p: Parameters) extends XSBundle {
   val l1I_pf_enable = Bool()

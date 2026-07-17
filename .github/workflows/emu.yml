@@ -18,8 +18,8 @@ jobs:
     outputs:
       core: ${{ steps.filter.outputs.core }}
     steps:
-    - uses: actions/checkout@v4
-    - uses: dorny/paths-filter@v3
+    - uses: actions/checkout@v7
+    - uses: dorny/paths-filter@v4
       id: filter
       with:
         predicate-quantifier: 'every'
@@ -33,7 +33,7 @@ jobs:
     timeout-minutes: 900
     name: Generate XSAI Verilog
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           submodules: true
@@ -94,7 +94,7 @@ jobs:
     timeout-minutes: 900
     name: EMU - XSAI Basics
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           submodules: true
@@ -127,6 +127,9 @@ jobs:
       - name: Basic Test - misc-tests
         run: |
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci misc-tests 2> /dev/zero
+      - name: Basic AME Test
+        run: |
+          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci ame-tests 2> /dev/zero
       - name: Extension Test - hypervisor
         run: |
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci rvh-tests 2> /dev/zero
@@ -180,50 +183,6 @@ jobs:
           echo "| linux | ${{ steps.linux.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
           echo "| povray | ${{ steps.povray.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
           echo "| copy_and_run | ${{ steps.copy_and_run.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-  
-  emu-xsai-gsim:
-    runs-on: bosc
-    needs: changes
-    if: ${{ needs.changes.outputs.core == 'true' }}
-    continue-on-error: false
-    timeout-minutes: 900
-    name: EMU - XSAI GSIM
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          submodules: true
-      - name: set env
-        run: |
-          export HEAD_SHA=${{ github.run_number }}
-          echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
-          echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
-          echo "AM_HOME=/nfs/home/share/ci-workloads/nexus-am" >> $GITHUB_ENV
-          echo "PERF_HOME=/nfs/home/ci-runner/xsai-perf/${HEAD_SHA}" >> $GITHUB_ENV
-          echo "WAVE_HOME=/nfs/home/ci-runner/xsai-wave/${HEAD_SHA}" >> $GITHUB_ENV
-          echo "GCPT_RESTORE_BIN=/nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin" >> $GITHUB_ENV
-          mkdir -p /nfs/home/ci-runner/xsai-perf/${HEAD_SHA}
-          mkdir -p /nfs/home/ci-runner/xsai-wave/${HEAD_SHA}
-      - name: Initialize submodules
-        run: make init-force
-      - name: clean up
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
-      - name: Build XSAI GSIM emu
-        run: |
-          make gsim GSIM=1 CONFIG=DefaultMatrixConfig -j 200 PGO_WORKLOAD=$GITHUB_WORKSPACE/ready-to-run/coremark-2-iteration.bin LLVM_PROFDATA=llvm-profdata WITH_DRAMSIM3=1 DRAMSIM3_HOME=/nfs/home/share/ci-workloads/DRAMsim3
-      - name: Simple Test - CoreMark
-        id: coremark
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci coremark 2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/coremark-gsim.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
-      - name: System Test - Linux
-        id: linux
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci linux-hello-opensbi 2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/linux-gsim.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
 
   docker-build:
     name: Docker Build
@@ -233,7 +192,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build docker image
         run: make image
@@ -249,7 +208,7 @@ jobs:
     timeout-minutes: 900
     name: EMU - XSAI General-Purpose Performance
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           submodules: true
@@ -360,7 +319,7 @@ jobs:
     timeout-minutes: 900
     name: EMU - XSAI MC
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           submodules: true
@@ -400,7 +359,7 @@ jobs:
     timeout-minutes: 900
     name: EMU - XS without Matrix
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           submodules: true
@@ -447,7 +406,7 @@ jobs:
     timeout-minutes: 900
     name: Check Format
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: 'recursive'
       - uses: actions/setup-java@v4

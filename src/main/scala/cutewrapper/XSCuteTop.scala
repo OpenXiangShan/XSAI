@@ -7,27 +7,34 @@ import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import org.chipsalliance.cde.config._
-import coupledL2.MatrixDataBundle
+import xscache.coupledL2.MatrixDataBundle
 import utility.{ChiselDB, TLLoggerM}
 import xiangshan.HasXSParameter
+import xscache.coupledL2.{AmeIndexField, AmeIndexKey}
 
 /**
  * A simple wrapper demonstration that integrates CUTEV2Top and Cute2TL,
  * facilitating their use for independent unit testing.
  */
 
+// Import CUTEImplParameters to access ABMatrixRegNBanks
+trait XSCuteParameters extends CUTEImplParameters
+
 class XSCuteTopImpl(wrapper: XSCuteTop) extends LazyModuleImp(wrapper) {
   val cute = Module(new CUTEV2Top)
+  val nBanks = wrapper.cuteParams.ABMatrixRegNBanks
   val io = IO(new CUTETopIO {
-    val matrix_data_in = wrapper.cute_tl.module.io.matrix_data_in.cloneType
+    val matrix_data_in = Vec(nBanks, Flipped(Decoupled(chiselTypeOf(wrapper.cute_tl.module.io.matrix_data_in(0).bits))))
   })
   io.ctrl2top <> cute.io.ctrl2top
   io.perf <> cute.io.perf
   wrapper.cute_tl.module.io.matrix_data_in <> io.matrix_data_in
   wrapper.cute_tl.module.io.mmu <> cute.io.mmu2llc
   io.mmu2llc := DontCare
-  val tl = wrapper.node.makeIOs()(ValName("tl"))
-  val edgeIn = wrapper.node.edges.in(0)
+  val tls = wrapper.node.zipWithIndex.map{ case(x, i) => x.makeIOs()(ValName(s"tl$i")) }
+  val edgeIns = wrapper.node.map(_.edges.in(0))
+  val tl = tls.map(_.head)
+  val edgeIn = edgeIns.head
 }
 
 // Add a LazyModule with TLAdapterNode between TLWidthWidget and cute_tl.node
@@ -109,11 +116,11 @@ object CuteDebugAdapter {
   }
 }
 
-class XSCuteTop(implicit p: Parameters) extends LazyModule {
+class XSCuteTop(implicit p: Parameters) extends LazyModule with XSCuteParameters {
   val beatBytes = 32
   val transferBytes = 64
   val cute_tl = LazyModule(new Cute2TL)
-  val node = TLManagerNode(Seq(TLSlavePortParameters.v1(
+  val node = Seq.fill(8)(TLManagerNode(Seq(TLSlavePortParameters.v1(
     managers = Seq(TLSlaveParameters.v1(
       address = Seq(AddressSet(0, 0xffffffffL)),
       supportsGet = TransferSizes(1, transferBytes),
@@ -121,21 +128,25 @@ class XSCuteTop(implicit p: Parameters) extends LazyModule {
       supportsPutFull = TransferSizes(1, transferBytes),
       fifoId = Some(0)
     )),
-    beatBytes = beatBytes))
-  )
+    requestKeys = Seq(AmeIndexKey),
+    responseFields = Seq(AmeIndexField()),
+    beatBytes = beatBytes))))
 
-  if (beatBytes == 64) {
-    node := CuteDebugAdapter("near_cute") := cute_tl.node
+  (node zip cute_tl.node).zipWithIndex foreach { case ((down, up), i) =>
+    if (beatBytes == 64) {
+      down := CuteDebugAdapter(s"near_cute_$i") := up
+    }
+    else {
+      down := CuteDebugAdapter(s"near_manager_$i") := TLFragmenter(32, 64) := TLWidthWidget(64) := CuteDebugAdapter(s"near_cute_$i") := up
+    }
   }
-  else {
-    node := CuteDebugAdapter("near_manager") := TLFragmenter(32, 64) := TLWidthWidget(64) := CuteDebugAdapter("near_cute") := cute_tl.node
-  }
+
   lazy val module = new XSCuteTopImpl(this)
 }
 
 class XSCuteIO(implicit p: Parameters) extends CuteBundle {
   val cute = new CUTETopIO
-  val matrix_data_in = Flipped(Vec(L2NBanks, Decoupled(new MatrixDataBundle())))
+  val matrix_data_in = Flipped(Vec(ABMatrixRegNBanks, Decoupled(new MatrixDataBundle())))
   val hartId = Input(UInt(8.W))
 }
 
@@ -143,8 +154,10 @@ class XSCuteImp(wrapper: XSCute)(implicit p: Parameters) extends LazyModuleImp(w
   with HasXSParameter 
   with CUTEImplParameters
 {
-    (wrapper.node.in zip wrapper.node.out).foreach { case ((in, edgeIn), (out, edgeOut)) =>
-      out <> in
+    wrapper.node.zipWithIndex.foreach { case (node, i) =>
+      (node.in zip node.out).foreach { case ((in, edgeIn), (out, edgeOut)) =>
+        out <> in
+      }
     }
 
     val io = IO(new XSCuteIO())
@@ -153,34 +166,60 @@ class XSCuteImp(wrapper: XSCute)(implicit p: Parameters) extends LazyModuleImp(w
     io.cute.mmu2llc := DontCare
     wrapper.cute_tl.module.io.mmu <> cute.io.mmu2llc
 
-    val tl_data_in = wrapper.cute_tl.module.io.matrix_data_in
-    val matrix_data_in_vec = io.matrix_data_in
-    val matrix_data_arb = Module(new Arbiter(matrix_data_in_vec(0).bits.cloneType, matrix_data_in_vec.length))
-    matrix_data_arb.io.in <> matrix_data_in_vec
-
     val enableTLLog = !env.FPGAPlatform && env.AlwaysBasicDB
-    require(wrapper.node.out.size == 1)
-    val logm = Module(new TLLoggerM(s"L2_CUTE_${coreParams.HartId}", wrapper.node.out.head._2, enableTLLog))
-    logm.io.a.valid := wrapper.node.out.head._1.a.valid
-    logm.io.a.bits := wrapper.node.out.head._1.a.bits
-    logm.io.m.valid := matrix_data_arb.io.out.valid
-    logm.io.m.bits.source := matrix_data_arb.io.out.bits.sourceId
-    logm.io.m.bits.data := matrix_data_arb.io.out.bits.data.data
+    val matrix_data_ch0 = wrapper.cute_tl.module.io.matrix_data_in(0)
+    val logm = Module(new TLLoggerM(s"L2_CUTE_${coreParams.HartId}", wrapper.node.head.out.head._2, enableTLLog))
+    logm.io.a.valid := wrapper.node.head.out.head._1.a.valid
+    logm.io.a.bits := wrapper.node.head.out.head._1.a.bits
+    logm.io.m.valid := matrix_data_ch0.valid
+    logm.io.m.bits.source := matrix_data_ch0.bits.source
+    logm.io.m.bits.data := matrix_data_ch0.bits.data
 
-    tl_data_in.valid := matrix_data_arb.io.out.valid
-    tl_data_in.bits := 0.U.asTypeOf(tl_data_in.bits)
-    tl_data_in.bits.opcode := TLMessages.AccessAckData
-    tl_data_in.bits.source := matrix_data_arb.io.out.bits.sourceId
-    tl_data_in.bits.data := matrix_data_arb.io.out.bits.data.data
-    matrix_data_arb.io.out.ready := tl_data_in.ready
+    // Connect 8-channel matrix_data_in (currently only channel 0 is used in CUTE2TLImp)
+    for (i <- 0 until ABMatrixRegNBanks) {
+      val matrix_data_in = wrapper.cute_tl.module.io.matrix_data_in(i)
+      matrix_data_in.valid := io.matrix_data_in(i).valid
+      matrix_data_in.bits.source := io.matrix_data_in(i).bits.sourceId
+      matrix_data_in.bits.data := io.matrix_data_in(i).bits.data.data
+      io.matrix_data_in(i).ready := matrix_data_in.ready
+    }
 
   // DiffTest: Monitor CUTE write requests to L2 Cache
   if (env.EnableDifftest) {
+    DifftestModule.addCppMacro(
+      "CONFIG_DIFF_MMA_REDUCE_WIDTH_BYTES",
+      BigInt(wrapper.cuteParams.ReduceWidthByte)
+    )
 
     val mmu = wrapper.cute_tl.module.io.mmu
     // Use wrapper.node.in(0) instead of wrapper.cute_tl.node.out(0)
     // because wrapper.node is connected to cute_tl.node and is visible in this module
-    val (tl_in, _) = wrapper.node.in(0)
+    val (tl_in, _) = wrapper.node(0).in(0)
+
+    // Match LocalMMU's RequestSourceID encoding:
+    // encodedId = (reqLlcOrigId << SourceTagWidth) | sourceTag
+    val sourceTagWidth = 3
+    val cWriteTag = 3.U(sourceTagWidth.W)
+    val allocatedOrigIdFlagBit = 60
+
+    def isAllocatedOrigId(id: UInt): Bool = id.pad(64)(allocatedOrigIdFlagBit)
+    def restoreLoaderSourceId(id: UInt): UInt = {
+      val id64 = id.pad(64)
+      Mux(
+        isAllocatedOrigId(id64),
+        Cat(0.U((64 - LLCSourceMaxNumBitSize).W), id64(LLCSourceMaxNumBitSize - 1, 0)),
+        id64
+      )
+    }
+
+    def decodeEncodedSourceId(encodedId: UInt): (UInt, UInt, UInt, Bool) = {
+      val tag = encodedId(sourceTagWidth - 1, 0)
+      val reqLlcOrigId = encodedId >> sourceTagWidth
+      val loaderSourceId = restoreLoaderSourceId(reqLlcOrigId)
+      val loaderSourceIdInRange = loaderSourceId < LLCSourceMaxNum.U
+      val loaderSourceIdx = loaderSourceId(LLCSourceMaxNumBitSize - 1, 0)
+      (tag, reqLlcOrigId, loaderSourceIdx, loaderSourceIdInRange)
+    }
     
     // Record write request information when it's sent
     val writeReqTable = Reg(Vec(LLCSourceMaxNum, new Bundle {
@@ -190,39 +229,57 @@ class XSCuteImp(wrapper: XSCute)(implicit p: Parameters) extends LazyModuleImp(w
       val valid = Bool()
     }))
     dontTouch(writeReqTable)
+
+    val writeReq = mmu.Request(0)
+    val reqEncodedSourceId = writeReq.bits.RequestSourceID
+    val (reqSourceTag, _, reqLoaderSourceIdx, reqLoaderSourceIdInRange) = decodeEncodedSourceId(reqEncodedSourceId)
+    val reqWriteReqEntry = writeReqTable(reqLoaderSourceIdx)
+
+    // Record write request when it fires
+    when(writeReq.fire && writeReq.bits.RequestType_isWrite) {
+      assert(reqSourceTag === cWriteTag, cf"CUTE store request has unexpected source tag ${reqSourceTag}")
+      assert(reqLoaderSourceIdInRange, cf"CUTE store request source id out of range: encoded=${reqEncodedSourceId}")
+      reqWriteReqEntry.addr := writeReq.bits.RequestAddr
+      reqWriteReqEntry.data := writeReq.bits.RequestData.asTypeOf(Vec(64, UInt(8.W)))
+      reqWriteReqEntry.mask := writeReq.bits.RequestMask
+      reqWriteReqEntry.valid := true.B
+    }
+
+
+    val respEncodedSourceId = tl_in.d.bits.user.lift(AmeIndexKey).get  // Force to contain AmeIndexKey in the path.
+    val (respSourceTag, _, respLoaderSourceIdx, respLoaderSourceIdInRange) = decodeEncodedSourceId(respEncodedSourceId)
+    val respWriteReqEntry = writeReqTable(respLoaderSourceIdx)
+
+    val ackFire = tl_in.d.fire
+    val isStoreAck = tl_in.d.bits.opcode === TLMessages.AccessAck || tl_in.d.bits.opcode === TLMessages.ReleaseAck
+    val hasStoreTag = respSourceTag === cWriteTag
+    val hasValidWriteReq = respLoaderSourceIdInRange && respWriteReqEntry.valid
     
     // Clear valid when response comes back
-    when(tl_in.d.fire && tl_in.d.bits.opcode === TLMessages.AccessAck) {
-      writeReqTable(tl_in.d.bits.source).valid := false.B
-    }
-    
-    // Record write request when it fires
-    when(mmu.Request.fire && mmu.Request.bits.RequestType_isWrite) {
-      val sourceId = mmu.ConherentRequsetSourceID.bits
-      writeReqTable(sourceId).addr := mmu.Request.bits.RequestPhysicalAddr
-      writeReqTable(sourceId).data := mmu.Request.bits.RequestData.asTypeOf(Vec(64, UInt(8.W)))
-      writeReqTable(sourceId).mask := mmu.Request.bits.RequestMask
-      writeReqTable(sourceId).valid := true.B
+    when(ackFire && isStoreAck) {
+      assert(respSourceTag === cWriteTag, cf"CUTE store response has unexpected source tag ${respSourceTag}")
+      assert(respLoaderSourceIdInRange, cf"CUTE store response source id out of range: encoded=${respEncodedSourceId}")
+      respWriteReqEntry.valid := false.B
     }
     
     // Trigger DiffTest event when write response comes back
     val difftest = DifftestModule(new DiffMatrixStoreEvent, delay = 1)
     difftest.coreid := io.hartId
     difftest.index  := 0.U
-    difftest.valid  := tl_in.d.fire && writeReqTable(tl_in.d.bits.source).valid &&
-                       (tl_in.d.bits.opcode === TLMessages.AccessAck || tl_in.d.bits.opcode === TLMessages.ReleaseAck)
-                        
-    difftest.addr   := writeReqTable(tl_in.d.bits.source).addr
-    difftest.data   := writeReqTable(tl_in.d.bits.source).data
-    difftest.mask   := writeReqTable(tl_in.d.bits.source).mask
+    difftest.valid  := ackFire && isStoreAck && hasStoreTag && hasValidWriteReq
+    difftest.addr   := respWriteReqEntry.addr
+    difftest.data   := respWriteReqEntry.data
+    difftest.mask   := respWriteReqEntry.mask
   }
 }
 
-class XSCute(implicit p: Parameters) extends LazyModule {
+class XSCute(implicit p: Parameters) extends LazyModule with XSCuteParameters {
   val cute_tl = LazyModule(new Cute2TL)
-  val node = TLAdapterNode()
+  val node = List.fill(ABMatrixRegNBanks)(TLAdapterNode())
 
-  node := TLWidthWidget(64) := CuteDebugAdapter("near_cute") := cute_tl.node
+  for (i <- 0 until ABMatrixRegNBanks) {
+    node(i) :=* TLWidthWidget(64) := CuteDebugAdapter(s"near_cute_channel$i") := cute_tl.node(i)
+  }
 
   lazy val module = new XSCuteImp(this)
 }
