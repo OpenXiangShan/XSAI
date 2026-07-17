@@ -6,7 +6,7 @@
 	url = https://github.com/OpenXiangShan/difftest
 [submodule "ready-to-run"]
 	path = ready-to-run
-	url = https://github.com/yu-yake2002/XSAI-ready-to-run.git
+	url = https://github.com/ecall73/XSAI-ready-to-run.git
 [submodule "fudian"]
 	path = fudian
 	url = https://github.com/OpenXiangShan/fudian.git
