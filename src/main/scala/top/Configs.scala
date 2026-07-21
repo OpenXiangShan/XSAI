@@ -278,6 +278,7 @@ class MinimalMatrixConfig(n: Int) extends Config(
       val cuteBase = CuteParams.CUTE_2Tops
       val (tensorMn, tensorK) = MatrixCuteTensorDims.fromXcore(xp)
       cuteBase.copy(
+        MsyncRegs = xp.MsyncRegs,
         Tensor_MN = tensorMn,
         Tensor_K = tensorK,
         Debug = CuteDebugParams.NoDebug,
@@ -514,6 +515,7 @@ class DefaultMatrixConfig(n: Int = 1) extends Config(
       val cuteBase = CuteParams.CUTE_8Tops_128SCP
       val (tensorMn, tensorK) = MatrixCuteTensorDims.fromXcore(xp)
       cuteBase.copy(
+        MsyncRegs = xp.MsyncRegs,
         Tensor_MN = tensorMn,
         Tensor_K = tensorK,
         Debug = CuteDebugParams.NoDebug,

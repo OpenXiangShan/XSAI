@@ -153,7 +153,7 @@ object Bundles {
   }
 
   class AmuReleaseIO2CUTE(implicit p: Parameters) extends XSBundle {
-    val msyncRd = UInt(p(XSCoreParamsKey).MsyncRegs.W)
+    val msyncRd = UInt(log2Ceil(p(XSCoreParamsKey).MsyncRegs).W)
   }
 
   object AmuReleaseIO2CUTE {
