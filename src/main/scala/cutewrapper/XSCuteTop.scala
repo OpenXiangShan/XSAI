@@ -154,6 +154,8 @@ class XSCuteImp(wrapper: XSCute)(implicit p: Parameters) extends LazyModuleImp(w
   with HasXSParameter 
   with CUTEImplParameters
 {
+    require(MsyncRegs == CuteMsyncRegs, s"core MsyncRegs ($MsyncRegs) must match CUTE MsyncRegs ($CuteMsyncRegs)")
+
     wrapper.node.zipWithIndex.foreach { case (node, i) =>
       (node.in zip node.out).foreach { case ((in, edgeIn), (out, edgeOut)) =>
         out <> in
