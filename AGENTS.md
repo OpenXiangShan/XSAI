@@ -47,7 +47,7 @@ make emu -j16 EMU_THREADS=8 WITH_CHISELDB=1 EMU_TRACE=fst CONFIG=DefaultMatrixCo
 
 - Prefer `EMU_THREADS=8` or `16`. Compile FST support with `EMU_TRACE=fst`; enable ChiselDB or rolling/constantin facilities only when needed.
 - `RELEASE=1` produces a faster, stripped-down simulator. Use `WITH_DRAMSIM3=1 DRAMSIM3_HOME=...` only when DRAMSim3 is required.
-- Use the CPU MMA reference by default; enable CUDA with `SIM_ARGS="--difftest-config C"` only when explicitly requested, since transfer, launch, and synchronization overhead usually eliminates non-FPGA `emu` speedups.
+- Use the CPU MMA reference by default; enable CUDA with `MMA_BACKEND=cuda` only when explicitly requested, since transfer, launch, and synchronization overhead usually eliminates non-FPGA `emu` speedups.
 - CUDA runs need host GPU access; if a sandbox reports no device, retry with elevated or unsandboxed access before diagnosing the backend.
 - Full RTL and simulator builds are expensive; prefer targeted checks or incremental builds when sufficient.
 
