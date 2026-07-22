@@ -1694,11 +1694,6 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
         difftest.robIdx := ZeroExt(ptr, 10)
         difftest.lqIdx := ZeroExt(uop.lqIdx.value, 7)
         difftest.sqIdx := ZeroExt(uop.sqIdx.value, 7)
-        if (HasMatrixExtension) {
-          difftest.mlsqIdx := ZeroExt(uop.mlsqIdx.get.value, 7)
-        } else {
-          difftest.mlsqIdx := 0.U(7.W)
-        }
         difftest.isLoad := io.commits.info(i).commitType === CommitType.LOAD
         difftest.isStore := io.commits.info(i).commitType === CommitType.STORE
         // Check LoadEvent only when isAmo or isLoad and skip MMIO
