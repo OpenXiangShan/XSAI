@@ -163,16 +163,16 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
       val MXRM = RW(1, 0)
     })))
     val wAliasMsat = IO(Input(new CSRAddrWriteBundle(new CSRBundle {
-      val MSAT = RW(2)
+      val MSAT = RW(0)
     })))
     val wAliasMflags = IO(Input(new CSRAddrWriteBundle(new CSRBundle {
-      val MFFLAGS = RW(7, 3)
+      val MFFLAGS = RW(4, 0)
     })))
     val wAliasMfrm = IO(Input(new CSRAddrWriteBundle(new CSRBundle {
-      val MFRM = RW(10, 8)
+      val MFRM = RW(2, 0)
     })))
     val wAliasMsaten = IO(Input(new CSRAddrWriteBundle(new CSRBundle {
-      val MSATEN = RW(11)
+      val MSATEN = RW(0)
     })))
     val mxrm = IO(Output(Mxrm()))
     val msat = IO(Output(Msat()))
