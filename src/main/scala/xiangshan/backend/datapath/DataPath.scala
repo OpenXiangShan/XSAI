@@ -394,7 +394,6 @@ class DataPathImp(override val wrapper: DataPath)(implicit p: Parameters, params
   if (HasMatrixExtension) {
     FpRegFile("MxRegFile", MxPhyRegs, mxRfRaddr.get, mxRfRdata.get, mxRfWen.get, mxRfWaddr.get, mxRfWdata.get,
       bankNum = 1,
-      isMxRegfile = true,
       debugReadAddr = mxDiffRead.map(_._1),
       debugReadData = mxDiffRead.map(_._2)
     )

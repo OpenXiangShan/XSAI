@@ -74,8 +74,7 @@ class Regfile
   len: Int,
   width: Int,
   bankNum: Int = 1,
-  isVlRegfile: Boolean = false,
-  isMxRegfile: Boolean = false
+  isVlRegfile: Boolean = false
 ) extends Module {
   val io = IO(new Bundle() {
     val readPorts = Vec(numReadPorts, new RfReadPort(len, width))
@@ -86,7 +85,7 @@ class Regfile
   override def desiredName = name
   println(name + ": size:" + numPregs + " read: " + numReadPorts + " write: " + numWritePorts)
 
-  val mem_0 = if (isVlRegfile || isMxRegfile) RegInit(0.U(len.W)) else Reg(UInt(len.W))
+  val mem_0 = if (isVlRegfile) RegInit(0.U(len.W)) else Reg(UInt(len.W))
   val mem = Reg(Vec(numPregs, UInt(len.W)))
   val memForRead = Wire(Vec(numPregs, UInt(len.W)))
   memForRead.zipWithIndex.map{ case(m, i) =>
@@ -161,8 +160,7 @@ object Regfile {
     debugReadAddr: Option[Seq[UInt]],
     debugReadData: Option[Vec[UInt]],
     debugAllRData: Option[Vec[UInt]],
-    isVlRegfile  : Boolean = false,
-    isMxRegfile: Boolean = false
+    isVlRegfile  : Boolean = false
   )(implicit p: Parameters): Unit = {
     val numReadPorts = raddr.length
     val numWritePorts = wen.length
@@ -175,7 +173,7 @@ object Regfile {
 
     val instanceName = name(0).toLower.toString() + name.drop(1)
     require(instanceName != name, "Regfile Instance Name can't be same as Module name")
-    val regfile = Module(new Regfile(name, numEntries, numReadPorts, numWritePorts, hasZero, dataBits, addrBits, bankNum, isVlRegfile, isMxRegfile)).suggestName(instanceName)
+    val regfile = Module(new Regfile(name, numEntries, numReadPorts, numWritePorts, hasZero, dataBits, addrBits, bankNum, isVlRegfile)).suggestName(instanceName)
     rdata := regfile.io.readPorts.zip(raddr).map { case (rport, addr) =>
       rport.addr := addr
       rport.data
@@ -305,12 +303,11 @@ object FpRegFile {
              debugAllRData: Option[Vec[UInt]] = None,
              withReset    : Boolean = false,
              bankNum      : Int,
-             isVlRegfile  : Boolean = false,
-             isMxRegfile : Boolean = false
+             isVlRegfile  : Boolean = false
            )(implicit p: Parameters): Unit = {
     Regfile(
       name, numEntries, raddr, rdata, wen, waddr, wdata,
-      hasZero = false, withReset, bankNum, debugReadAddr, debugReadData, debugAllRData, isVlRegfile, isMxRegfile)
+      hasZero = false, withReset, bankNum, debugReadAddr, debugReadData, debugAllRData, isVlRegfile)
   }
 }
 
@@ -330,8 +327,7 @@ object FpRegFileSplit {
              debugAllRData: Option[Vec[UInt]] = None,
              withReset    : Boolean = false,
              bankNum      : Int,
-             isVlRegfile  : Boolean = false,
-             isMxRegfile  : Boolean = false
+             isVlRegfile  : Boolean = false
            )(implicit p: Parameters): Unit = {
     require(Seq(1, 2, 4, 8).contains(splitNum))
     val rdataVec = Wire(Vec(splitNum, Vec(rdata.length, UInt((rdata.head.getWidth / splitNum).W))))
@@ -359,7 +355,7 @@ object FpRegFileSplit {
       Regfile(
         name + nameSuffix, numEntries, raddr, rdataVec(i), wen, waddr, wdataThisPart,
         hasZero = false, withReset, bankNum, debugReadAddr, OptionWrapper(debugReadData.nonEmpty, debugReadDataVec.get(i)),
-        OptionWrapper(debugAllRData.nonEmpty, debugAllRDataVec.get(i)), isVlRegfile, isMxRegfile)
+        OptionWrapper(debugAllRData.nonEmpty, debugAllRDataVec.get(i)), isVlRegfile)
     }
   }
 }
