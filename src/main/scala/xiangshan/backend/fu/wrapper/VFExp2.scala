@@ -88,7 +88,15 @@ class VFExp2(cfg: FuConfig)(implicit p: Parameters) extends VecPipedFuncUnit(cfg
   }
 
   private val fflagsAll = Wire(Vec(4 * numVecModule, UInt(5.W)))
-  fflagsAll := fflagsData.asUInt.asTypeOf(fflagsAll)
+  private val fflagsAllE16 = fflagsData.asUInt.asTypeOf(fflagsAll)
+  private val fflagsAllE32 = Wire(Vec(4 * numVecModule, UInt(5.W)))
+  fflagsAllE32 := 0.U.asTypeOf(fflagsAllE32)
+  for (m <- 0 until numVecModule) {
+    val modFlags = fflagsData(m).asTypeOf(Vec(4, UInt(5.W)))
+    fflagsAllE32(2 * m) := modFlags(0)
+    fflagsAllE32(2 * m + 1) := modFlags(1)
+  }
+  fflagsAll := Mux(outVecCtrl.vsew === 2.U, fflagsAllE32, fflagsAllE16)
   private val outFFlags = fflagsEn.zip(fflagsAll).map {
     case (en, fflag) => Mux(en, fflag, 0.U(5.W))
   }.reduce(_ | _)
