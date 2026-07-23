@@ -216,11 +216,11 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
 
   // Redirect (Sync with outer ROB)
   for (i <- 0 until RobSize) {
-    val needFlush = io.redirect.valid &&
-      Mux((io.redirect.end > io.redirect.begin) && !io.redirect.all,
+    val needFlush = io.redirect.valid && (Mux(
+      (io.redirect.end > io.redirect.begin),
         (i.U > io.redirect.begin) && (i.U < io.redirect.end),
         (i.U > io.redirect.begin) || (i.U < io.redirect.end)
-    )
+      ) || io.redirect.all)
 
     when (needFlush) {
       amuCtrlEntries(i) := AmuCtrlEntry.zero
