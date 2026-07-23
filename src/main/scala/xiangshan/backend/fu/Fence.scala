@@ -48,7 +48,7 @@ class Fence(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg) {
   )
 
   val (s_idle :: s_wait :: s_tlb :: s_icache :: s_fence :: s_nofence ::
-    s_wait_macquire :: s_macquire :: s_msyncregreset ::Nil) = Enum(9)
+    s_wait_macquire :: s_macquire :: s_msyncregreset :: s_exception :: Nil) = Enum(10)
 
   val state = RegInit(s_idle)
   /* fsm
@@ -61,11 +61,23 @@ class Fence(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg) {
    * s_wait_macquire : wait for macquire condition
    * s_macquire : do nothing
    * s_msyncregreset : reset msync register
+   * s_exception : report an illegal msync register index
    */
 
   // Msync registers for mrelease & macquire.
-  val msyncRegsWidth = log2Ceil(p(XSCoreParamsKey).MsyncRegs)
-  val msyncRegs = RegInit(VecInit(Seq.fill(p(XSCoreParamsKey).MsyncRegs)(0.U(64.W))))
+  val msyncRegsNum = p(XSCoreParamsKey).MsyncRegs
+  require(Seq(8, 16, 32).contains(msyncRegsNum), "MsyncRegs only supports 8/16/32")
+  val msyncRegsWidth = log2Ceil(msyncRegsNum)
+  val msyncRegs = RegInit(VecInit(Seq.fill(msyncRegsNum)(0.U(64.W))))
+
+  // Fence immediates are overwritten in rename with Cat(lsrc(1), lsrc(0)).
+  // Matrix sync instructions keep their five-bit sync index in lsrc(1).
+  val inMsyncIdx = io.in.bits.data.imm(10, 6)
+  val inMsyncIdxIllegal = msyncRegsNum match {
+    case 8  => inMsyncIdx(4, 3).orR
+    case 16 => inMsyncIdx(4)
+    case 32 => false.B
+  }
 
   // Registers for macquire
   val macquire_r1 = Reg(UInt(64.W))
@@ -76,7 +88,7 @@ class Fence(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg) {
   // In rename stage,
   //   io.out(i).bits.imm := Cat(io.in(i).bits.lsrc(1), io.in(i).bits.lsrc(0))
   // for fence. To get the msync register index, we need to read lsrc(1).
-  val msyncregreset_msync_idx = RegEnable(io.in.bits.data.imm(10, 6)(msyncRegsWidth - 1, 0), io.in.fire)
+  val msyncregreset_msync_idx = RegEnable(inMsyncIdx(msyncRegsWidth - 1, 0), io.in.fire)
 
   val sbuffer = toSbuffer.flushSb
   val sbEmpty = toSbuffer.sbIsEmpty
@@ -98,8 +110,12 @@ class Fence(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg) {
 
   when (state === s_idle && io.in.valid && !FenceOpType.isMatrix(io.in.bits.ctrl.fuOpType)) { state := s_wait }
   when (state === s_idle && io.in.valid && io.in.bits.ctrl.fuOpType === FenceOpType.mfence) { state := s_wait }
-  when (state === s_idle && io.in.valid && io.in.bits.ctrl.fuOpType === FenceOpType.msyncregreset) { state := s_msyncregreset }
-  when (state === s_idle && io.in.valid && io.in.bits.ctrl.fuOpType === FenceOpType.macquire) { state := s_wait_macquire }
+  when (state === s_idle && io.in.valid && io.in.bits.ctrl.fuOpType === FenceOpType.msyncregreset) {
+    state := Mux(inMsyncIdxIllegal, s_exception, s_msyncregreset)
+  }
+  when (state === s_idle && io.in.valid && io.in.bits.ctrl.fuOpType === FenceOpType.macquire) {
+    state := Mux(inMsyncIdxIllegal, s_exception, s_wait_macquire)
+  }
   when (state === s_wait && func === FenceOpType.fencei && sbEmpty) { state := s_icache }
   when (state === s_wait && ((func === FenceOpType.sfence || func === FenceOpType.hfence_g || func === FenceOpType.hfence_v) && sbEmpty)) { state := s_tlb }
   when (state === s_wait && func === FenceOpType.fence  && sbEmpty) { state := s_fence }
@@ -115,13 +131,14 @@ class Fence(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg) {
   io.out.bits.ctrl.pdest := uop.ctrl.pdest
   io.out.bits.ctrl.flushPipe.get := uop.ctrl.flushPipe.get
   io.out.bits.ctrl.exceptionVec.get := 0.U.asTypeOf(io.out.bits.ctrl.exceptionVec.get)
+  io.out.bits.ctrl.exceptionVec.get(illegalInstr) := state === s_exception
   io.out.bits.perfDebugInfo := io.in.bits.perfDebugInfo
   io.out.bits.debug_seqNum := io.in.bits.debug_seqNum
 
   // store macquire info
   when (state === s_idle && io.in.valid && io.in.bits.ctrl.fuOpType === FenceOpType.macquire) {
     macquire_r1 := io.in.bits.data.src(0)
-    macquire_msync_idx := io.in.bits.data.imm(10, 6)(msyncRegsWidth - 1, 0)
+    macquire_msync_idx := inMsyncIdx(msyncRegsWidth - 1, 0)
   }
 
   // Maintain msync registers.
@@ -137,7 +154,7 @@ class Fence(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg) {
 
       when (!hasConflict) {
         // no conflict, normal execution
-        for (i <- 0 until p(XSCoreParamsKey).MsyncRegs) {
+        for (i <- 0 until msyncRegsNum) {
           when (amuRelease.get.bits.msyncRd(i) === true.B) {
             msyncRegs(i) := msyncRegs(i) + 1.U
           }

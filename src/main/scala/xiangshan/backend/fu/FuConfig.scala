@@ -377,6 +377,7 @@ object FuConfig {
     writeIntRf = false,
     latency = CertainLatency(0),
     needAmuCtrl = true,
+    exceptionOut = Seq(illegalInstr),
     immType = Set(SelImm.IMM_MSETVAL)
   )
 
