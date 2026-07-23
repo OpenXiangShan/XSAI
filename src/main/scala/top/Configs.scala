@@ -432,14 +432,17 @@ case class LLCConfig(llc: String) extends Config((site, here, up) => {
     up(XSTileKey).map { tile =>
       tile.copy(L2CacheParamsOpt = tile.L2CacheParamsOpt.map(_.copy(
         dataCheck = None,
-        enablePoison = false
+        enablePoison = false,
+        bufferableNC = false,
+        endpointOrderNC = true
       )))
     }
 })
 
 case class ZhuJiangConfig(size: String, ways: Int = 16) extends Config((site, here, up) => {
   case SoCParamsKey =>
-    up(SoCParamsKey).copy(ZhuJiangParams = ZJParameters(
+    val soc = up(SoCParamsKey)
+    soc.copy(ZhuJiangParams = soc.ZhuJiangParams.copy(
       cacheSizeInB = CacheSizeParser.toBytes(size),
       cacheWays = ways
     ))
@@ -518,6 +521,7 @@ class FuzzConfig(dummy: Int = 0) extends Config(
 
 class DefaultConfig(n: Int = 1) extends Config(
   OpenLLCConfig("16MB", banks = 4, ways = 16)
+    ++ ZhuJiangConfig("16MB", ways = 16)
     ++ L2CacheConfig("1MB", banks = 4)
     ++ WithNKBL1D(64, ways = 4)
     ++ new BaseConfig(n)
