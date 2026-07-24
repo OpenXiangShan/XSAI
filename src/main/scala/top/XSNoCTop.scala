@@ -267,19 +267,19 @@ trait HasXSTileImp[+L <: HasXSTile] { this: BaseXSSocImp with HasAsyncClockImp =
 trait HasXSTileCHIImp[+L <: HasXSTile] extends HasXSTileImp[L] {
   this: BaseXSSocImp with HasAsyncClockImp =>
 
-  val io_chi = IO(new PortIO)
+  require(socParams.isOpenLLC, "XSNoCTop currently supports only LLC=OpenLLC")
 
-  require(socParams.enableCHI)
+  val io_chi = IO(new PortIO)
 
   socParams.EnableCHIAsyncBridge match {
     case Some(param) =>
       withClockAndReset(noc_clock.get, noc_reset_sync.get) {
         val time_sink = Module(new CHIAsyncBridgeSink(param))
-        time_sink.io.async <> core_with_l2.module.io.chi
+        time_sink.io.async <> core_with_l2.module.io.chi.get
         io_chi <> time_sink.io.deq
       }
     case None =>
-      io_chi <> core_with_l2.module.io.chi
+      io_chi <> core_with_l2.module.io.chi.get
   }
 }
 
