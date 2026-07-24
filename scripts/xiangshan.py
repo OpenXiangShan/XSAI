@@ -381,7 +381,7 @@ class XiangShan(object):
 
     def __get_ci_ametests(self, bench=None):
         base_dir = "/nfs/home/share/ci-workloads/"
-        bench_list = ["ame-gemm", "ame-ls-ab", "bf16"]
+        bench_list = ["ame-gemm", "ame-ls-ab", "ame-ls-whole", "bf16"]
         bench_path_list = [os.path.join(base_dir, bench, f"{bench}.bin") for bench in bench_list]
         return bench_path_list
 
