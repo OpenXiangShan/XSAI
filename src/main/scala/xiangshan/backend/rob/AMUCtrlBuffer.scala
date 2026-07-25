@@ -330,7 +330,7 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
   }
 
   val deqCondSeq = deqEntries.map(x => ~x.canDeq)
-  val deqCount = PriorityEncoder(deqCondSeq)
+  val deqCount = PriorityEncoder(deqCondSeq :+ true.B)
   // Update deqPtr and invalidate entries
   deqPtr := deqPtr + deqCount
   for (i <- 0 until CommitWidth) {
