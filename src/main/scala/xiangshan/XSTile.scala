@@ -28,7 +28,7 @@ import system.HasSoCParameter
 import top.{ArgParser, BusPerfMonitor, Generator}
 import utility._
 import utility.sram.SramBroadcastBundle
-import xscache.chi.PortIO
+import xscache.chi.{CHIDataCheckKey, CHIPoisonKey, DecoupledPortIO, PortIO}
 import xiangshan.backend.trace.TraceCoreInterface
 import xiangshan.backend.fu.matrix._
 import xiangshan.backend.fu.matrix.Bundles._
@@ -57,7 +57,7 @@ class XSTile()(implicit p: Parameters) extends LazyModule
   val enableL2 = coreParams.L2CacheParamsOpt.isDefined
   // =========== Public Ports ============
   val memBlock = core.memBlock.inner
-  val memory_port = if (enableL2) None else Some(l2top.inner.memory_port.get)
+  val memory_port = None
   val tl_uncache = l2top.inner.mmio_port
   val sep_tl_opt = l2top.inner.sep_tl_port_opt
   val beu_int_source = l2top.inner.beu.intNode
@@ -134,8 +134,14 @@ class XSTile()(implicit p: Parameters) extends LazyModule
         val l3MissMatch = Input(Bool())
       }
       val l3Miss = Input(Bool())
-      val chi = if (enableCHI) Some(new PortIO) else None
-      val nodeID = if (enableCHI) Some(Input(UInt(NodeIDWidth.W))) else None
+      val chi = Option.when(isOpenLLC)(new PortIO)
+      val decoupledCHI = Option.when(isZhuJiang)(
+        new DecoupledPortIO()(p.alter((_, _, _) => {
+          case CHIDataCheckKey => "none"
+          case CHIPoisonKey => false
+        }))
+      )
+      val nodeID = Some(Input(UInt(NodeIDWidth.W)))
       val clintTime = Input(ValidIO(UInt(64.W)))
       val dft = Option.when(hasDFT)(Input(new SramBroadcastBundle))
       val dft_reset = Option.when(hasMbist)(Input(new DFTResetSignals()))
@@ -146,7 +152,8 @@ class XSTile()(implicit p: Parameters) extends LazyModule
     dontTouch(io.hartId)
     dontTouch(io.msiInfo)
     io.teemsiInfo.foreach(dontTouch(_))
-    if (!io.chi.isEmpty) { dontTouch(io.chi.get) }
+    io.chi.foreach(dontTouch(_))
+    io.decoupledCHI.foreach(dontTouch(_))
 
     val core_soft_rst = core_reset_sink.in.head._1 // unused
 
@@ -239,6 +246,7 @@ class XSTile()(implicit p: Parameters) extends LazyModule
     core.module.io.topDownInfo.l3Miss := l2top.module.io.l3Miss.toCore
 
     io.chi.foreach(_ <> l2top.module.io.chi.get)
+    io.decoupledCHI.foreach(_ <> l2top.module.io.decoupledCHI.get)
     l2top.module.io.nodeID.foreach(_ := io.nodeID.get)
 
     if (debugOpts.ResetGen && enableL2) {

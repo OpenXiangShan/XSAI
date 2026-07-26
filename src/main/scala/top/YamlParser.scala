@@ -37,8 +37,10 @@ case class YamlConfig(
   PmemRanges: Option[List[MemoryRange]],
   PMAConfigs: Option[List[PMAConfigEntry]],
   EnableCHIAsyncBridge: Option[Boolean],
+  LLC: Option[String],
   L2CacheConfig: Option[L2CacheConfig],
   OpenLLCConfig: Option[OpenLLCConfig],
+  ZhuJiangConfig: Option[ZhuJiangConfig],
   HartIDBits: Option[Int],
   HartIDDmodeWidth: Option[Int],
   DebugAttachProtocals: Option[List[String]],
@@ -107,6 +109,10 @@ object YamlParser {
       newConfig = newConfig.alter(updatedL2)
     }
     yamlConfig.OpenLLCConfig.foreach(llc => newConfig = newConfig.alter(llc))
+    yamlConfig.ZhuJiangConfig.foreach(zj => newConfig = newConfig.alter(zj))
+    yamlConfig.LLC.foreach { llc =>
+      newConfig = newConfig.alter(LLCConfig(llc))
+    }
     yamlConfig.DebugAttachProtocals.foreach { protocols =>
       newConfig = newConfig.alter((site, here, up) => {
         case ExportDebug => DebugAttachParams(protocols = protocols.map {
