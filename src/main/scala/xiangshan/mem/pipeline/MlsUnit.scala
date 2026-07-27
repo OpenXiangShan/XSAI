@@ -199,7 +199,8 @@ class MlsUnit(implicit p: Parameters) extends XSModule
     s0_isFirstIssue  := true.B
     s0_ld_rep        := false.B
     s0_sched_idx     := 0.U
-    s0_stride        := src.src(1)
+    s0_stride        := Mux(MldstOpType.isWholeReg(src.uop.fuOpType),
+      Mux(MldstOpType.isMatrixC(src.uop.fuOpType), (ARLEN / 8).U, (TRLEN / 8).U), src.src(1))
     s0_mtile0        := src.src(2)
     s0_mtile1        := src.src(3)
   }
@@ -265,7 +266,8 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   s0_out.stride        := s0_stride
   s0_out.mtile0        := s0_mtile0
   s0_out.mtile1        := s0_mtile1
-  s0_out.uop.exceptionVec(illegalInstr)        := illegal_regidx || illegal_mtilem || illegal_mtilen || illegal_mtilek
+  s0_out.uop.exceptionVec(illegalInstr)        := illegal_regidx ||
+    (s0_nonWholeMls && (illegal_mtilem || illegal_mtilen || illegal_mtilek))
   s0_out.uop.exceptionVec(loadAddrMisaligned)  := !s0_addr_aligned && s0_ld_flow
   s0_out.uop.exceptionVec(storeAddrMisaligned) := !s0_addr_aligned && !s0_ld_flow
   s0_out.forward_tlDchannel := false.B
@@ -555,6 +557,7 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   amuCtrl.ms := s3_in.uop.imm(2, 0)
   val s3_wholeReg = MldstOpType.isWholeReg(s3_in.uop.fuOpType)
   val s3_wholeAcc = s3_wholeReg && MldstOpType.isMatrixC(s3_in.uop.fuOpType)
+  val s3_wholeB = s3_wholeReg && MldstOpType.isMatrixB(s3_in.uop.fuOpType)
   amuCtrl.widths    := Mux(s3_wholeReg, Mux(s3_wholeAcc, MSew.e32, MSew.e8), s3_mcfgWidth)
   amuCtrl.baseAddr  := s3_in.paddr
   amuCtrl.stride    := s3_in.stride
@@ -563,11 +566,11 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   amuCtrl.isA       := MldstOpType.isMatrixA(s3_in.uop.fuOpType)
   amuCtrl.isB       := MldstOpType.isMatrixB(s3_in.uop.fuOpType)
   when (s3_wholeReg) {
-    amuCtrl.row     := ROWNUM.U
+    amuCtrl.row     := Mux(s3_wholeB, (TRLEN / 8).U, ROWNUM.U)
     when (s3_wholeAcc) { // for acc registers
       amuCtrl.column := (ARLEN / 32).U
     } .otherwise { // for tile registers
-      amuCtrl.column := (TRLEN / 8).U
+      amuCtrl.column := Mux(s3_wholeB, ROWNUM.U, (TRLEN / 8).U)
     }
   } .otherwise {
     amuCtrl.row     := s3_in.mtile0
