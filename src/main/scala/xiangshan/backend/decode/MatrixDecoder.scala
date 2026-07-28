@@ -125,8 +125,8 @@ object MatrixDecoder extends DecodeConstants {
     ),
     MFENCE -> XSDecode(SrcType.pc, SrcType.imm, SrcType.X,
       FuType.fence, FenceOpType.mfence, SelImm.X,
-      noSpec = T, blockBack = F, flushPipe = F
-      // It only flush the SBuffer in XSAI.
+      noSpec = T, blockBack = T, flushPipe = F
+      // It only flushes the SBuffer in XSAI, but younger stores must not enter the SQ.
     )
   )
 
