@@ -35,6 +35,7 @@ import xiangshan.backend.fu.vector.Bundles.{VType, Vl}
 import xiangshan.backend.fu.wrapper.CSRToDecode
 import xiangshan.backend.decode.Zimop._
 import xiangshan.backend.decode.Zfbf._
+import xiangshan.backend.decode.XMXFP._
 import yunsuan.{VfaluType, VfcvtType}
 import xiangshan.backend.decode
 
@@ -914,6 +915,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   private val isFMA = inst.OPCODE === BitPat("b100??11")
   private val isVppu = FuType.isVppu(decodedInst.fuType)
   private val isVecOPF = FuType.isVecOPF(decodedInst.fuType)
+  private val isMxfp = (VFNCVTMXFP4_F_F_W === inst.ALL) || (VFNCVTMXFP8_F_F_W === inst.ALL)
 
   // read src1~3 location
   decodedInst.lsrc(0) := inst.RS1
@@ -970,7 +972,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
       FuType.FuTypeOrR(decodedInst.fuType, FuType.fpOP ++ Seq(FuType.f2v)) ||
       (FuType.FuTypeOrR(decodedInst.fuType, FuType.ldu) && (decodedInst.fuOpType === LSUOpType.lh || decodedInst.fuOpType === LSUOpType.lw || decodedInst.fuOpType === LSUOpType.ld) ||
       FuType.FuTypeOrR(decodedInst.fuType, FuType.stu) && (decodedInst.fuOpType === LSUOpType.sh || decodedInst.fuOpType === LSUOpType.sw || decodedInst.fuOpType === LSUOpType.sd)) && decodedInst.instr(2) ||
-      inst.isOPFVF || inst.isOPFVV
+      inst.isOPFVF || inst.isOPFVV || isMxfp
     ) ||
     io.fromCSR.illegalInst.vsIsOff    && (FuType.FuTypeOrR(decodedInst.fuType, FuType.vecAll) || isCsrrVl || isCsrrVlenb) ||
     // io.fromCSR.illegalInst.msIsOff    && (FuType.FuTypeOrR(decodedInst.fuType, FuType.matrixAll) || isMfence) ||
@@ -1087,6 +1089,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     VFWCVT_XU_F_V, VFWCVT_X_F_V, VFWCVT_RTZ_XU_F_V, VFWCVT_RTZ_X_F_V, VFWCVT_F_XU_V, VFWCVT_F_X_V, VFWCVT_F_F_V, VFWCVTBF16_F_F_V,
     VFNCVT_XU_F_W, VFNCVT_X_F_W, VFNCVT_RTZ_XU_F_W, VFNCVT_RTZ_X_F_W, VFNCVT_F_XU_W, VFNCVT_F_X_W, VFNCVT_F_F_W,
     VFNCVT_ROD_F_F_W, VFNCVTBF16_F_F_W, VFRSQRT7_V, VFREC7_V,
+    VFNCVTMXFP4_F_F_W, VFNCVTMXFP8_F_F_W,
     // zfa
     FLEQ_H, FLEQ_S, FLEQ_D, FLTQ_H, FLTQ_S, FLTQ_D,
     FMINM_H, FMINM_S, FMINM_D, FMAXM_H, FMAXM_S, FMAXM_D,
@@ -1152,7 +1155,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   decodedInst.srcType(4) := SrcType.vp // vconfig
 
   val uopInfoGen = Module(new UopInfoGen)
-  uopInfoGen.io.in.preInfo.isVecArith := inst.isVecArith
+  uopInfoGen.io.in.preInfo.isVecArith := inst.isVecArith || isMxfp
   uopInfoGen.io.in.preInfo.isVecMem := inst.isVecStore || inst.isVecLoad
   uopInfoGen.io.in.preInfo.isAmoCAS := inst.isAMOCAS
   

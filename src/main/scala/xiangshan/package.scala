@@ -1206,6 +1206,8 @@ package object xiangshan {
     def VEC_VFRED        = "b111100".U // VEC_VFRED
     def VEC_VFREDOSUM    = "b111101".U // VEC_VFREDOSUM
     def VEC_MVNR         = "b000100".U // vmvnr
+    def VEC_MXFP8        = "b100110".U // FP32 to packed MXFP8
+    def VEC_MXFP4        = "b101000".U // FP32 to packed MXFP4
 
     def AMO_CAS_W        = "b110101".U // amocas_w
     def AMO_CAS_D        = "b110110".U // amocas_d
