@@ -89,6 +89,7 @@ case class SoCParameters
   OpenLLCParamsOpt: Option[OpenLLCParam] = None,
   ZhuJiangParams: ZJParameters = ZJParameters(),
   XSTopPrefix: Option[String] = None,
+  MemoryAXI4IdBits: Int = 14,
   NodeIDWidthList: Map[String, Int] = Map(
     "B" -> 7,
     "C" -> 9,
@@ -360,7 +361,7 @@ trait HaveAXI4MemPort {
       AXI4Buffer() :=
       AXI4Buffer() :=
       AXI4Buffer() :=
-      AXI4IdIndexer(idBits = 14) :=
+      AXI4IdIndexer(idBits = soc.MemoryAXI4IdBits) :=
       AXI4UserYanker() :=
       axi4memencrpty.get.node
 
@@ -372,7 +373,7 @@ trait HaveAXI4MemPort {
       AXI4Buffer() :=
       AXI4Buffer() :=
       AXI4Buffer() :=
-      AXI4IdIndexer(idBits = 14) :=
+      AXI4IdIndexer(idBits = soc.MemoryAXI4IdBits) :=
       AXI4UserYanker() :=
       AXI4Deinterleaver(L3BlockSize) :=
       axi4mem_node

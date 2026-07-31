@@ -570,6 +570,16 @@ class DefaultMatrixConfig(n: Int = 1) extends Config(
   })
 )
 
+class FpgaDefaultMatrixConfig(n: Int = 1) extends Config(
+  new DefaultMatrixConfig(n).alter((site, here, up) => {
+    case DebugOptionsKey => up(DebugOptionsKey).copy(
+      AlwaysBasicDiff = false,
+      AlwaysBasicDB = false
+    )
+    case SoCParamsKey => up(SoCParamsKey).copy(MemoryAXI4IdBits = 5)
+  })
+)
+
 class FpgaDiffDefaultMatrixConfig(n: Int = 1) extends Config(
   new DefaultMatrixConfig(n).alter((site, here, up) => {
     case DebugOptionsKey =>
