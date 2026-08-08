@@ -368,7 +368,7 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
       l2.io.l2_tlb_req.pmp_resp.atomic := io.l2_pmp_resp.atomic
       l2.io.nodeID := io.nodeID.get
       if (isOpenLLC) {
-        io.chi.get <> l2.io.lcreditCHI.get
+        io.chi.get <> l2.io.chi.get
       } else {
         io.decoupledCHI.get <> l2.io.decoupledCHI.get
       }
