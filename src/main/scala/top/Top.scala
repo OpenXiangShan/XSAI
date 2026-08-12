@@ -498,7 +498,7 @@ class XSTileDiffTop(implicit p: Parameters) extends XSTop {
   override lazy val desiredName: String = "XSTop"
 
   class XSTileDiffTopImp(wrapper: XSTop) extends XSTopImp(wrapper) with HasDiffTestInterfaces {
-    override def cpuName: Option[String] = Some("XiangShan")
+    override def cpuName: Option[String] = Some("XiangShan-KMHV2")
     override protected def implicitClock: Clock = io.clock
     override protected def implicitReset: Reset = io.reset
   }

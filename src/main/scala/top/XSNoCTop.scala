@@ -504,7 +504,7 @@ class XSNoCTop()(implicit p: Parameters) extends BaseXSSoc
 class XSNoCDiffTop(implicit p: Parameters) extends XSNoCTop
 {
   class XSNoCDiffTopImp(wrapper: XSNoCTop) extends XSNoCTopImp(wrapper) with HasDiffTestInterfaces {
-    override def cpuName: Option[String] = Some("XiangShan")
+    override def cpuName: Option[String] = Some("XiangShan-KMHV2")
     override protected def implicitClock: Clock = clock
     override protected def implicitReset: Reset = reset
 
