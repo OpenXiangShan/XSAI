@@ -242,10 +242,13 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
 
   io.toAMU.zipWithIndex.foreach { case (amuCtrl, i) =>
     val deqEntry = deqEntries(i)
+    val olderAmuReqValid = if (i == 0) false.B else deqEntries.take(i).map(_.amuReqValid).reduce(_ || _)
     deqEntry.checkSanity(s"AMUCtrlBuffer: deqEntry[$i]")
     amuCtrl.valid := deqEntry.amuReqValid
     amuCtrl.bits := Mux(deqEntry.amuReqValid, deqEntry.amuCtrl, 0.U.asTypeOf(new AmuCtrlIO))
     when (amuCtrl.fire) {
+      // XSCore serializes these lanes through a fixed-priority arbiter.
+      assert(!olderAmuReqValid, s"AMUCtrlBuffer: toAMU[$i] fired before an older AMU request")
       assert(!deqEntry.canDeq, s"AMUCtrlBuffer: deqEntry[$i] is already set to canDeq")
       deqEntry.canDeq := true.B
     }
