@@ -238,6 +238,10 @@ object ArgParser {
           nextOption(config.alter((site, here, up) => {
             case DebugOptionsKey => up(DebugOptionsKey).copy(EnableXMR = false)
           }), tail)
+        case "--disable-cached-parameters" :: tail =>
+          nextOption(config.alter((site, here, up) => {
+            case CachedParameterKey => false
+          }), tail)
         case "--yaml-config" :: yamlFile :: tail =>
           nextOption(YamlParser.parseYaml(config, yamlFile), tail)
         case option :: tail =>

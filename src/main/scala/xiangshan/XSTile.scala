@@ -28,7 +28,7 @@ import system.HasSoCParameter
 import top.{ArgParser, BusPerfMonitor, Generator}
 import utility._
 import utility.sram.SramBroadcastBundle
-import xscache.chi.{CHIDataCheckKey, CHIPoisonKey, DecoupledPortIO, PortIO}
+import xscache.chi.{CHIAddrWidthKey, CHIDataCheckKey, CHIIssue, CHIPoisonKey, DecoupledPortIO, NonSecureKey, PortIO}
 import xiangshan.backend.trace.TraceCoreInterface
 import xiangshan.backend.fu.matrix._
 import xiangshan.backend.fu.matrix.Bundles._
@@ -137,6 +137,9 @@ class XSTile()(implicit p: Parameters) extends LazyModule
       val chi = Option.when(isOpenLLC)(new PortIO)
       val decoupledCHI = Option.when(isZhuJiang)(
         new DecoupledPortIO()(p.alter((_, _, _) => {
+          case CHIIssue => p(CHIIssue)
+          case CHIAddrWidthKey => p(CHIAddrWidthKey)
+          case NonSecureKey => p(NonSecureKey)
           case CHIDataCheckKey => "none"
           case CHIPoisonKey => false
         }))

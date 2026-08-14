@@ -227,6 +227,9 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
       val chi = Option.when(isOpenLLC)(new PortIO)
       val decoupledCHI = Option.when(isZhuJiang)(
         new DecoupledPortIO()(p.alter((_, _, _) => {
+          case CHIIssue => p(CHIIssue)
+          case CHIAddrWidthKey => p(CHIAddrWidthKey)
+          case NonSecureKey => p(NonSecureKey)
           case CHIDataCheckKey => "none"
           case CHIPoisonKey => false
         }))
