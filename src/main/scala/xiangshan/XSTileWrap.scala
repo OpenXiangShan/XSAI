@@ -25,7 +25,7 @@ import freechips.rocketchip.interrupts._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util._
 import system.HasSoCParameter
-import xscache.chi.{AsyncPortIO, CHIAsyncBridgeSource, CHIDataCheckKey, CHIPoisonKey, DecoupledPortIO, PortIO}
+import xscache.chi.{AsyncPortIO, CHIAddrWidthKey, CHIAsyncBridgeSource, CHIDataCheckKey, CHIIssue, CHIPoisonKey, DecoupledPortIO, NonSecureKey, PortIO}
 import utility.sram.SramBroadcastBundle
 import utility.{DFTResetSignals, IntBuffer, ResetGen}
 import xiangshan.backend.trace.TraceCoreInterface
@@ -93,6 +93,9 @@ class XSTileWrap()(implicit p: Parameters) extends LazyModule
       })
       val decoupledCHI = Option.when(isZhuJiang)(
         new DecoupledPortIO()(p.alter((_, _, _) => {
+          case CHIIssue => p(CHIIssue)
+          case CHIAddrWidthKey => p(CHIAddrWidthKey)
+          case NonSecureKey => p(NonSecureKey)
           case CHIDataCheckKey => "none"
           case CHIPoisonKey => false
         }))
