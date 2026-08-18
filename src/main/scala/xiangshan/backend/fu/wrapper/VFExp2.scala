@@ -20,7 +20,7 @@ import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.decode._
-import utility.XSError
+import utility.{XSError, XSPerfAccumulate}
 import xiangshan.ExceptionNO
 import xiangshan.backend.fu.FuConfig
 import xiangshan.backend.fu.vector.utils.VecDataSplitModule
@@ -29,6 +29,10 @@ import yunsuan.VfexpType
 import yunsuan.vector.{VfExp2 => YunSuanVfExp2}
 
 class VFExp2(cfg: FuConfig)(implicit p: Parameters) extends VecPipedFuncUnit(cfg) {
+  XSPerfAccumulate("vfexp2_in_fire", io.in.fire)
+  XSPerfAccumulate("vfexp2_in_stall", io.in.valid && !io.in.ready)
+  XSPerfAccumulate("vfexp2_out_fire", io.out.fire)
+
   private val dataWidth = cfg.destDataBits
   private val dataWidthOfDataModule = 64
   private val numVecModule = dataWidth / dataWidthOfDataModule
