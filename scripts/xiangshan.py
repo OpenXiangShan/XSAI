@@ -366,6 +366,12 @@ class XiangShan(object):
         ]
         misc_tests = map(lambda x: os.path.join(base_dir, x), workloads)
         return misc_tests
+
+    def __get_ci_vfexp2test(self, name=None):
+        return [
+            "/nfs/home/share/ci-workloads/vfexp2test/"
+            "vfexp2test-riscv64-xs.bin"
+        ]
     
     def __get_ci_rvhtest(self, name=None):
         base_dir = "/nfs/home/share/ci-workloads/H-extension-tests"
@@ -578,6 +584,7 @@ class XiangShan(object):
             "cputest": self.__get_ci_cputest,
             "riscv-tests": self.__get_ci_rvtest,
             "misc-tests": self.__get_ci_misc,
+            "vfexp2test": self.__get_ci_vfexp2test,
             "mc-tests": self.__get_ci_mc,
             "nodiff-tests": self.__get_ci_nodiff,
             "rvh-tests": self.__get_ci_rvhtest,
