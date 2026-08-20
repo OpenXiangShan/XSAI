@@ -14,6 +14,7 @@ import yunsuan.{VfpuType, VipuType, VimacType, VpermType, VialuFixType, VfaluTyp
 import xiangshan.backend.decode.Zvbb._
 import xiangshan.backend.decode.Zfbf._
 import xiangshan.backend.decode.Zvfexp._
+import xiangshan.backend.decode.XX8._
 
 abstract class VecDecode extends XSDecodeBase {
   def generate() : List[BitPat]
@@ -573,6 +574,10 @@ object VecDecoder extends DecodeConstants {
   )
 
   val opfvv: Array[(BitPat, XSDecodeBase)] = Array(
+    VFNCVTXX8_INT8 -> OPFVV(SrcType.X, SrcType.vp, FuType.vfcvt, VfcvtType.vfncvtxx8_int8, F, T, F, UopSplitType.VEC_XX8),
+    VFNCVTXX8_E4M3 -> OPFVV(SrcType.X, SrcType.vp, FuType.vfcvt, VfcvtType.vfncvtxx8_e4m3, F, T, F, UopSplitType.VEC_XX8),
+    VFNCVTXX8_E5M2 -> OPFVV(SrcType.X, SrcType.vp, FuType.vfcvt, VfcvtType.vfncvtxx8_e5m2, F, T, F, UopSplitType.VEC_XX8),
+
     // 13.2. Vector Single-Width Floating-Point Add/Subtract Instructions
     VFADD_VV           -> OPFVV(SrcType.vp, SrcType.vp , FuType.vfalu, VfaluType.vfadd, F, T, F, UopSplitType.VEC_VVV),
     VFSUB_VV           -> OPFVV(SrcType.vp, SrcType.vp , FuType.vfalu, VfaluType.vfsub, F, T, F, UopSplitType.VEC_VVV),
