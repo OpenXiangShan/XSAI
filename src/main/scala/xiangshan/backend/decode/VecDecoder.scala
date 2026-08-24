@@ -831,4 +831,11 @@ object VecDecoder extends DecodeConstants {
 
   override val decodeArray: Array[(BitPat, XSDecodeBase)] = vset ++
     opivv ++ opivx ++ opivi ++ opmvv ++ opmvx ++ opfvv ++ opfvf ++ opfff ++ vls
+
+  def table(hasVfexp2: Boolean): Array[(BitPat, List[BitPat])] =
+    decodeArray
+      .filterNot { case (pattern, _) =>
+        !hasVfexp2 && (pattern == VFEXP2_V || pattern == VFEXP2BF16_V)
+      }
+      .map { case (pattern, decode) => (pattern, decode.generate()) }
 }
