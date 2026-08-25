@@ -565,6 +565,14 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   amuCtrl.isacc     := MldstOpType.isMatrixC(s3_in.uop.fuOpType)
   amuCtrl.isA       := MldstOpType.isMatrixA(s3_in.uop.fuOpType)
   amuCtrl.isB       := MldstOpType.isMatrixB(s3_in.uop.fuOpType)
+  amuCtrl.packedB   := MatrixExtension.enableInt8Fp2Pack4I32.B &&
+    s3_mcfgEntry.tableSel === 0.U &&
+    s3_mcfgTypeCode === McfgHelpers.Fp2Pack4.typeCode.U &&
+    MldstOpType.isLoad(s3_in.uop.fuOpType) &&
+    MldstOpType.isMatrixB(s3_in.uop.fuOpType) &&
+    !MldstOpType.isTransposed(s3_in.uop.fuOpType) &&
+    !s3_wholeReg &&
+    !s3_in.uop.imm(2)
   when (s3_wholeReg) {
     amuCtrl.row     := Mux(s3_wholeB, (TRLEN / 8).U, ROWNUM.U)
     when (s3_wholeAcc) { // for acc registers

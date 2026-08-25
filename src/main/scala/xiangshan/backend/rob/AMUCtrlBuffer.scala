@@ -320,7 +320,8 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
         difftestAmuCtrl.stride    := mlsio.stride
         difftestAmuCtrl.row       := mlsio.row
         difftestAmuCtrl.column    := mlsio.column
-        difftestAmuCtrl.widths    := mlsio.widths
+        // 0b100 is reserved as the difftest-only signed-i2x4 load marker.
+        difftestAmuCtrl.widths    := Mux(mlsio.packedB, "b100".U, mlsio.widths)
       }
       when (amuCtrl.bits.isRelease()) {
         difftestAmuCtrl.msyncRd := mreleaseio.msyncRd

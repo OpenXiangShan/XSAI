@@ -537,6 +537,7 @@ class DefaultMatrixConfig(n: Int = 1) extends Config(
         MELEN = 32,
         MatrixExtension = MatrixIsaParams(
           enableInt8Int32 = true,
+          enableInt8Fp2Pack4I32 = true,
           enableFp8Fp32 = true,
           enableBf16Fp32 = true,
         ),

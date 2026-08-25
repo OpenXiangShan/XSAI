@@ -102,6 +102,9 @@ object Bundles {
   }
 
   class AmuLsuIO(implicit p: Parameters) extends XSBundle {
+    // B payload is four signed i2 lanes packed into each memory byte.
+    // Keep this above the legacy fields so their established bits [125:0] do not move.
+    val packedB   = Bool()            // 126
     // src/dest matrix register
     val ms        = UInt(4.W)         // 125 : 122
     // load(0)/store(1)
