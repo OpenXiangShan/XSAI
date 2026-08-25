@@ -40,6 +40,8 @@ class DecodeStageIO(implicit p: Parameters) extends XSBundle {
   private val numVecRegSrc = backendParams.numVecRegSrc
   private val numVecRatPorts = numVecRegSrc
 
+  val hartId = Option.when((env.AlwaysBasicDiff || env.EnableDifftest) && HasMatrixExtension)(Input(UInt(hartIdLen.W)))
+
   val redirect = Input(Bool())
   val canAccept = Output(Bool())
   // from Ibuffer
@@ -112,6 +114,7 @@ class DecodeStage(implicit p: Parameters) extends XSModule
   val vtypeGen = Module(new VTypeGen)
   /** mcfg generation module */
   val mcfgGen = Module(new McfgGen)
+  mcfgGen.io.hartId.foreach(_ := io.hartId.get)
 
   val debug_globalCounter = RegInit(0.U(XLEN.W))
 
