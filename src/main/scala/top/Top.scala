@@ -543,5 +543,5 @@ object TopMain extends App {
     }
   }
 
-  FileRegisters.write(fileDir = "./build", filePrefix = "XSTop.")
+  FileRegisters.write(fileDir = GeneratedFileDir.value, filePrefix = "XSTop.")
 }
