@@ -571,6 +571,6 @@ object XSNoCDiffTopChecker {
         |
         |endmodule
       """.stripMargin
-    FileRegisters.writeOutputFile("./build", "XSDiffTopChecker.sv", verilog)
+    FileRegisters.writeOutputFile(GeneratedFileDir.value, "XSDiffTopChecker.sv", verilog)
   }
 }

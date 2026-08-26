@@ -15,7 +15,8 @@
 # See the Mulan PSL v2 for more details.
 #***************************************************************************************
 
-BUILD_DIR = ./build
+BUILD_DIR ?= ./build
+GENERATED_DIR ?= $(abspath $(BUILD_DIR))
 RTL_DIR = $(BUILD_DIR)/rtl
 
 # import docker support
@@ -286,7 +287,7 @@ comp:
 
 $(TOP_V): $(SCALA_FILE)
 	mkdir -p $(@D)
-	$(TIME_CMD) mill -i $(MILL_BUILD_ARGS) xiangshan.runMain $(FPGATOP)   \
+	GENERATED_DIR="$(GENERATED_DIR)" $(TIME_CMD) mill -i $(MILL_BUILD_ARGS) xiangshan.runMain $(FPGATOP)   \
 		--target-dir $(@D) --config $(CONFIG) --issue $(ISSUE) $(FPGA_MEM_ARGS)		\
 		--num-cores $(NUM_CORES) $(TOPMAIN_ARGS)
 ifeq ($(CHISEL_TARGET),systemverilog)
@@ -301,7 +302,7 @@ $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mkdir -p $(@D)
 	@echo -e "\n[mill] Generating Verilog files..." > $(TIMELOG)
 	@date -R | tee -a $(TIMELOG)
-	$(TIME_CMD) mill -i $(MILL_BUILD_ARGS) xiangshan.test.runMain $(SIMTOP)    \
+	GENERATED_DIR="$(GENERATED_DIR)" $(TIME_CMD) mill -i $(MILL_BUILD_ARGS) xiangshan.test.runMain $(SIMTOP)    \
 		--target-dir $(@D) --config $(CONFIG) --issue $(ISSUE) $(SIM_MEM_ARGS)		\
 		--num-cores $(NUM_CORES) $(SIM_ARGS) --full-stacktrace
 ifeq ($(CHISEL_TARGET),systemverilog)

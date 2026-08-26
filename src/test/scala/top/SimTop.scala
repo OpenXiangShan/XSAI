@@ -124,5 +124,5 @@ object XiangShanSim extends App {
   // tools: write cpp files
   ChiselDB.addToFileRegisters
   Constantin.addToFileRegisters
-  FileRegisters.write(fileDir = "./build")
+  FileRegisters.write(fileDir = GeneratedFileDir.value)
 }
