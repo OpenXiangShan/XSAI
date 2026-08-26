@@ -174,7 +174,7 @@ object FuType extends OHEnumeration {
   def isVset(fuType: UInt): Bool = FuTypeOrR(fuType, vecVSET)
   def isMsettilex(fuType: UInt): Bool = FuTypeOrR(fuType, matrixMSETtilex)
   def needAmuCtrl(fuType: UInt): Bool = FuTypeOrR(fuType, matrixArith ++ matrixMem ++ Seq(mrelease))
-
+  def isMcfg(fuType: UInt): Bool = FuTypeOrR(fuType, mcfg)
   def isJump(fuType: UInt): Bool = FuTypeOrR(fuType, jmp)
 
   def isFArith(fuType: UInt): Bool = FuTypeOrR(fuType, fpArithAll)

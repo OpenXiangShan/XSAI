@@ -1188,8 +1188,8 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   val isFLI = inst.FUNCT7 === BitPat("b11110??") && inst.RS2 === 1.U && inst.RM === 0.U && inst.OPCODE5Bit === OPCODE5Bit.OP_FP
 
   val isMsettilex = FuType.isMsettilex(decodedInst.fuType)
-  val isMcfg = MSetOpType.isMcfg(decodedInst.fuOpType)
-  val isMsetcfg = MSetOpType.isMsetcfg(decodedInst.fuOpType)
+  val isMcfg = FuType.isMcfg(decodedInst.fuType)
+  val isMsetcfg = isMcfg && MSetOpType.isMsetcfg(decodedInst.fuOpType)
   val isMMA = FuType.isMMA(decodedInst.fuType)
   val isMls = FuType.isMls(decodedInst.fuType)
   val isMarith = FuType.isMarith(decodedInst.fuType)

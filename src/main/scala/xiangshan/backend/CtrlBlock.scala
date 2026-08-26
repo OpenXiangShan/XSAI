@@ -91,6 +91,7 @@ class CtrlBlockImp(
   val dispatch = Module(new NewDispatch)
   val gpaMem = wrapper.gpaMem.module
   val decode = Module(new DecodeStage)
+  decode.io.hartId.foreach(_ := io.fromTop.hartId)
   val fusionDecoder = Module(new FusionDecoder)
   val rat = Module(new RenameTableWrapper)
   val rename = Module(new Rename)
