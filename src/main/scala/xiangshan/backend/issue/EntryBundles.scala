@@ -544,7 +544,7 @@ object EntryBundles extends HasCircularQueuePtrHelper {
   def EnqDelayWakeupConnect(enqDelayIn: EnqDelayInBundle, enqDelayOut: EnqDelayOutBundle, status: Status, delay: Int)(implicit p: Parameters, params: IssueBlockParams) = {
     enqDelayOut.srcWakeUpByWB.zipWithIndex.foreach { case (wakeup, i) =>
       wakeup := enqDelayIn.wakeUpFromWB.map{ x =>
-        if (params.isMfSchd) {
+        if (params.isMfSchd || params.numMxSrc != 0) {
           x.bits.wakeUp(Seq((status.srcStatus(i).psrc, status.srcStatus(i).srcType)), x.valid).head
         } else {
           if (i == 3)
