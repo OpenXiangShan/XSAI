@@ -10,9 +10,10 @@ import utils._
 import xiangshan.ExceptionNO.illegalInstr
 import xiangshan.backend.fu.FuType
 import xiangshan._
-import yunsuan.{VfpuType, VipuType, VimacType, VpermType, VialuFixType, VfaluType, VfmaType, VfdivType, VfcvtType, VidivType}
+import yunsuan.{VfpuType, VipuType, VimacType, VpermType, VialuFixType, VfaluType, VfmaType, VfdivType, VfcvtType, VfexpType, VidivType}
 import xiangshan.backend.decode.Zvbb._
 import xiangshan.backend.decode.Zfbf._
+import xiangshan.backend.decode.Zvfexp._
 
 abstract class VecDecode extends XSDecodeBase {
   def generate() : List[BitPat]
@@ -615,6 +616,10 @@ object VecDecoder extends DecodeConstants {
     // 13.10. Vector Floating-Point Reciprocal Estimate Instruction
     VFREC7_V           -> OPFVV(SrcType.X , SrcType.vp , FuType.vfcvt, VfcvtType.vfrec7, F, T, F, UopSplitType.VEC_VVV), // vfrec7.v vd, vs2, vm
 
+    // custom vector floating-point exp2 instructions
+    VFEXP2_V           -> OPFVV(SrcType.X , SrcType.vp , FuType.vfexp2, VfexpType.vfexp2, F, T, F, UopSplitType.VEC_VVV),
+    VFEXP2BF16_V       -> OPFVV(SrcType.X , SrcType.vp , FuType.vfexp2, VfexpType.vfexp2bf16, F, T, F, UopSplitType.VEC_VVV),
+
     // 13.11. Vector Floating-Point MIN/MAX Instructions
     VFMIN_VV           -> OPFVV(SrcType.vp, SrcType.vp , FuType.vfalu, VfaluType.vfmin, F, T, F, UopSplitType.VEC_VVV),
     VFMAX_VV           -> OPFVV(SrcType.vp, SrcType.vp , FuType.vfalu, VfaluType.vfmax, F, T, F, UopSplitType.VEC_VVV),
@@ -826,4 +831,11 @@ object VecDecoder extends DecodeConstants {
 
   override val decodeArray: Array[(BitPat, XSDecodeBase)] = vset ++
     opivv ++ opivx ++ opivi ++ opmvv ++ opmvx ++ opfvv ++ opfvf ++ opfff ++ vls
+
+  def table(hasVfexp2: Boolean): Array[(BitPat, List[BitPat])] =
+    decodeArray
+      .filterNot { case (pattern, _) =>
+        !hasVfexp2 && (pattern == VFEXP2_V || pattern == VFEXP2BF16_V)
+      }
+      .map { case (pattern, decode) => (pattern, decode.generate()) }
 }

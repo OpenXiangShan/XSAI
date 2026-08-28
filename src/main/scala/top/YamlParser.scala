@@ -69,6 +69,7 @@ case class YamlConfig(
   CVMParams: Option[CVMParameters],
   EnableBitmapCheck: Option[Boolean],
   EnableBitmapCheckDefault: Option[Boolean],
+  EnableVfexp2: Option[Boolean],
 )
 
 object YamlParser {
@@ -256,6 +257,11 @@ object YamlParser {
     yamlConfig.EnableBitmapCheckDefault.foreach { enable =>
       newConfig = newConfig.alter((site, here, up) => {
         case XSTileKey => up(XSTileKey).map(_.copy(HasBitmapCheckDefault = enable))
+      })
+    }
+    yamlConfig.EnableVfexp2.foreach { enable =>
+      newConfig = newConfig.alter((site, here, up) => {
+        case XSTileKey => up(XSTileKey).map(_.copy(HasVfexp2 = enable))
       })
     }
     newConfig
