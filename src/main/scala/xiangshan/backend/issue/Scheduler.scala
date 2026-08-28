@@ -13,7 +13,6 @@ import xiangshan.backend.datapath.WbConfig._
 import xiangshan.backend.fu.FuType
 import xiangshan.backend.regfile.RfWritePortWithConfig
 import xiangshan.mem.Bundles.MemWaitUpdateReqBundle
-import xiangshan.mem.{LsqEnqCtrl, LsqEnqIO, SqPtr, LqPtr, MlsqPtr}
 import xiangshan.backend.datapath.WbConfig.V0WB
 import xiangshan.backend.regfile.VlPregParams
 import xiangshan.backend.regcache.RegCacheTagTable
@@ -142,15 +141,12 @@ class SchedulerIO()(implicit params: SchdBlockParams, p: Parameters) extends XSB
     val stIssuePtr = Input(new SqPtr())
     val lcommit = Input(UInt(log2Up(CommitWidth + 1).W))
     val scommit = Input(UInt(log2Ceil(EnsbufferWidth + 1).W)) // connected to `memBlock.io.sqDeq` instead of ROB
-    val mcommit = OptionWrapper(HasMatrixExtension, Input(UInt(log2Up(CommitWidth + 1).W)))
     val wakeup = Vec(params.LdWakeupCnt, Flipped(Valid(new DynInst)))
     val lqDeqPtr = Input(new LqPtr)
     val sqDeqPtr = Input(new SqPtr)
-    val mlsqDeqPtr = OptionWrapper(HasMatrixExtension, Input(new MlsqPtr))
     // from lsq
     val lqCancelCnt = Input(UInt(log2Up(LoadQueueSize + 1).W))
     val sqCancelCnt = Input(UInt(log2Up(StoreQueueSize + 1).W))
-    val mlsqCancelCnt = OptionWrapper(HasMatrixExtension, Input(UInt(log2Up(MlsQueueSize + 1).W)))
     val memWaitUpdateReq = Flipped(new MemWaitUpdateReqBundle)
   }) else None
   val toMem = if (params.isMemSchd) Some(new Bundle {

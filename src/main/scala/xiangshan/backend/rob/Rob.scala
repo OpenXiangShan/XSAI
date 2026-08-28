@@ -893,16 +893,13 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
   val ldCommitVec = VecInit((0 until CommitWidth).map(i => io.commits.commitValid(i) && io.commits.info(i).commitType === CommitType.LOAD))
   // TODO: Check if meet the require that only set scommit when commit scala store uop
   val stCommitVec = VecInit((0 until CommitWidth).map(i => io.commits.commitValid(i) && io.commits.info(i).commitType === CommitType.STORE && !robEntries(deqPtrVec(i).value).vls ))
-  val mlsCommitVec = VecInit((0 until CommitWidth).map(i => io.commits.commitValid(i) && io.commits.info(i).commitType === CommitType.MLS))
   io.lsq.lcommit := RegNext(Mux(io.commits.isCommit, PopCount(ldCommitVec), 0.U))
   io.lsq.scommit := RegNext(Mux(io.commits.isCommit, PopCount(stCommitVec), 0.U))
-  io.lsq.mcommit := RegNext(Mux(io.commits.isCommit, PopCount(mlsCommitVec), 0.U))
   // indicate a pending load or store
   io.lsq.pendingMMIOld := RegNext(io.commits.isCommit && io.commits.info(0).commitType === CommitType.LOAD && deqPtrEntryValid && deqPtrEntry.mmio)
   io.lsq.pendingld := RegNext(io.commits.isCommit && io.commits.info(0).commitType === CommitType.LOAD && deqPtrEntryValid)
   // TODO: Check if need deassert pendingst when it is vst
   io.lsq.pendingst := RegNext(io.commits.isCommit && io.commits.info(0).commitType === CommitType.STORE && deqPtrEntryValid)
-  io.lsq.pendingmls := RegNext(io.commits.isCommit && io.commits.info(0).commitType === CommitType.MLS && deqPtrEntryValid)
   // TODO: Check if set correctly when vector store is at the head of ROB
   io.lsq.pendingVst := RegNext(io.commits.isCommit && io.commits.info(0).commitType === CommitType.STORE && deqPtrEntryValid && deqPtrEntry.vls)
   io.lsq.commit := RegNext(io.commits.isCommit && io.commits.commitValid(0))
