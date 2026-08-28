@@ -263,11 +263,9 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
   memBlock.io.ooo_to_mem.tlbCsr := backend.io.mem.tlbCsr
   memBlock.io.ooo_to_mem.lsqio.lcommit          := backend.io.mem.robLsqIO.lcommit
   memBlock.io.ooo_to_mem.lsqio.scommit          := backend.io.mem.robLsqIO.scommit
-  memBlock.io.ooo_to_mem.lsqio.mcommit          := backend.io.mem.robLsqIO.mcommit
   memBlock.io.ooo_to_mem.lsqio.pendingMMIOld    := backend.io.mem.robLsqIO.pendingMMIOld
   memBlock.io.ooo_to_mem.lsqio.pendingld        := backend.io.mem.robLsqIO.pendingld
   memBlock.io.ooo_to_mem.lsqio.pendingst        := backend.io.mem.robLsqIO.pendingst
-  memBlock.io.ooo_to_mem.lsqio.pendingmls       := backend.io.mem.robLsqIO.pendingmls
   memBlock.io.ooo_to_mem.lsqio.pendingVst       := backend.io.mem.robLsqIO.pendingVst
   memBlock.io.ooo_to_mem.lsqio.commit           := backend.io.mem.robLsqIO.commit
   memBlock.io.ooo_to_mem.lsqio.pendingPtr       := backend.io.mem.robLsqIO.pendingPtr
