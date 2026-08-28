@@ -476,14 +476,11 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
   memScheduler.io.mxWriteBackDelayed.foreach(_ := mxWriteBackDelayed.get)
   memScheduler.io.fromMem.get.scommit := io.mem.sqDeq
   memScheduler.io.fromMem.get.lcommit := io.mem.lqDeq
-  memScheduler.io.fromMem.get.mcommit.foreach(_ := io.mem.mlsqDeq.get)
   memScheduler.io.fromMem.get.wakeup := io.mem.wakeup
   memScheduler.io.fromMem.get.sqDeqPtr := io.mem.sqDeqPtr
   memScheduler.io.fromMem.get.lqDeqPtr := io.mem.lqDeqPtr
-  memScheduler.io.fromMem.get.mlsqDeqPtr.foreach(_ := io.mem.mlsqDeqPtr.get)
   memScheduler.io.fromMem.get.sqCancelCnt := io.mem.sqCancelCnt
   memScheduler.io.fromMem.get.lqCancelCnt := io.mem.lqCancelCnt
-  memScheduler.io.fromMem.get.mlsqCancelCnt.foreach(_ := io.mem.mlsqCancelCnt.get)
   memScheduler.io.fromMem.get.stIssuePtr := io.mem.stIssuePtr
   require(memScheduler.io.fromMem.get.memWaitUpdateReq.robIdx.length == io.mem.stIn.length)
   memScheduler.io.fromMem.get.memWaitUpdateReq.robIdx.zip(io.mem.stIn).foreach { case (sink, source) =>
