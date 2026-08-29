@@ -19,7 +19,7 @@ jobs:
       - name: Initialize submodules 
         run: make init-force
 
-      - uses: docker/metadata-action@v5
+      - uses: docker/metadata-action@v6
         id: metadata
         with:
           images: |
@@ -29,15 +29,15 @@ jobs:
           labels: |
             maintainer=${{ github.repository_owner }}
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64
@@ -82,7 +82,7 @@ jobs:
           make pdb-run
       - name: upload compressed XSPdb package (pr merge only)
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.FILE_NAME }}
           path: build/xspdb/${{ env.FILE_NAME }}
