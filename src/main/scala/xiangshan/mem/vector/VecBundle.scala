@@ -227,6 +227,7 @@ class storeMisaignIO(implicit p: Parameters) extends Bundle{
   val storeMisalignBufferEmpty  = Input(Bool())
   val storeMisalignBufferRobIdx = Input(new RobPtr)
   val storeMisalignBufferUopIdx = Input(UopIdx())
+  val sqDeqIsVec                = Input(Bool())
   val blockScalaIssue           = Output(Bool())
 
 }

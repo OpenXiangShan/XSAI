@@ -127,6 +127,7 @@ class LsqWrapper(implicit p: Parameters) extends XSModule with HasDCacheParamete
     val sqCommitPtr = Output(new SqPtr)
     val sqCommitUopIdx = Output(UopIdx())
     val sqCommitRobIdx = Output(new RobPtr)
+    val sqDeqIsVec = Output(Bool())
     val mlsqDeqPtr = Option.when(HasMatrixExtension)(Output(new MlsqPtr))
     val lqDeqRobIdx = Output(new RobPtr)
     val lqDeqUopIdx = Output(UopIdx())
@@ -187,6 +188,7 @@ class LsqWrapper(implicit p: Parameters) extends XSModule with HasDCacheParamete
   }
   io.sqCommitRobIdx := storeQueue.io.sqCommitRobIdx
   io.sqCommitUopIdx := storeQueue.io.sqCommitUopIdx
+  io.sqDeqIsVec := storeQueue.io.sqDeqIsVec
   io.lqDeqRobIdx := loadQueue.io.lqDeqRobIdx
   io.lqDeqUopIdx := loadQueue.io.lqDeqUopIdx
   io.sqCommitPtr    := storeQueue.io.sqCommitPtr

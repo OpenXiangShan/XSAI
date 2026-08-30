@@ -187,6 +187,7 @@ class StoreQueue(implicit p: Parameters) extends XSModule
     val sqCommitPtr = Output(new SqPtr)
     val sqCommitUopIdx = Output(UopIdx())
     val sqCommitRobIdx = Output(new RobPtr)
+    val sqDeqIsVec = Output(Bool())
     val sqFull = Output(Bool())
     val sqCancelCnt = Output(UInt(log2Up(StoreQueueSize + 1).W))
     val sqDeq = Output(UInt(log2Ceil(EnsbufferWidth + 1).W))
@@ -1168,6 +1169,7 @@ class StoreQueue(implicit p: Parameters) extends XSModule
   io.sqCommitPtr := cmtPtrExt(0)
   io.sqCommitUopIdx := uop(cmtPtrExt(0).value).uopIdx
   io.sqCommitRobIdx := uop(cmtPtrExt(0).value).robIdx
+  io.sqDeqIsVec := isVec(deqPtr)
 
   /**
    * committed stores will not be cancelled and can be sent to lower level.
