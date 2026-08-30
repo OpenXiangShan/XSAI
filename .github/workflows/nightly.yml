@@ -60,10 +60,13 @@ jobs:
       - ${{ needs.build-default-matrix.outputs.cluster }} # use the same cluster as the builder
     needs: build-default-matrix
     continue-on-error: false
-    # At most 12 hours after the shared EMU build completes.
     timeout-minutes: 720
-    # 8 checkpoints * 1-hour timeout, plus setup time.
-    name: Nightly Regression(master) - Checkpoints
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        checkpoint: [0, 1, 2, 3, 4, 5, 6, 7]
+    name: Nightly Regression(master) - Checkpoint ${{ matrix.checkpoint }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -71,7 +74,7 @@ jobs:
           submodules: true
       - name: set env
         run: |
-          JOB_HOME="${NIGHTLY_HOME}/checkpoints"
+          JOB_HOME="${NIGHTLY_HOME}/checkpoints/random-${{ matrix.checkpoint }}"
           echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
           echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
           echo "PERF_HOME=${JOB_HOME}" >> $GITHUB_ENV
@@ -87,70 +90,14 @@ jobs:
         run: |
           mkdir -p build
           cp -L ${EMU_HOME}/emu ${GITHUB_WORKSPACE}/build/emu
-      - name: Random Checkpoint 0
+      - name: Random Checkpoint ${{ matrix.checkpoint }}
         run: |
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
             --wave-dump $WAVE_HOME --threads 16 --numa             \
             --ci random --timeout 3600 --ram-size=16GB             \
             --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
             2> perf.log
-          cat perf.log | sort | tee $PERF_HOME/random_0.txt
-      - name: Random Checkpoint 1
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-            --wave-dump $WAVE_HOME --threads 16 --numa             \
-            --ci random --timeout 3600 --ram-size=16GB             \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-            2> perf.log
-          cat perf.log | sort | tee $PERF_HOME/random_1.txt
-      - name: Random Checkpoint 2
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-            --wave-dump $WAVE_HOME --threads 16 --numa             \
-            --ci random --timeout 3600 --ram-size=16GB             \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-            2> perf.log
-          cat perf.log | sort | tee $PERF_HOME/random_2.txt
-      - name: Random Checkpoint 3
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-            --wave-dump $WAVE_HOME --threads 16 --numa             \
-            --ci random --timeout 3600 --ram-size=16GB             \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-            2> perf.log
-          cat perf.log | sort | tee $PERF_HOME/random_3.txt
-      - name: Random Checkpoint 4
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-            --wave-dump $WAVE_HOME --threads 16 --numa             \
-            --ci random --timeout 3600 --ram-size=16GB             \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-            2> perf.log
-          cat perf.log | sort | tee $PERF_HOME/random_4.txt
-      - name: Random Checkpoint 5
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-            --wave-dump $WAVE_HOME --threads 16 --numa             \
-            --ci random --timeout 3600 --ram-size=16GB             \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-            2> perf.log
-          cat perf.log | sort | tee $PERF_HOME/random_5.txt
-      - name: Random Checkpoint 6
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-            --wave-dump $WAVE_HOME --threads 16 --numa             \
-            --ci random --timeout 3600 --ram-size=16GB             \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-            2> perf.log
-          cat perf.log | sort | tee $PERF_HOME/random_6.txt
-      - name: Random Checkpoint 7
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-            --wave-dump $WAVE_HOME --threads 16 --numa             \
-            --ci random --timeout 3600 --ram-size=16GB             \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-            2> perf.log
-          cat perf.log | sort | tee $PERF_HOME/random_7.txt
+          cat perf.log | sort | tee $PERF_HOME/random_${{ matrix.checkpoint }}.txt
 
   emu-xsai-performance:
     runs-on:
@@ -159,7 +106,32 @@ jobs:
     needs: build-default-matrix
     continue-on-error: false
     timeout-minutes: 720
-    name: EMU - XSAI General-Purpose Performance
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        include:
+          - benchmark: hmmer-Vector
+            use_gcpt_restore_patch: false
+          - benchmark: mcf
+            use_gcpt_restore_patch: true
+          - benchmark: xalancbmk
+            use_gcpt_restore_patch: true
+          - benchmark: gcc
+            use_gcpt_restore_patch: true
+          - benchmark: namd
+            use_gcpt_restore_patch: true
+          - benchmark: milc
+            use_gcpt_restore_patch: true
+          - benchmark: lbm
+            use_gcpt_restore_patch: true
+          - benchmark: gromacs
+            use_gcpt_restore_patch: true
+          - benchmark: wrf
+            use_gcpt_restore_patch: true
+          - benchmark: astar
+            use_gcpt_restore_patch: true
+    name: EMU - XSAI Performance - ${{ matrix.benchmark }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -167,7 +139,7 @@ jobs:
           submodules: true
       - name: set env
         run: |
-          JOB_HOME="${NIGHTLY_HOME}/performance"
+          JOB_HOME="${NIGHTLY_HOME}/performance/${{ matrix.benchmark }}"
           echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
           echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
           echo "AM_HOME=/nfs/home/share/ci-workloads/nexus-am" >> $GITHUB_ENV
@@ -175,6 +147,7 @@ jobs:
           echo "WAVE_HOME=${JOB_HOME}" >> $GITHUB_ENV
           echo "GCPT_RESTORE_BIN=/nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin" >> $GITHUB_ENV
           mkdir -p "${JOB_HOME}"
+          : > "${JOB_HOME}/ipc.txt"
       - name: Initialize submodules
         run: make init-force
       - name: clean up
@@ -184,121 +157,53 @@ jobs:
         run: |
           mkdir -p build
           cp -L ${EMU_HOME}/emu ${GITHUB_WORKSPACE}/build/emu
-      - name: SPEC06 Test - hmmer-Vector
-        id: hmmer_vector
+      - name: SPEC06 Test - ${{ matrix.benchmark }}
+        id: run
+        shell: bash
         run: |
+          RESTORE_ARGS=()
+          if [[ "${{ matrix.use_gcpt_restore_patch }}" == "true" ]]; then
+            RESTORE_ARGS=(--gcpt-restore-bin "$GCPT_RESTORE_BIN")
+          fi
+
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py               \
             --wave-dump $WAVE_HOME --threads 16 --max-instr 5000000   \
-            --numa --ci hmmer-Vector                                   \
+            --numa --ci "${{ matrix.benchmark }}"                      \
+            "${RESTORE_ARGS[@]}"                                      \
             2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/hmmer-Vector.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
-      - name: SPEC06 Test - mcf
-        id: mcf
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py               \
-            --wave-dump $WAVE_HOME --threads 16 --max-instr 5000000   \
-            --numa --ci mcf                                           \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                       \
-            2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/mcf.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
-      - name: SPEC06 Test - xalancbmk
-        id: xalancbmk
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py               \
-            --wave-dump $WAVE_HOME --threads 16 --max-instr 5000000   \
-            --numa --ci xalancbmk                                     \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                       \
-            2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/xalancbmk.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
-      - name: SPEC06 Test - gcc
-        id: gcc
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py               \
-            --wave-dump $WAVE_HOME --threads 16 --max-instr 5000000   \
-            --numa --ci gcc                                           \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                       \
-            2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/gcc.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
-      - name: SPEC06 Test - namd
-        id: namd
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py               \
-            --wave-dump $WAVE_HOME --threads 16 --max-instr 5000000   \
-            --numa --ci namd                                          \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                       \
-            2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/namd.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
-      - name: SPEC06 Test - milc
-        id: milc
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py               \
-            --wave-dump $WAVE_HOME --threads 16 --max-instr 5000000   \
-            --numa --ci milc                                          \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                       \
-            2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/milc.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
-      - name: SPEC06 Test - lbm
-        id: lbm
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py               \
-            --wave-dump $WAVE_HOME --threads 16 --max-instr 5000000   \
-            --numa --ci lbm                                           \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                       \
-            2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/lbm.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
-      - name: SPEC06 Test - gromacs
-        id: gromacs
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py               \
-            --wave-dump $WAVE_HOME --threads 16 --max-instr 5000000   \
-            --numa --ci gromacs                                       \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                       \
-            2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/gromacs.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
-      - name: SPEC06 Test - wrf
-        id: wrf
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py               \
-            --wave-dump $WAVE_HOME --threads 16 --max-instr 5000000   \
-            --numa --ci wrf                                           \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                       \
-            2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/wrf.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
-      - name: SPEC06 Test - astar
-        id: astar
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py               \
-            --wave-dump $WAVE_HOME --threads 16 --max-instr 5000000   \
-            --numa --ci astar                                         \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                       \
-            2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/astar.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
+          cat perf.log | sort | tee "$PERF_HOME/${{ matrix.benchmark }}.log"
+          IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log || true)
+          printf '%s\n' "${IPC:-N/A}" | tee "$PERF_HOME/ipc.txt"
+
+  emu-xsai-performance-summary:
+    runs-on:
+      - bosc
+      - ${{ needs.build-default-matrix.outputs.cluster }}
+    needs:
+      - build-default-matrix
+      - emu-xsai-performance
+    if: ${{ always() && needs.build-default-matrix.result == 'success' }}
+    timeout-minutes: 30
+    name: EMU - XSAI Performance Summary
+    steps:
       - name: Generate summary
-        if: always()
         run: |
-          echo "## Emu - Performance summary" >> $GITHUB_STEP_SUMMARY
-          echo "| Testcase | IPC |" >> $GITHUB_STEP_SUMMARY
-          echo "| -------- | --- |" >> $GITHUB_STEP_SUMMARY
-          echo "| hmmer-Vector | ${{ steps.hmmer_vector.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| mcf | ${{ steps.mcf.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| xalancbmk | ${{ steps.xalancbmk.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| gcc | ${{ steps.gcc.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| namd | ${{ steps.namd.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| milc | ${{ steps.milc.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| lbm | ${{ steps.lbm.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| gromacs | ${{ steps.gromacs.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| wrf | ${{ steps.wrf.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| astar | ${{ steps.astar.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
+          RESULTS_HOME="${NIGHTLY_HOME}/performance"
+          BENCHMARKS=(hmmer-Vector mcf xalancbmk gcc namd milc lbm gromacs wrf astar)
+
+          {
+            echo "## Emu - Performance summary"
+            echo "| Testcase | IPC |"
+            echo "| -------- | --- |"
+            for benchmark in "${BENCHMARKS[@]}"; do
+              IPC_FILE="${RESULTS_HOME}/${benchmark}/ipc.txt"
+              IPC="N/A"
+              if [[ -s "${IPC_FILE}" ]]; then
+                IPC=$(head -n 1 "${IPC_FILE}")
+              fi
+              echo "| ${benchmark} | ${IPC} |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
 
   emu-no-matrix:
     runs-on: bosc
