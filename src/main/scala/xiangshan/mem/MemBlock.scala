@@ -1674,7 +1674,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
           sink.valid := loadMisalignBuffer.io.vecWriteBack.valid
           sink.bits := loadMisalignBuffer.io.vecWriteBack.bits
         }
-      }.otherwise {
+      } else {
         sink.valid := loadUnits(j).io.vecldout.valid
         sink.bits := loadUnits(j).io.vecldout.bits
       }
