@@ -258,8 +258,22 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
   val robBanksRdataNextLineUpdate = Wire(Vec(CommitWidth, new RobEntryBundle))
   val commitValidThisLine = Wire(Vec(CommitWidth, Bool()))
   val hasCommitted = RegInit(VecInit(Seq.fill(CommitWidth)(false.B)))
-  val donotNeedWalk = RegInit(VecInit(Seq.fill(CommitWidth)(false.B)))
   val allCommitted = Wire(Bool())
+  val hcLineHead = RegInit(0.U.asTypeOf(new RobPtr))
+  val hasCommittedKill = RegInit(VecInit(Seq.fill(CommitWidth)(false.B)))
+  val redirectNewEnqPtr = Mux(io.redirect.bits.flushItself(), io.redirect.bits.robIdx, io.redirect.bits.robIdx + 1.U)
+  when(io.redirect.valid) {
+    for (i <- 0 until CommitWidth) {
+      hasCommittedKill(i) := hasCommittedKill(i) || (hasCommitted(i) && !isAfter(redirectNewEnqPtr, hcLineHead + i.U))
+    }
+  }.elsewhen(allCommitted) {
+    hasCommittedKill := 0.U.asTypeOf(hasCommittedKill)
+  }
+  when(io.commits.isCommit) {
+    hcLineHead := deqPtrVec(0).lineHeadPtr
+  }
+  val hasCommittedSafe = VecInit(hasCommitted.zip(hasCommittedKill).map { case (h, k) => h && !k })
+  val donotNeedWalk = RegInit(VecInit(Seq.fill(CommitWidth)(false.B)))
 
   when(allCommitted) {
     hasCommitted := 0.U.asTypeOf(hasCommitted)
@@ -936,11 +950,14 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
   deqPtrGenModule.io.deq_w := commit_wDeqGroup
   deqPtrGenModule.io.exception_state := exceptionDataRead
   deqPtrGenModule.io.intrBitSetReg := intrBitSetReg
+  deqPtrGenModule.io.redirectHoldDeq := exceptionHappen
+  deqPtrGenModule.io.hasCommitted := hasCommitted
+  deqPtrGenModule.io.hasCommittedKill := hasCommittedKill
+  deqPtrGenModule.io.enqPtr := enqPtr
   deqPtrGenModule.io.hasNoSpecExec := hasWaitForward
   deqPtrGenModule.io.allowOnlyOneCommit := allowOnlyOneCommit
   deqPtrGenModule.io.interrupt_safe := robDeqGroup(deqPtr.value(bankAddrWidth-1,0)).interrupt_safe
   deqPtrGenModule.io.blockCommit := blockCommit
-  deqPtrGenModule.io.hasCommitted := hasCommitted
   deqPtrGenModule.io.allCommitted := allCommitted
   deqPtrVec := deqPtrGenModule.io.out
   deqPtrVec_next := deqPtrGenModule.io.next_out
