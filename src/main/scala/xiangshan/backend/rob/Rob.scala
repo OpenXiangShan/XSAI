@@ -936,7 +936,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
   deqPtrGenModule.io.deq_w := commit_wDeqGroup
   deqPtrGenModule.io.exception_state := exceptionDataRead
   deqPtrGenModule.io.intrBitSetReg := intrBitSetReg
-  deqPtrGenModule.io.redirectHoldDeq := exceptionHappen
+  deqPtrGenModule.io.deqHasFlushed := deqHasFlushed
   deqPtrGenModule.io.hasCommitted := hasCommitted
   deqPtrGenModule.io.hasNoSpecExec := hasWaitForward
   deqPtrGenModule.io.allowOnlyOneCommit := allowOnlyOneCommit
