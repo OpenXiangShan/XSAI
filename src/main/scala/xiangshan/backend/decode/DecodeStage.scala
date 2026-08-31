@@ -59,6 +59,7 @@ class DecodeStageIO(implicit p: Parameters) extends XSBundle {
   val csrCtrl = Input(new CustomCSRCtrlIO)
   val fromCSR = Input(new CSRToDecode)
   val fusion = Vec(DecodeWidth - 1, Input(Bool()))
+  val backendCanAccept = Input(Bool())
 
   // vtype update
   val fromRob = new Bundle {
@@ -92,7 +93,7 @@ class DecodeStage(implicit p: Parameters) extends XSModule
 
   val io = IO(new DecodeStageIO)
 
-  io.in.zipWithIndex.foreach{ case (d, i) => 
+  io.in.zipWithIndex.foreach{ case (d, i) =>
     PerfCCT.updateInstPos(d.bits.debug_seqNum, PerfCCT.InstPos.AtDecode.id.U, d.valid, clock, reset)
   }
 
@@ -339,6 +340,8 @@ class DecodeStage(implicit p: Parameters) extends XSModule
   XSPerfAccumulate("wait_cycle", !io.in.head.valid && io.out.head.ready)
   XSPerfAccumulate("inst_spec", PopCount(io.in.map(_.fire)))
   XSPerfAccumulate("recovery_bubble", recoveryFlag)
+  XSPerfAccumulate("frontend_stall_cycle", GatedValidRegNext(!io.in.head.valid && io.backendCanAccept))
+  XSPerfAccumulate("backend_stall_cycle",  GatedValidRegNext(io.in.head.valid && !io.in.head.ready))
 
   XSPerfHistogram("in_valid_range", PopCount(io.in.map(_.valid)), true.B, 0, DecodeWidth + 1, 1)
   XSPerfHistogram("in_fire_range", PopCount(io.in.map(_.fire)), true.B, 0, DecodeWidth + 1, 1)
@@ -347,7 +350,7 @@ class DecodeStage(implicit p: Parameters) extends XSModule
 
   val fusionValid = VecInit(io.fusion.map(x => GatedValidRegNext(x)))
   val inValidNotReady = io.in.map(in => GatedValidRegNext(in.valid && !in.ready))
-  val frontendStall = GatedValidRegNext(!io.in.head.valid && io.in.head.ready)
+  val frontendStall = GatedValidRegNext(!io.in.head.valid && io.backendCanAccept)
   val backendStall  = GatedValidRegNext(io.in.head.valid && !io.in.head.ready)
   val perfEvents = Seq(
     ("decoder_fused_instr",  PopCount(fusionValid)       ),

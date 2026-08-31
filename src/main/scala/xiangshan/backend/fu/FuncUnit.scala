@@ -51,6 +51,7 @@ class FuncUnitCtrlOutput(cfg: FuConfig)(implicit p: Parameters) extends XSBundle
   val mxWen         = OptionWrapper(cfg.needMxWen, Bool())
   val exceptionVec  = OptionWrapper(cfg.exceptionOut.nonEmpty, ExceptionVec())
   val flushPipe     = OptionWrapper(cfg.flushPipe,  Bool())
+  val satpFlushPipe = OptionWrapper(cfg.isCsr, Bool())
   val replay        = OptionWrapper(cfg.replayInst, Bool())
   val preDecode     = OptionWrapper(cfg.hasPredecode, new PreDecodeInfo)
   val fpu           = OptionWrapper(cfg.writeFflags, new FPUCtrlSignals)

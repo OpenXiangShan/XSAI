@@ -135,8 +135,10 @@ class LoadMisalignBuffer(implicit p: Parameters) extends XSModule
     val loadMisalignFull = Output(Bool())
   })
 
-  io.rob.mmio := 0.U.asTypeOf(Vec(LoadPipelineWidth, Bool()))
-  io.rob.uop  := 0.U.asTypeOf(Vec(LoadPipelineWidth, new DynInst))
+  io.rob.loadMmio := DontCare
+  io.rob.loadMmioUop  := DontCare
+  io.rob.storeMmio := DontCare
+  io.rob.storeMmioUop  := DontCare
 
   val req_valid = RegInit(false.B)
   val req = Reg(new LqWriteBundle)
@@ -220,6 +222,13 @@ class LoadMisalignBuffer(implicit p: Parameters) extends XSModule
           globalMMIO := io.splitLoadResp.bits.mmio
           globalNC   := io.splitLoadResp.bits.nc
           globalMemBackTypeMM := io.splitLoadResp.bits.memBackTypeMM
+          req.vaddr := io.splitLoadResp.bits.vaddr
+          req.fullva := io.splitLoadResp.bits.fullva
+          req.vaNeedExt := io.splitLoadResp.bits.vaNeedExt
+          req.paddr := io.splitLoadResp.bits.paddr
+          req.gpaddr := io.splitLoadResp.bits.gpaddr
+          req.isForVSnonLeafPTE := io.splitLoadResp.bits.isForVSnonLeafPTE
+          req.isHyper := io.splitLoadResp.bits.isHyper
         } .elsewhen(io.splitLoadResp.bits.rep_info.need_rep || (unSentLoads & ~clearOh).orR) {
           // need replay or still has unsent requests
           bufferState := s_req

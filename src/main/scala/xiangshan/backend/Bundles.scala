@@ -55,6 +55,7 @@ object Bundles {
     val ftqOffset        = UInt(log2Up(PredictWidth).W)
     val isLastInFtqEntry = Bool()
     val debug_seqNum     = InstSeqNum()
+    val satpFlushFirstFetchFault = Bool()
 
     def connectCtrlFlow(source: CtrlFlow): Unit = {
       this.instr            := source.instr
@@ -70,6 +71,7 @@ object Bundles {
       this.ftqOffset        := source.ftqOffset
       this.isLastInFtqEntry := source.isLastInFtqEntry
       this.debug_seqNum     := source.debug_seqNum
+      this.satpFlushFirstFetchFault := source.satpFlushFirstFetchFault
     }
   }
 
@@ -88,6 +90,7 @@ object Bundles {
     val crossPageIPFFix = Bool()
     val ftqPtr          = new FtqPtr
     val ftqOffset       = UInt(log2Up(PredictWidth).W)
+    val satpFlushFirstFetchFault = Bool()
     // decoded
     val srcType         = Vec(numSrc, SrcType())
     val lsrc            = Vec(numSrc, UInt(LogicRegsWidth.W))
@@ -194,6 +197,7 @@ object Bundles {
     val crossPageIPFFix = Bool()
     val ftqPtr          = new FtqPtr
     val ftqOffset       = UInt(log2Up(PredictWidth).W)
+    val satpFlushFirstFetchFault = Bool()
     // passed from DecodedInst
     val srcType         = Vec(numSrc, SrcType())
     val ldest           = UInt(LogicRegsWidth.W)
@@ -770,6 +774,7 @@ object Bundles {
     val vxsat        = if (params.writeVxsat)   Some(Bool())                  else None
     val exceptionVec = if (params.exceptionOut.nonEmpty) Some(ExceptionVec()) else None
     val flushPipe    = if (params.flushPipe)    Some(Bool())                  else None
+    val satpFlushPipe= if (params.satpFlushPipe)Some(Bool())                  else None
     val replay       = if (params.replayInst)   Some(Bool())                  else None
     val lqIdx        = if (params.hasLoadFu)    Some(new LqPtr())             else None
     val sqIdx        = if (params.hasStoreAddrFu || params.hasStdFu)
@@ -808,6 +813,7 @@ object Bundles {
     val data = UInt(params.dataWidth.W)
     val robIdx = new RobPtr()(p)
     val flushPipe = Bool()
+    val satpFlushPipe = Bool()
     val replayInst = Bool()
     val redirect = ValidIO(new Redirect)
     val fflags = UInt(5.W)
@@ -831,6 +837,7 @@ object Bundles {
       this.data   := source.data(source.params.wbIndex(typeMap(wbType)))
       this.robIdx := source.robIdx
       this.flushPipe := source.flushPipe.getOrElse(false.B)
+      this.satpFlushPipe := source.satpFlushPipe.getOrElse(false.B)
       this.replayInst := source.replay.getOrElse(false.B)
       this.redirect := source.redirect.getOrElse(0.U.asTypeOf(this.redirect))
       this.fflags := source.fflags.getOrElse(0.U.asTypeOf(this.fflags))
@@ -944,6 +951,7 @@ object Bundles {
     val exceptionVec = ExceptionVec()
     val isPcBkpt = Bool()
     val isFetchMalAddr = Bool()
+    val satpFlushFirstFetchFault = Bool()
     val gpaddr = UInt(XLEN.W)
     val singleStep = Bool()
     val crossPageIPFFix = Bool()
