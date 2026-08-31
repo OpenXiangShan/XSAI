@@ -46,8 +46,6 @@ class NewRobDeqPtrWrapper(implicit p: Parameters) extends XSModule with HasCircu
     // for flush: when exception occurs, reset deqPtrs to range(0, CommitWidth)
     val intrBitSetReg = Input(Bool())
     val redirectHoldDeq = Input(Bool())
-    val hasCommittedKill = Input(Vec(CommitWidth, Bool()))
-    val enqPtr = Input(new RobPtr)
     val allowOnlyOneCommit = Input(Bool())
     val hasNoSpecExec = Input(Bool())
     val interrupt_safe = Input(Bool())
@@ -72,9 +70,8 @@ class NewRobDeqPtrWrapper(implicit p: Parameters) extends XSModule with HasCircu
   // we don't need to consider whether the first instruction has exceptions since it wil trigger exceptions.
   val realCommitLast = deqPtrVec(0).lineHeadPtr + Fill(bankAddrWidth, 1.U)
   val commit_exception = io.exception_state.valid && !isAfter(io.exception_state.bits.robIdx, realCommitLast)
-  val hasCommittedSafe = VecInit((0 until CommitWidth).map(i => io.hasCommitted(i) && !io.hasCommittedKill(i)))
-  val canCommit = VecInit((0 until CommitWidth).map(i => io.deq_v(i) && io.deq_w(i) || hasCommittedSafe(i)))
-  val normalCommitCnt = PriorityEncoder(canCommit.map(c => !c) :+ true.B) - PopCount(hasCommittedSafe)
+  val canCommit = VecInit((0 until CommitWidth).map(i => io.deq_v(i) && io.deq_w(i) || io.hasCommitted(i)))
+  val normalCommitCnt = PriorityEncoder(canCommit.map(c => !c) :+ true.B) - PopCount(io.hasCommitted)
   // when io.intrBitSetReg or there're possible exceptions in these instructions,
   // only one instruction is allowed to commit
   val allowOnlyOne = io.allowOnlyOneCommit
@@ -101,8 +98,6 @@ class NewRobDeqPtrWrapper(implicit p: Parameters) extends XSModule with HasCircu
   io.commitCnt := commitCnt
   io.commitEn := io.state === 0.U && !redirectOutValid && !io.blockCommit
 
-  XSError(isAfter(deqPtrVec(0), io.enqPtr) && !isFull(io.enqPtr, deqPtrVec(0)),
-    "rob: deqPtr is older than enqPtr!\n")
   XSInfo(io.state === 0.U && commitCnt > 0.U, "retired %d insts\n", commitCnt)
 
   if(backendParams.debugEn){
