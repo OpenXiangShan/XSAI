@@ -272,7 +272,7 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
       teemsiInfo.toCore.bits := RegEnable(teemsiInfo.fromTile.bits, teemsiInfo.fromTile.valid)
     }
     io.cpu_halt.toTile := RegNext(io.cpu_halt.fromCore)
-    io.cpu_critical_error.toTile := RegNext(io.cpu_critical_error.fromCore)
+    io.cpu_critical_error.toTile := RegNext(io.cpu_critical_error.fromCore, false.B)
     io.msiAck.toTile := io.msiAck.fromCore
     io.teemsiAck.foreach( teemsiAck => teemsiAck.toTile := teemsiAck.fromCore)
     io.l3Miss.toCore := RegNext(io.l3Miss.fromTile)
@@ -291,7 +291,7 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
     )
     traceToTile.toEncoder.mstatus := RegNext(traceFromCore.toEncoder.mstatus)
     (0 until TraceGroupNum).foreach{ i =>
-      traceToTile.toEncoder.groups(i).valid := RegNext(traceFromCore.toEncoder.groups(i).valid)
+      traceToTile.toEncoder.groups(i).valid := RegNext(traceFromCore.toEncoder.groups(i).valid, false.B)
       traceToTile.toEncoder.groups(i).bits.iretire := RegNext(traceFromCore.toEncoder.groups(i).bits.iretire)
       traceToTile.toEncoder.groups(i).bits.itype := RegNext(traceFromCore.toEncoder.groups(i).bits.itype)
       traceToTile.toEncoder.groups(i).bits.ilastsize := RegEnable(

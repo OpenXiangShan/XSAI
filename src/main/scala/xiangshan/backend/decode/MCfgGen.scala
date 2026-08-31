@@ -3,6 +3,7 @@ package xiangshan.backend.decode
 import chisel3._
 import chisel3.util._
 import cute.MatrixIsaParams
+import difftest.{DifftestModule, DiffMcfgState}
 import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.tile.XLen
 import utility._
@@ -229,6 +230,7 @@ class McfgReadView(implicit p: Parameters) extends Bundle {
 }
 
 class McfgGenIO(implicit p: Parameters) extends XSBundle {
+  val hartId = Option.when((env.AlwaysBasicDiff || env.EnableDifftest) && HasMatrixExtension)(Input(UInt(hartIdLen.W)))
   val walkToArchMcfg = Input(Bool())
   val walkMcfg = Flipped(Vec(CommitWidth, Valid(new McfgCommit)))
   val mcfg = Output(new McfgState)
@@ -263,6 +265,12 @@ class McfgGen(implicit p: Parameters) extends XSModule {
 
   mcfgArchNext := updateMany(mcfgArch, io.commitMcfg)
   walkBase := Mux(io.walkToArchMcfg, mcfgArchNext, mcfgSpec)
+
+  if ((env.AlwaysBasicDiff || env.EnableDifftest) && HasMatrixExtension) {
+    val difftest = DifftestModule(new DiffMcfgState, delay = 2)
+    difftest.coreid := io.hartId.get
+    difftest.value := VecInit(mcfgArch.entries.map(_.raw))
+  }
 
   when(hasCommitMcfg) {
     mcfgSpecNext := updateMany(mcfgSpec, io.commitMcfg)

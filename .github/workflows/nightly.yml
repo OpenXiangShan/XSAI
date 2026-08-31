@@ -1,17 +1,21 @@
 name: Nightly Regression
 on:
   schedule:
-    # run at 15:33 UTC (23:33 UTC+8)
-    - cron: '33 15 * * *'
+    # run at 14:33 UTC (22:33 UTC+8)
+    - cron: '33 14 * * *'
+
+env:
+  NIGHTLY_HOME: /nfs/home/ci-runner/xsai-nightly/${{ github.run_number }}
+  EMU_HOME: /nfs/home/ci-runner/xsai-nightly/${{ github.run_number }}/default-matrix
 
 jobs:
-  build:
+  build-default-matrix:
     runs-on: bosc
+    outputs:
+      cluster: ${{ steps.save.outputs.cluster }}
     continue-on-error: false
-    # At most 12 hours to finish (before 11:33 UTC+8).
-    timeout-minutes: 720
-    # Build + 8 checkpoints * 1-hour timeout
-    name: Nightly Regression(master) - Checkpoints
+    timeout-minutes: 360
+    name: Build DefaultMatrixConfig EMU
     steps:
       - uses: actions/checkout@v7
         with:
@@ -19,187 +23,233 @@ jobs:
           submodules: true
       - name: set env
         run: |
-          export HEAD_SHA=${{ github.run_number }}
           echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
           echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
-          echo "PERF_HOME=/nfs/home/ci-runner/xs-perf/${HEAD_SHA}" >> $GITHUB_ENV
-          echo "WAVE_HOME=/nfs/home/ci-runner/xs-wave/${HEAD_SHA}" >> $GITHUB_ENV
-          echo "GCPT_RESTORE_BIN=/nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin" >> $GITHUB_ENV
-          mkdir -p /nfs/home/ci-runner/xs-perf/${HEAD_SHA}
-          mkdir -p /nfs/home/ci-runner/xs-wave/${HEAD_SHA}
       - name: Initialize submodules
         run: make init-force
       - name: clean up
         run: |
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
-      - name: Build EMU with DRAMsim3 and Spike-Diff
+      - name: Build EMU with DRAMsim3 and NEMU-Diff
         run: |
+          sed -i \
+            -e 's/--output-split 30000/--output-split 5000/' \
+            -e 's/--output-split-cfuncs 30000/--output-split-cfuncs 5000/' \
+            -e 's/OPT_FAST ?= -O3/OPT_FAST ?= -O3\\ -fno-vectorize\\ -fno-slp-vectorize/' \
+            $GITHUB_WORKSPACE/difftest/verilator.mk
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --build          \
             --dramsim3 /nfs/home/share/ci-workloads/DRAMsim3              \
-            --with-dramsim3 --threads 16 --spike                          \
+            --with-dramsim3 --threads 8                                   \
+            --num-cores 1 --config DefaultMatrixConfig                    \
             --pgo $GITHUB_WORKSPACE/ready-to-run/coremark-2-iteration.bin \
             --llvm-profdata llvm-profdata --trace-fst
-      - name: Random Checkpoint 0
+      - name: Save artifact
+        id: save
         run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-            --wave-dump $WAVE_HOME --threads 16 --numa             \
-            --spike --ci random --timeout 3600 --ram-size=16GB     \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-            2> perf.log
-          cat perf.log | sort | tee $PERF_HOME/random_0.txt
-      - name: Random Checkpoint 1
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-            --wave-dump $WAVE_HOME --threads 16 --numa             \
-            --spike --ci random --timeout 3600 --ram-size=16GB     \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-            2> perf.log
-          cat perf.log | sort | tee $PERF_HOME/random_1.txt
-      - name: Random Checkpoint 2
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-            --wave-dump $WAVE_HOME --threads 16 --numa             \
-            --spike --ci random --timeout 3600 --ram-size=16GB     \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-            2> perf.log
-          cat perf.log | sort | tee $PERF_HOME/random_2.txt
-      - name: Random Checkpoint 3
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-            --wave-dump $WAVE_HOME --threads 16 --numa             \
-            --spike --ci random --timeout 3600 --ram-size=16GB     \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-            2> perf.log
-          cat perf.log | sort | tee $PERF_HOME/random_3.txt
-      - name: Random Checkpoint 4
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-            --wave-dump $WAVE_HOME --threads 16 --numa             \
-            --spike --ci random --timeout 3600 --ram-size=16GB     \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-            2> perf.log
-          cat perf.log | sort | tee $PERF_HOME/random_4.txt
-      - name: Random Checkpoint 5
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-            --wave-dump $WAVE_HOME --threads 16 --numa             \
-            --spike --ci random --timeout 3600 --ram-size=16GB     \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-            2> perf.log
-          cat perf.log | sort | tee $PERF_HOME/random_5.txt
-      - name: Random Checkpoint 6
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-            --wave-dump $WAVE_HOME --threads 16 --numa             \
-            --spike --ci random --timeout 3600 --ram-size=16GB     \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-            2> perf.log
-          cat perf.log | sort | tee $PERF_HOME/random_6.txt
-      - name: Random Checkpoint 7
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-            --wave-dump $WAVE_HOME --threads 16 --numa             \
-            --spike --ci random --timeout 3600 --ram-size=16GB     \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-            2> perf.log
-          cat perf.log | sort | tee $PERF_HOME/random_7.txt
+          mkdir -p ${EMU_HOME}
+          cp -L ${GITHUB_WORKSPACE}/build/emu ${EMU_HOME}/emu
+          if [[ $(hostname) == *.bosccluster.com ]]; then
+            echo "cluster=node" >> ${GITHUB_OUTPUT}
+          else
+            echo "cluster=open" >> ${GITHUB_OUTPUT}
+          fi
 
-  build-v3:
-      runs-on: bosc
-      continue-on-error: false
-      # At most 12 hours to finish (before 11:33 UTC+8).
-      timeout-minutes: 720
-      # Build + 8 checkpoints * 1-hour timeout
-      name: Nightly Regression(kunminghu-v3) - Checkpoints
-      steps:
-        - uses: actions/checkout@v7
-          with:
-            ref: kunminghu-v3
-            fetch-depth: 0
-            submodules: true
-        - name: set env
-          run: |
-            export HEAD_SHA=${{ github.run_number }}
-            echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
-            echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
-            echo "PERF_HOME=/nfs/home/ci-runner/xs-perf/${HEAD_SHA}" >> $GITHUB_ENV
-            echo "WAVE_HOME=/nfs/home/ci-runner/xs-wave/${HEAD_SHA}" >> $GITHUB_ENV
-            echo "GCPT_RESTORE_BIN=/nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin" >> $GITHUB_ENV
-            mkdir -p /nfs/home/ci-runner/xs-perf/${HEAD_SHA}
-            mkdir -p /nfs/home/ci-runner/xs-wave/${HEAD_SHA}
-        - name: Initialize submodules
-          run: make init-force
-        - name: clean up
-          run: |
-            python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
-        - name: Build EMU with DRAMsim3 and Spike-Diff
-          run: |
-            python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --build          \
-              --dramsim3 /nfs/home/share/ci-workloads/DRAMsim3              \
-              --with-dramsim3 --threads 16 --spike                          \
-              --pgo $GITHUB_WORKSPACE/ready-to-run/coremark-2-iteration.bin \
-              --llvm-profdata llvm-profdata --trace-fst
-        - name: Random Checkpoint 0
-          run: |
-            python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-              --wave-dump $WAVE_HOME --threads 16 --numa             \
-              --spike --ci random --timeout 3600 --ram-size=16GB     \
-              --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-              2> perf.log
-            cat perf.log | sort | tee $PERF_HOME/random_0.txt
-        - name: Random Checkpoint 1
-          run: |
-            python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-              --wave-dump $WAVE_HOME --threads 16 --numa             \
-              --spike --ci random --timeout 3600 --ram-size=16GB     \
-              --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-              2> perf.log
-            cat perf.log | sort | tee $PERF_HOME/random_1.txt
-        - name: Random Checkpoint 2
-          run: |
-            python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-              --wave-dump $WAVE_HOME --threads 16 --numa             \
-              --spike --ci random --timeout 3600 --ram-size=16GB     \
-              --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-              2> perf.log
-            cat perf.log | sort | tee $PERF_HOME/random_2.txt
-        - name: Random Checkpoint 3
-          run: |
-            python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-              --wave-dump $WAVE_HOME --threads 16 --numa             \
-              --spike --ci random --timeout 3600 --ram-size=16GB     \
-              --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-              2> perf.log
-            cat perf.log | sort | tee $PERF_HOME/random_3.txt
-        - name: Random Checkpoint 4
-          run: |
-            python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-              --wave-dump $WAVE_HOME --threads 16 --numa             \
-              --spike --ci random --timeout 3600 --ram-size=16GB     \
-              --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-              2> perf.log
-            cat perf.log | sort | tee $PERF_HOME/random_4.txt
-        - name: Random Checkpoint 5
-          run: |
-            python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-              --wave-dump $WAVE_HOME --threads 16 --numa             \
-              --spike --ci random --timeout 3600 --ram-size=16GB     \
-              --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-              2> perf.log
-            cat perf.log | sort | tee $PERF_HOME/random_5.txt
-        - name: Random Checkpoint 6
-          run: |
-            python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-              --wave-dump $WAVE_HOME --threads 16 --numa             \
-              --spike --ci random --timeout 3600 --ram-size=16GB     \
-              --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-              2> perf.log
-            cat perf.log | sort | tee $PERF_HOME/random_6.txt
-        - name: Random Checkpoint 7
-          run: |
-            python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-              --wave-dump $WAVE_HOME --threads 16 --numa             \
-              --spike --ci random --timeout 3600 --ram-size=16GB     \
-              --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-              2> perf.log
-            cat perf.log | sort | tee $PERF_HOME/random_7.txt
+  nightly-checkpoints:
+    runs-on:
+      - bosc
+      - ${{ needs.build-default-matrix.outputs.cluster }} # use the same cluster as the builder
+    needs: build-default-matrix
+    continue-on-error: false
+    timeout-minutes: 720
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        checkpoint: [0, 1, 2, 3, 4, 5, 6, 7]
+    name: Nightly Regression(master) - Checkpoint ${{ matrix.checkpoint }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: true
+      - name: set env
+        run: |
+          JOB_HOME="${NIGHTLY_HOME}/checkpoints/random-${{ matrix.checkpoint }}"
+          echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
+          echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
+          echo "PERF_HOME=${JOB_HOME}" >> $GITHUB_ENV
+          echo "WAVE_HOME=${JOB_HOME}" >> $GITHUB_ENV
+          echo "GCPT_RESTORE_BIN=/nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin" >> $GITHUB_ENV
+          mkdir -p "${JOB_HOME}"
+      - name: Initialize submodules
+        run: make init-force
+      - name: clean up
+        run: |
+          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
+      - name: Get artifact
+        run: |
+          mkdir -p build
+          cp -L ${EMU_HOME}/emu ${GITHUB_WORKSPACE}/build/emu
+      - name: Random Checkpoint ${{ matrix.checkpoint }}
+        run: |
+          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
+            --wave-dump $WAVE_HOME --threads 16 --numa             \
+            --ci random --timeout 3600 --ram-size=16GB             \
+            --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
+            2> perf.log
+          cat perf.log | sort | tee $PERF_HOME/random_${{ matrix.checkpoint }}.txt
+
+  emu-xsai-performance:
+    runs-on:
+      - bosc
+      - ${{ needs.build-default-matrix.outputs.cluster }} # use the same cluster as the builder
+    needs: build-default-matrix
+    continue-on-error: false
+    timeout-minutes: 720
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        include:
+          - benchmark: hmmer-Vector
+            use_gcpt_restore_patch: false
+          - benchmark: mcf
+            use_gcpt_restore_patch: true
+          - benchmark: xalancbmk
+            use_gcpt_restore_patch: true
+          - benchmark: gcc
+            use_gcpt_restore_patch: true
+          - benchmark: namd
+            use_gcpt_restore_patch: true
+          - benchmark: milc
+            use_gcpt_restore_patch: true
+          - benchmark: lbm
+            use_gcpt_restore_patch: true
+          - benchmark: gromacs
+            use_gcpt_restore_patch: true
+          - benchmark: wrf
+            use_gcpt_restore_patch: true
+          - benchmark: astar
+            use_gcpt_restore_patch: true
+    name: EMU - XSAI Performance - ${{ matrix.benchmark }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: true
+      - name: set env
+        run: |
+          JOB_HOME="${NIGHTLY_HOME}/performance/${{ matrix.benchmark }}"
+          echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
+          echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
+          echo "AM_HOME=/nfs/home/share/ci-workloads/nexus-am" >> $GITHUB_ENV
+          echo "PERF_HOME=${JOB_HOME}" >> $GITHUB_ENV
+          echo "WAVE_HOME=${JOB_HOME}" >> $GITHUB_ENV
+          echo "GCPT_RESTORE_BIN=/nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin" >> $GITHUB_ENV
+          mkdir -p "${JOB_HOME}"
+          : > "${JOB_HOME}/ipc.txt"
+      - name: Initialize submodules
+        run: make init-force
+      - name: clean up
+        run: |
+          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
+      - name: Get artifact
+        run: |
+          mkdir -p build
+          cp -L ${EMU_HOME}/emu ${GITHUB_WORKSPACE}/build/emu
+      - name: SPEC06 Test - ${{ matrix.benchmark }}
+        id: run
+        shell: bash
+        run: |
+          RESTORE_ARGS=()
+          if [[ "${{ matrix.use_gcpt_restore_patch }}" == "true" ]]; then
+            RESTORE_ARGS=(--gcpt-restore-bin "$GCPT_RESTORE_BIN")
+          fi
+
+          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py               \
+            --wave-dump $WAVE_HOME --threads 16 --max-instr 5000000   \
+            --numa --ci "${{ matrix.benchmark }}"                      \
+            "${RESTORE_ARGS[@]}"                                      \
+            2> perf.log | tee stdout.log
+          cat perf.log | sort | tee "$PERF_HOME/${{ matrix.benchmark }}.log"
+          IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log || true)
+          printf '%s\n' "${IPC:-N/A}" | tee "$PERF_HOME/ipc.txt"
+
+  emu-xsai-performance-summary:
+    runs-on:
+      - bosc
+      - ${{ needs.build-default-matrix.outputs.cluster }}
+    needs:
+      - build-default-matrix
+      - emu-xsai-performance
+    if: ${{ always() && needs.build-default-matrix.result == 'success' }}
+    timeout-minutes: 30
+    name: EMU - XSAI Performance Summary
+    steps:
+      - name: Generate summary
+        run: |
+          RESULTS_HOME="${NIGHTLY_HOME}/performance"
+          BENCHMARKS=(hmmer-Vector mcf xalancbmk gcc namd milc lbm gromacs wrf astar)
+
+          {
+            echo "## Emu - Performance summary"
+            echo "| Testcase | IPC |"
+            echo "| -------- | --- |"
+            for benchmark in "${BENCHMARKS[@]}"; do
+              IPC_FILE="${RESULTS_HOME}/${benchmark}/ipc.txt"
+              IPC="N/A"
+              if [[ -s "${IPC_FILE}" ]]; then
+                IPC=$(head -n 1 "${IPC_FILE}")
+              fi
+              echo "| ${benchmark} | ${IPC} |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  emu-no-matrix:
+    runs-on: bosc
+    continue-on-error: false
+    timeout-minutes: 600
+    name: EMU - XS without Matrix
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: true
+      - name: set env
+        run: |
+          JOB_HOME="${NIGHTLY_HOME}/no-matrix"
+          echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
+          echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
+          echo "AM_HOME=/nfs/home/share/ci-workloads/nexus-am" >> $GITHUB_ENV
+          echo "PERF_HOME=${JOB_HOME}" >> $GITHUB_ENV
+          echo "WAVE_HOME=${JOB_HOME}" >> $GITHUB_ENV
+          echo "GCPT_RESTORE_BIN=/nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin" >> $GITHUB_ENV
+          mkdir -p "${JOB_HOME}"
+      - name: Initialize submodules
+        run: make init-force
+      - name: clean up
+        run: |
+          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
+      - name: Build EMU
+        run: |
+          sed -i \
+            -e 's/--output-split 30000/--output-split 5000/' \
+            -e 's/--output-split-cfuncs 30000/--output-split-cfuncs 5000/' \
+            -e 's/OPT_FAST ?= -O3/OPT_FAST ?= -O3\\ -fno-vectorize\\ -fno-slp-vectorize/' \
+            $GITHUB_WORKSPACE/difftest/verilator.mk
+          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --build \
+            --config DefaultConfig \
+            --dramsim3 /nfs/home/share/ci-workloads/DRAMsim3 --with-dramsim3 --threads 8 \
+            --pgo $GITHUB_WORKSPACE/ready-to-run/coremark-2-iteration.bin --llvm-profdata llvm-profdata --trace-fst
+      - name: Simple Test - CoreMark
+        id: coremark
+        run: |
+          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci coremark 2> perf.log | tee stdout.log
+          cat perf.log | sort | tee $PERF_HOME/coremark.log
+          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
+      - name: System Test - Linux
+        id: linux
+        run: |
+          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci linux-hello-opensbi 2> perf.log | tee stdout.log
+          cat perf.log | sort | tee $PERF_HOME/linux.log
+          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT

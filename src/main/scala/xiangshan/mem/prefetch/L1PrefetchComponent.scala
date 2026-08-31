@@ -300,7 +300,7 @@ class MLPReqFilterBundle(implicit p: Parameters) extends XSBundle with HasL1Pref
 
   def may_be_replace(valid: Bool): Bool = {
     // either invalid or has sent out all reqs out
-    !valid || RegNext(PopCount(sent_vec) === BIT_VEC_WITDH.U)
+    !valid || RegNext(valid) && RegNext(PopCount(sent_vec) === BIT_VEC_WITDH.U)
   }
 
   def get_pf_addr(): UInt = {
@@ -619,6 +619,7 @@ class MutiLevelPrefetchFilter(implicit p: Parameters) extends XSModule with HasL
     tlb_req_arb.io.in(i).bits.hlvx := DontCare
     tlb_req_arb.io.in(i).bits.hyperinst := DontCare
     tlb_req_arb.io.in(i).bits.pmp_addr  := DontCare
+    tlb_req_arb.io.in(i).bits.frm_mabuf  := DontCare
   }
 
   assert(PopCount(s0_tlb_fire_vec) <= 1.U, "s0_tlb_fire_vec should be one-hot or empty")

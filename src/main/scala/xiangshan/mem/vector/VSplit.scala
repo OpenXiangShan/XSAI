@@ -406,7 +406,8 @@ abstract class VSplitBuffer(isVStore: Boolean = false)(implicit p: Parameters) e
   /** Issue to scala pipeline**/
 
   lazy val misalignedCanGo = true.B
-  val allowIssue = (addrAligned || misalignedCanGo) && io.out.ready
+  lazy val splitCanGo      = true.B
+  val allowIssue = (addrAligned || misalignedCanGo) && io.out.ready && splitCanGo
   val issueCount = Mux(usNoSplit, 2.U, (PopCount(inActiveIssue) + PopCount(activeIssue))) // for dont need split unit-stride, issue two flow
   val dataIssued = RegInit(false.B)
 
@@ -449,7 +450,7 @@ abstract class VSplitBuffer(isVStore: Boolean = false)(implicit p: Parameters) e
   }
 
   // out connect
-  io.out.valid := issueValid && vecActive && (addrAligned || misalignedCanGo) // TODO: inactive unit-stride uop do not send to pipeline
+  io.out.valid := issueValid && vecActive && (addrAligned || misalignedCanGo) && splitCanGo // TODO: inactive unit-stride uop do not send to pipeline
 
   XSPerfAccumulate("out_valid",             io.out.valid)
   XSPerfAccumulate("out_fire",              io.out.fire)
@@ -459,11 +460,14 @@ abstract class VSplitBuffer(isVStore: Boolean = false)(implicit p: Parameters) e
 }
 
 class VSSplitBufferImp(implicit p: Parameters) extends VSplitBuffer(isVStore = true){
-  override lazy val misalignedCanGo = io.vstdMisalign.get.storePipeEmpty &&
-    (io.vstdMisalign.get.storeMisalignBufferEmpty ||
-      io.vstdMisalign.get.storeMisalignBufferRobIdx > io.out.bits.uop.robIdx ||
-      io.vstdMisalign.get.storeMisalignBufferRobIdx === io.out.bits.uop.robIdx &&
-        io.vstdMisalign.get.storeMisalignBufferUopIdx > io.out.bits.uop.uopIdx)
+  lazy val canToMisalignBuffer = io.vstdMisalign.get.storeMisalignBufferEmpty ||
+    io.vstdMisalign.get.storeMisalignBufferRobIdx > io.out.bits.uop.robIdx ||
+    (io.vstdMisalign.get.storeMisalignBufferRobIdx === io.out.bits.uop.robIdx &&
+      io.vstdMisalign.get.storeMisalignBufferUopIdx > io.out.bits.uop.uopIdx) ||
+    io.vstdMisalign.get.sqDeqIsVec
+
+  override lazy val misalignedCanGo = io.vstdMisalign.get.storePipeEmpty && canToMisalignBuffer
+
 
   // split data
   val splitData = genVSData(
@@ -504,12 +508,55 @@ class VSSplitBufferImp(implicit p: Parameters) extends VSplitBuffer(isVStore = t
     vstd.bits.vecDebug.get.offset := usVaddrOffset
   }
 
+  io.vstdMisalign.get.blockScalaIssue := RegNext(issueValid && canToMisalignBuffer && !addrAligned)
 }
 
 class VLSplitBufferImp(implicit p: Parameters) extends VSplitBuffer(isVStore = false){
   io.out.bits.uop.lqIdx := issueUop.lqIdx + splitIdx
   io.out.bits.uop.exceptionVec(loadAddrMisaligned) := !addrAligned && !issuePreIsSplit && io.out.bits.mask.orR
   io.out.bits.uop.fuType := FuType.vldu.U
+
+  object StopAndWaitState extends ChiselEnum {
+    val idle = Value
+    val send = Value
+    val stop = Value
+  }
+
+  lazy val stopWaitState     = RegInit(StopAndWaitState.idle)
+  lazy val stopWaitStateNext = WireInit(stopWaitState)
+  stopWaitState              := stopWaitStateNext
+
+  val pipelineWbValid = io.fromPipeline.get.map { port =>
+    port.valid && port.bits.mBIndex === issueMbIndex
+  }.reduce(_ || _)
+
+  switch(stopWaitState) {
+    is(StopAndWaitState.idle) {
+      when(isOrderIndexed(issueInstType) && io.out.fire && !splitFinish && !needCancel) {
+        stopWaitStateNext := StopAndWaitState.stop
+      }
+    }
+    is(StopAndWaitState.send) {
+      when(splitFinish || needCancel) {
+        stopWaitStateNext := StopAndWaitState.idle
+      }.elsewhen(io.out.fire) {
+        stopWaitStateNext := StopAndWaitState.stop
+      }
+    }
+    is(StopAndWaitState.stop) {
+      when(splitFinish || needCancel) {
+        stopWaitStateNext := StopAndWaitState.idle
+      }.elsewhen(pipelineWbValid) {
+        stopWaitStateNext := StopAndWaitState.send
+      }
+    }
+  }
+
+  override lazy val splitCanGo = stopWaitState =/= StopAndWaitState.stop
+
+  XSError((stopWaitState === StopAndWaitState.stop || stopWaitState === StopAndWaitState.send) &&
+    !isOrderIndexed(issueInstType), "normal vector load instruction does not need to wait!\n")
+  XSError(!allocated && stopWaitState =/= StopAndWaitState.idle, "invalid entry does not need to wait!\n")
 }
 
 class VSSplitPipelineImp(implicit p: Parameters) extends VSplitPipeline(isVStore = true){
@@ -529,7 +576,9 @@ class VLSplitImp(implicit p: Parameters) extends VLSUModule{
   val io = IO(new VSplitIO(isVStore=false))
   val splitPipeline = Module(new VLSplitPipelineImp())
   val splitBuffer = Module(new VLSplitBufferImp())
-  val mergeBufferNack = io.threshold.get.valid && io.threshold.get.bits =/= io.in.bits.uop.lqIdx
+  val mergeBufferNack = (io.threshold.get.valid || isOrderIndexed(io.in.bits.uop.fuOpType(6, 5))) &&
+    !(io.threshold.get.bits.robIdx === io.in.bits.uop.robIdx &&
+      io.threshold.get.bits.uopIdx === io.in.bits.uop.vpu.vuopIdx)
   // Split Pipeline
   splitPipeline.io.in <> io.in
   io.in.ready := splitPipeline.io.in.ready && !mergeBufferNack
@@ -545,6 +594,7 @@ class VLSplitImp(implicit p: Parameters) extends VLSUModule{
 
   // Split Buffer
   splitBuffer.io.redirect <> io.redirect
+  splitBuffer.io.fromPipeline.get := io.fromPipeline.get
   io.out <> splitBuffer.io.out
 }
 
@@ -571,4 +621,3 @@ class VSSplitImp(implicit p: Parameters) extends VLSUModule{
 
   io.vstdMisalign.get <> splitBuffer.io.vstdMisalign.get
 }
-
