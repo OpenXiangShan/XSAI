@@ -565,16 +565,8 @@ class XiangShan(object):
         # select a random SPEC checkpoint
         assert(name == "random")
         all_cpt_dir = [
-            "/nfs/home/share/checkpoints_profiles/spec06_rv64gcb_o2_20m/take_cpt",
             "/nfs/home/share/checkpoints_profiles/spec06_rv64gcb_o3_20m/take_cpt",
-            "/nfs/home/share/checkpoints_profiles/spec06_rv64gc_o2_20m/take_cpt",
-            "/nfs/home/share/checkpoints_profiles/spec06_rv64gc_o2_50m/take_cpt",
-            "/nfs/home/share/checkpoints_profiles/spec17_rv64gcb_o2_20m/take_cpt",
-            "/nfs/home/share/checkpoints_profiles/spec17_rv64gcb_o3_20m/take_cpt",
-            "/nfs/home/share/checkpoints_profiles/spec17_rv64gc_o2_50m/take_cpt",
-            "/nfs/home/share/checkpoints_profiles/spec17_speed_rv64gcb_o3_20m/take_cpt",
-            "/nfs/home/share/checkpoints_profiles/spec06_rv64gcb_O3_20m_gcc12.2.0-intFpcOff-jeMalloc/zstd-checkpoint-0-0-0",
-            "/nfs/home/share/checkpoints_profiles/spec06_gcc15_rv64gcbv_O3_lto_base_nemu_single_core_NEMU_archgroup_2024-10-12-16-05/checkpoint-0-0-0"
+            "/nfs/home/share/checkpoints_profiles/spec17_rv64gcb_o3_20m/take_cpt"
         ]
         all_gcpt = load_all_gcpt(all_cpt_dir)
         return [random.choice(all_gcpt)]
