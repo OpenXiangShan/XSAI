@@ -1250,6 +1250,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
                              !FuType.isFence(io.enq.req(i).bits.fuType) &&
                              !FuType.isCsr(io.enq.req(i).bits.fuType) &&
                              !io.enq.req(i).bits.isVset &&
+                             !io.enq.req(i).bits.isMsetcfg &&
                              !FuType.isAMO(io.enq.req(i).bits.fuType)
       robEntries(allocatePtrVec(i).value).interrupt_safe := allow_interrupts
     }
