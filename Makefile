@@ -53,7 +53,6 @@ MEM_GEN_SEP = ./scripts/gen_sep_mem.sh
 
 CONFIG ?= DefaultConfig
 NUM_CORES ?= 1
-VFEXP2_ENABLE ?= 1
 ISSUE ?= E.b
 LLC ?= ZhuJiang
 CHISEL_TARGET ?= systemverilog
@@ -101,13 +100,6 @@ endif
 
 ifneq ($(FIRTOOL),)
 MFC_ARGS += --firtool-binary-path $(abspath $(FIRTOOL))
-endif
-
-# vfexp2 and vfexp2bf16 share one functional unit and are controlled together.
-ifeq ($(VFEXP2_ENABLE),0)
-COMMON_EXTRA_ARGS += --disable-vfexp2
-else ifneq ($(VFEXP2_ENABLE),1)
-$(error "VFEXP2_ENABLE must be 0 or 1")
 endif
 
 # prefix of XSTop or XSNoCTop

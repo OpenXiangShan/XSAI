@@ -61,7 +61,6 @@ object FuType extends OHEnumeration {
   val vfma = addType(name = "vfma")
   val vfdiv = addType(name = "vfdiv")
   val vfcvt = addType(name = "vfcvt")
-  val vfexp2 = addType(name = "vfexp2")
   val vsetiwi = addType(name = "vsetiwi") // vset read rs write rd
   val vsetiwf = addType(name = "vsetiwf") // vset read rs write vconfig
   val vsetfwf = addType(name = "vsetfwf") // vset read old vl write vconfig
@@ -136,7 +135,7 @@ object FuType extends OHEnumeration {
   val fpArithAll = Seq(falu, fcvt, fmac, fDivSqrt, f2v)
   val scalaMemAll = Seq(ldu, stu, mou)
   val vecOPI = Seq(vipu, vialuF, vppu, vimac, vidiv)
-  val vecOPF = Seq(vfpu, vfalu, vfma, vfdiv, vfcvt, vfexp2)
+  val vecOPF = Seq(vfpu, vfalu, vfma, vfdiv, vfcvt)
   val vecVSET = Seq(vsetiwi, vsetiwf, vsetfwf)
   val vecArith = vecOPI ++ vecOPF
   val vecMem = Seq(vldu, vstu, vsegldu, vsegstu)
@@ -144,7 +143,7 @@ object FuType extends OHEnumeration {
   val vecAll = vecVSET ++ vecArithOrMem
   val fpOP = fpArithAll ++ Seq(i2f, i2v)
   val scalaNeedFrm = Seq(i2f, fmac, fDivSqrt)
-  val vectorNeedFrm = Seq(vfalu, vfma, vfdiv, vfcvt, vfexp2)
+  val vectorNeedFrm = Seq(vfalu, vfma, vfdiv, vfcvt)
 
   val matrixMSETtilex = Seq(msetmtilexiwf, msetmtilexfwf)
   val matrixMSET = matrixMSETtilex ++ Seq(mcfg, mrelease)
@@ -290,6 +289,5 @@ object FuType extends OHEnumeration {
     vfma -> "vfma",
     vfdiv -> "vfdiv",
     vfcvt -> "vfcvt",
-    vfexp2 -> "vfexp2",
   )
 }

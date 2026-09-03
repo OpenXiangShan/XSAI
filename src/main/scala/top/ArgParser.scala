@@ -50,7 +50,6 @@ object ArgParser {
       |--disable-perf
       |--disable-alwaysdb
       |--disable-clockgate
-      |--disable-vfexp2
       |--enable-dfx
       |""".stripMargin
 
@@ -153,10 +152,6 @@ object ArgParser {
         case "--disable-clockgate" :: tail =>
           nextOption(config.alter((site, here, up) => {
             case XSTileKey => up(XSTileKey).map(_.copy(EnableClockGate = false))
-          }), tail)
-        case "--disable-vfexp2" :: tail =>
-          nextOption(config.alter((site, here, up) => {
-            case XSTileKey => up(XSTileKey).map(_.copy(HasVfexp2 = false))
           }), tail)
         case "--xstop-prefix" :: value :: tail =>
           nextOption(config.alter((site, here, up) => {
