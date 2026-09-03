@@ -79,7 +79,7 @@ jobs:
           echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
           echo "PERF_HOME=${JOB_HOME}" >> $GITHUB_ENV
           echo "WAVE_HOME=${JOB_HOME}" >> $GITHUB_ENV
-          echo "GCPT_RESTORE_BIN=/nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin" >> $GITHUB_ENV
+          echo "GCPT_RESTORE_BIN=/nfs/home/share/checkpoints_profiles/spec06_gcc16_rv64gcb_260819/gcpt/gcpt.bin" >> $GITHUB_ENV
           mkdir -p "${JOB_HOME}"
       - name: Initialize submodules
         run: make init-force
@@ -92,12 +92,13 @@ jobs:
           cp -L ${EMU_HOME}/emu ${GITHUB_WORKSPACE}/build/emu
       - name: Random Checkpoint ${{ matrix.checkpoint }}
         run: |
+          PERF_LOG="$PERF_HOME/random_${{ matrix.checkpoint }}.txt"
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
             --wave-dump $WAVE_HOME --threads 16 --numa             \
             --ci random --timeout 3600 --ram-size=16GB             \
             --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-            2> perf.log
-          cat perf.log | sort | tee $PERF_HOME/random_${{ matrix.checkpoint }}.txt
+            2> >(tee "$PERF_LOG" >&2)
+          sort -o "$PERF_LOG" "$PERF_LOG"
 
   emu-xsai-performance:
     runs-on:
