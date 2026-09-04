@@ -10,9 +10,7 @@ env:
 
 jobs:
   build-default-matrix:
-    runs-on: bosc
-    outputs:
-      cluster: ${{ steps.save.outputs.cluster }}
+    runs-on: [bosc, node]
     continue-on-error: false
     timeout-minutes: 360
     name: Build DefaultMatrixConfig EMU
@@ -44,20 +42,12 @@ jobs:
             --pgo $GITHUB_WORKSPACE/ready-to-run/coremark-2-iteration.bin \
             --llvm-profdata llvm-profdata --trace-fst
       - name: Save artifact
-        id: save
         run: |
           mkdir -p ${EMU_HOME}
           cp -L ${GITHUB_WORKSPACE}/build/emu ${EMU_HOME}/emu
-          if [[ $(hostname) == *.bosccluster.com ]]; then
-            echo "cluster=node" >> ${GITHUB_OUTPUT}
-          else
-            echo "cluster=open" >> ${GITHUB_OUTPUT}
-          fi
 
   nightly-checkpoints:
-    runs-on:
-      - bosc
-      - ${{ needs.build-default-matrix.outputs.cluster }} # use the same cluster as the builder
+    runs-on: [bosc, node]
     needs: build-default-matrix
     continue-on-error: false
     timeout-minutes: 720
@@ -101,9 +91,7 @@ jobs:
           sort -o "$PERF_LOG" "$PERF_LOG"
 
   emu-xsai-performance:
-    runs-on:
-      - bosc
-      - ${{ needs.build-default-matrix.outputs.cluster }} # use the same cluster as the builder
+    runs-on: [bosc, node]
     needs: build-default-matrix
     continue-on-error: false
     timeout-minutes: 720
@@ -177,9 +165,7 @@ jobs:
           printf '%s\n' "${IPC:-N/A}" | tee "$PERF_HOME/ipc.txt"
 
   emu-xsai-performance-summary:
-    runs-on:
-      - bosc
-      - ${{ needs.build-default-matrix.outputs.cluster }}
+    runs-on: [bosc, node]
     needs:
       - build-default-matrix
       - emu-xsai-performance
