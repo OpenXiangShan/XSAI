@@ -256,6 +256,8 @@ class XSTile()(implicit p: Parameters) extends LazyModule
       core.module.reset := l2top.module.reset_core
     }
 
+    l2top.module.io.matrixPrefetch.foreach(_ := 0.U.asTypeOf(new xscache.coupledL2.prefetch.MatrixPrefetchControl))
+
     cuteOpt.foreach { case cute =>
       l2top.module.io.matrixDataOut512L2 := DontCare
       cute.module.io := DontCare
@@ -266,6 +268,7 @@ class XSTile()(implicit p: Parameters) extends LazyModule
         amuRelease.bits := cute.module.io.cute.ctrl2top.mrelease.bits
         amuRelease.valid := cute.module.io.cute.ctrl2top.mrelease.valid
       }
+      l2top.module.io.matrixPrefetch.foreach(_ := cute.module.io.cute.matrixPrefetch)
 
       val matrix_data_out = l2top.module.io.matrixDataOut512L2
       val matrix_data_in = cute.module.io.matrix_data_in

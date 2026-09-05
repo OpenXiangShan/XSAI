@@ -8,9 +8,10 @@ import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import org.chipsalliance.cde.config._
 import xscache.coupledL2.MatrixDataBundle
-import utility.{ChiselDB, TLLoggerM}
+import utility.{ChiselDB, ReqSourceKey, TLLoggerM}
 import xiangshan.HasXSParameter
-import xscache.coupledL2.{AmeIndexField, AmeIndexKey}
+import xscache.coupledL2.{AmeIndexField, AmeIndexKey, MatrixKey}
+import xscache.coupledL2.prefetch.MatrixPrefetchTagKey
 
 /**
  * A simple wrapper demonstration that integrates CUTEV2Top and Cute2TL,
@@ -28,6 +29,7 @@ class XSCuteTopImpl(wrapper: XSCuteTop) extends LazyModuleImp(wrapper) {
   })
   io.ctrl2top <> cute.io.ctrl2top
   io.perf <> cute.io.perf
+  io.matrixPrefetch := cute.io.matrixPrefetch
   wrapper.cute_tl.module.io.matrix_data_in <> io.matrix_data_in
   wrapper.cute_tl.module.io.mmu <> cute.io.mmu2llc
   io.mmu2llc := DontCare
@@ -128,7 +130,7 @@ class XSCuteTop(implicit p: Parameters) extends LazyModule with XSCuteParameters
       supportsPutFull = TransferSizes(1, transferBytes),
       fifoId = Some(0)
     )),
-    requestKeys = Seq(AmeIndexKey),
+    requestKeys = Seq(AmeIndexKey, MatrixKey, MatrixPrefetchTagKey, ReqSourceKey),
     responseFields = Seq(AmeIndexField()),
     beatBytes = beatBytes))))
 
