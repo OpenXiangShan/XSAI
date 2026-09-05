@@ -529,6 +529,36 @@ class DefaultMatrixConfig(n: Int = 1) extends Config(
   })
 )
 
+// Keep the prefetch-enabled experiment as a separate static configuration so
+// DefaultMatrixConfig remains the reproducible prefetch-off baseline.
+class DefaultMatrixPrefetchConfig(n: Int = 1) extends Config(
+  new DefaultMatrixConfig(n).alter((site, here, up) => {
+    case XSTileKey => up(XSTileKey).map { core =>
+      core.copy(
+        L2CacheParamsOpt = core.L2CacheParamsOpt.map { l2 =>
+          val withoutMatrix = l2.prefetch.filterNot(_.isInstanceOf[MatrixPrefetchParameters])
+          l2.copy(prefetch = withoutMatrix :+ MatrixPrefetchParameters())
+        }
+      )
+    }
+  })
+)
+
+// Controlled Matrix-prefetch experiment: remove BOP/PBOP, TP, next-line and
+// receiver sources while retaining the Matrix-guided prefetch datapath.
+class DefaultMatrixOnlyPrefetchConfig(n: Int = 1) extends Config(
+  new DefaultMatrixConfig(n).alter((site, here, up) => {
+    case XSTileKey => up(XSTileKey).map { core =>
+      core.copy(
+        prefetcher = None,
+        L2CacheParamsOpt = core.L2CacheParamsOpt.map(
+          _.copy(prefetch = Seq(MatrixPrefetchParameters()))
+        )
+      )
+    }
+  })
+)
+
 class FpgaDiffDefaultMatrixConfig(n: Int = 1) extends Config(
   new DefaultMatrixConfig(n).alter((site, here, up) => {
     case DebugOptionsKey =>

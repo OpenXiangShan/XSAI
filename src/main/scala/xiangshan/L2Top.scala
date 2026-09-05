@@ -19,6 +19,7 @@ package xiangshan
 import chisel3._
 import chisel3.util._
 import xscache.coupledL2.MatrixDataBundle
+import xscache.coupledL2.prefetch.{MatrixPrefetchControl, MatrixPrefetchParameters}
 import org.chipsalliance.cde.config._
 import chisel3.util.{Valid, ValidIO}
 import freechips.rocketchip.devices.debug.DebugModuleKey
@@ -74,6 +75,9 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
     (buffers, node)
   }
   val enableL2 = coreParams.L2CacheParamsOpt.isDefined
+  val enableMatrixPrefetch = coreParams.L2CacheParamsOpt.exists(
+    _.prefetch.exists(_.isInstanceOf[MatrixPrefetchParameters])
+  )
   // =========== Components ============
   val l1_xbar = TLXbar()
   val mmio_xbar = TLXbar()
@@ -238,6 +242,7 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
       // val reset_core = IO(Output(Reset()))
 
       val matrixDataOut512L2 = Vec(coreParams.L2NBanks, DecoupledIO(new MatrixDataBundle()))
+      val matrixPrefetch = Option.when(enableMatrixPrefetch)(Input(new MatrixPrefetchControl))
     })
     io.dft_out.zip(io.dft).foreach({ case(a, b) => a := b })
     io.dft_reset_out.zip(io.dft_reset).foreach({ case(a, b) => a := b })
@@ -312,6 +317,7 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
       val l2 = l2cache.get.module
 
       l2.io.pfCtrlFromCore := io.pfCtrlFromCore
+      l2.io.matrixPrefetch.foreach(_ := io.matrixPrefetch.get)
       l2.io.dft.zip(io.dft).foreach({ case(a, b) => a := b })
       l2.io.dft_reset.zip(io.dft_reset).foreach({ case(a, b) => a := b })
       io.l2_hint := l2.io.l2_hint
@@ -358,7 +364,9 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
       l2.io.l2_tlb_req.pmp_resp.mmio := io.l2_pmp_resp.mmio
       l2.io.l2_tlb_req.pmp_resp.atomic := io.l2_pmp_resp.atomic
       l2.io.nodeID := io.nodeID.get
-      io.chi.get <> l2.io.chi
+      // CoupledL2 exposes the legacy credit-based CHI port as lcreditCHI;
+      // keep the wrapper connection optional for decoupled-downstream builds.
+      l2.io.lcreditCHI.foreach(_ <> io.chi.get)
       l2.io.cpu_wfi.foreach { _ := io.cpu_halt.fromCore }
       l2.io.matrixDataOut.foreach { matrixDataOut =>
         io.matrixDataOut512L2 <> matrixDataOut
