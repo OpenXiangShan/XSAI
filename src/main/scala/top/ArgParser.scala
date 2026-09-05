@@ -37,6 +37,7 @@ object ArgParser {
       |--xs-help                  print this help message
       |--version                  print version info
       |--config <ConfigClassName>
+      |--llc <OpenLLC|ZhuJiang>
       |--num-cores <Int>
       |--hartidbits <Int>
       |--with-dramsim3
@@ -49,6 +50,7 @@ object ArgParser {
       |--disable-perf
       |--disable-alwaysdb
       |--disable-clockgate
+      |--disable-vfexp2
       |--enable-dfx
       |""".stripMargin
 
@@ -82,6 +84,8 @@ object ArgParser {
           nextOption(config.alter((site, here, up) => {
             case xscache.chi.CHIIssue => issueString
           }), tail)
+        case "--llc" :: llcString :: tail =>
+          nextOption(config.alter(LLCConfig(llcString)), tail)
         case "--num-cores" :: value :: tail =>
           nextOption(config.alter((site, here, up) => {
             case XSTileKey => (0 until value.toInt) map { i =>
@@ -150,6 +154,10 @@ object ArgParser {
           nextOption(config.alter((site, here, up) => {
             case XSTileKey => up(XSTileKey).map(_.copy(EnableClockGate = false))
           }), tail)
+        case "--disable-vfexp2" :: tail =>
+          nextOption(config.alter((site, here, up) => {
+            case XSTileKey => up(XSTileKey).map(_.copy(HasVfexp2 = false))
+          }), tail)
         case "--xstop-prefix" :: value :: tail =>
           nextOption(config.alter((site, here, up) => {
             case SoCParamsKey => up(SoCParamsKey).copy(XSTopPrefix = Some(value))
@@ -187,14 +195,16 @@ object ArgParser {
           nextOption(config.alter((site, here, up) => {
             case SoCParamsKey =>
               val socParam = up(SoCParamsKey)
+              val sizeInBytes = value.toInt * 1024
               val banks = socParam.OpenLLCParamsOpt.map(_.banks).getOrElse(socParam.L3NBanks)
               val openLLCWays = socParam.OpenLLCParamsOpt.map(_.ways)
-              val openLLCSets = openLLCWays.map(value.toInt * 1024 / banks / _ / 64)
+              val openLLCSets = openLLCWays.map(sizeInBytes / banks / _ / 64)
               val openLLCParam = socParam.OpenLLCParamsOpt.map(_.copy(
                 sets = openLLCSets.get
               ))
               socParam.copy(
-                OpenLLCParamsOpt = openLLCParam
+                OpenLLCParamsOpt = openLLCParam,
+                ZhuJiangParams = socParam.ZhuJiangParams.copy(cacheSizeInB = sizeInBytes)
               )
           }), tail)
         case "--sim-mem-size" :: value :: tail =>
@@ -232,6 +242,10 @@ object ArgParser {
         case "--disable-xmr" :: tail =>
           nextOption(config.alter((site, here, up) => {
             case DebugOptionsKey => up(DebugOptionsKey).copy(EnableXMR = false)
+          }), tail)
+        case "--disable-cached-parameters" :: tail =>
+          nextOption(config.alter((site, here, up) => {
+            case CachedParameterKey => false
           }), tail)
         case "--yaml-config" :: yamlFile :: tail =>
           nextOption(YamlParser.parseYaml(config, yamlFile), tail)

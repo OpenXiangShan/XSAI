@@ -7,6 +7,10 @@ on:
   pull_request:
     branches: [ master, dev-v0.6 ]
 
+env:
+  CI_HOME: /nfs/home/ci-runner/xsai-emu/${{ github.run_number }}
+  EMU_HOME: /nfs/home/ci-runner/xsai-emu/${{ github.run_number }}/default-matrix
+
 jobs:
   changes: # Changes Detection
     name: Changes Detection
@@ -39,11 +43,11 @@ jobs:
           submodules: true
       - name: set env
         run: |
-          export HEAD_SHA=${{ github.run_number }}
+          JOB_HOME="${CI_HOME}/generate-verilog"
           echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
           echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
-          echo "WAVE_HOME=/nfs/home/ci-runner/xsai-wave/${HEAD_SHA}" >> $GITHUB_ENV
-          mkdir -p /nfs/home/ci-runner/xsai-wave/${HEAD_SHA}
+          echo "WAVE_HOME=${JOB_HOME}" >> $GITHUB_ENV
+          mkdir -p "${JOB_HOME}"
       - name: Initialize submodules
         run: make init-force
       - name: clean up
@@ -79,6 +83,11 @@ jobs:
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
       - name: build MinimalMatrixConfig Release emu
         run: |
+          sed -i \
+            -e 's/--output-split 30000/--output-split 5000/' \
+            -e 's/--output-split-cfuncs 30000/--output-split-cfuncs 5000/' \
+            -e 's/OPT_FAST ?= -O3/OPT_FAST ?= -O3\\ -fno-vectorize\\ -fno-slp-vectorize/' \
+            $GITHUB_WORKSPACE/difftest/verilator.mk
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --build \
             --threads 8 --config MinimalMatrixConfig --release --trace-fst
       - name: run MinimalMatrixConfig - Linux
@@ -86,13 +95,15 @@ jobs:
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 8 --numa --ci linux-hello-opensbi 2> perf.log
           cat perf.log | sort
 
-  emu-xsai-basics:
+  build-xsai-emu:
     runs-on: bosc
     needs: changes
     if: ${{ needs.changes.outputs.core == 'true' }}
+    outputs:
+      cluster: ${{ steps.save.outputs.cluster }}
     continue-on-error: false
     timeout-minutes: 900
-    name: EMU - XSAI Basics
+    name: EMU - Build DefaultMatrixConfig
     steps:
       - uses: actions/checkout@v7
         with:
@@ -100,15 +111,9 @@ jobs:
           submodules: true
       - name: set env
         run: |
-          export HEAD_SHA=${{ github.run_number }}
           echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
           echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
           echo "AM_HOME=/nfs/home/share/ci-workloads/nexus-am" >> $GITHUB_ENV
-          echo "PERF_HOME=/nfs/home/ci-runner/xsai-perf/${HEAD_SHA}" >> $GITHUB_ENV
-          echo "WAVE_HOME=/nfs/home/ci-runner/xsai-wave/${HEAD_SHA}" >> $GITHUB_ENV
-          echo "GCPT_RESTORE_BIN=/nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin" >> $GITHUB_ENV
-          mkdir -p /nfs/home/ci-runner/xsai-perf/${HEAD_SHA}
-          mkdir -p /nfs/home/ci-runner/xsai-wave/${HEAD_SHA}
       - name: Initialize submodules
         run: make init-force
       - name: clean up
@@ -116,8 +121,56 @@ jobs:
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
       - name: Build EMU
         run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --build --threads 16 \
+          sed -i \
+            -e 's/--output-split 30000/--output-split 5000/' \
+            -e 's/--output-split-cfuncs 30000/--output-split-cfuncs 5000/' \
+            -e 's/OPT_FAST ?= -O3/OPT_FAST ?= -O3\\ -fno-vectorize\\ -fno-slp-vectorize/' \
+            $GITHUB_WORKSPACE/difftest/verilator.mk
+          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --build --threads 8 \
             --config DefaultMatrixConfig --pgo $GITHUB_WORKSPACE/ready-to-run/coremark-2-iteration.bin --llvm-profdata llvm-profdata --trace-fst
+      - name: Save artifact
+        id: save
+        run: |
+          mkdir -p "${EMU_HOME}"
+          cp -L "${GITHUB_WORKSPACE}/build/emu" "${EMU_HOME}/emu"
+          if [[ $(hostname) == *.bosccluster.com ]]; then
+            echo "cluster=node" >> "$GITHUB_OUTPUT"
+          else
+            echo "cluster=open" >> "$GITHUB_OUTPUT"
+          fi
+
+  emu-xsai-isa-ame:
+    runs-on:
+      - bosc
+      - ${{ needs.build-xsai-emu.outputs.cluster }}
+    needs: build-xsai-emu
+    continue-on-error: false
+    timeout-minutes: 900
+    name: EMU - XSAI ISA and AME
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: true
+      - name: set env
+        run: |
+          JOB_HOME="${CI_HOME}/basics/isa-ame"
+          echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
+          echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
+          echo "AM_HOME=/nfs/home/share/ci-workloads/nexus-am" >> $GITHUB_ENV
+          echo "PERF_HOME=${JOB_HOME}" >> $GITHUB_ENV
+          echo "WAVE_HOME=${JOB_HOME}" >> $GITHUB_ENV
+          echo "GCPT_RESTORE_BIN=/nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin" >> $GITHUB_ENV
+          mkdir -p "${JOB_HOME}"
+      - name: Initialize submodules
+        run: make init-force
+      - name: clean up
+        run: |
+          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
+      - name: Get artifact
+        run: |
+          mkdir -p build
+          cp -L "${EMU_HOME}/emu" "${GITHUB_WORKSPACE}/build/emu"
       - name: Basic Test - cputest
         run: |
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --ci cputest 2> /dev/zero
@@ -130,39 +183,146 @@ jobs:
       - name: Basic AME Test
         run: |
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci ame-tests 2> /dev/zero
+
+  emu-xsai-hypervisor:
+    runs-on:
+      - bosc
+      - ${{ needs.build-xsai-emu.outputs.cluster }}
+    needs: build-xsai-emu
+    continue-on-error: false
+    timeout-minutes: 900
+    name: EMU - XSAI Hypervisor
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: true
+      - name: set env
+        run: |
+          JOB_HOME="${CI_HOME}/basics/hypervisor"
+          echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
+          echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
+          echo "AM_HOME=/nfs/home/share/ci-workloads/nexus-am" >> $GITHUB_ENV
+          echo "PERF_HOME=${JOB_HOME}" >> $GITHUB_ENV
+          echo "WAVE_HOME=${JOB_HOME}" >> $GITHUB_ENV
+          echo "GCPT_RESTORE_BIN=/nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin" >> $GITHUB_ENV
+          mkdir -p "${JOB_HOME}"
+      - name: Initialize submodules
+        run: make init-force
+      - name: clean up
+        run: |
+          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
+      - name: Get artifact
+        run: |
+          mkdir -p build
+          cp -L "${EMU_HOME}/emu" "${GITHUB_WORKSPACE}/build/emu"
       - name: Extension Test - hypervisor
         run: |
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci rvh-tests 2> /dev/zero
+
+  emu-xsai-system:
+    runs-on:
+      - bosc
+      - ${{ needs.build-xsai-emu.outputs.cluster }}
+    needs: build-xsai-emu
+    continue-on-error: false
+    timeout-minutes: 900
+    name: EMU - XSAI Microbench, CoreMark, and Linux
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: true
+      - name: set env
+        run: |
+          JOB_HOME="${CI_HOME}/basics/system"
+          echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
+          echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
+          echo "AM_HOME=/nfs/home/share/ci-workloads/nexus-am" >> $GITHUB_ENV
+          echo "PERF_HOME=${JOB_HOME}" >> $GITHUB_ENV
+          echo "WAVE_HOME=${JOB_HOME}" >> $GITHUB_ENV
+          echo "GCPT_RESTORE_BIN=/nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin" >> $GITHUB_ENV
+          mkdir -p "${JOB_HOME}"
+          : > "${JOB_HOME}/microbench.ipc"
+          : > "${JOB_HOME}/coremark.ipc"
+          : > "${JOB_HOME}/linux.ipc"
+      - name: Initialize submodules
+        run: make init-force
+      - name: clean up
+        run: |
+          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
+      - name: Get artifact
+        run: |
+          mkdir -p build
+          cp -L "${EMU_HOME}/emu" "${GITHUB_WORKSPACE}/build/emu"
       - name: Simple Test - microbench
-        id: microbench
         run: |
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --ci microbench 2> perf.log | tee stdout.log
           cat perf.log | sort | tee $PERF_HOME/microbench.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
+          IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log || true)
+          printf '%s\n' "${IPC:-N/A}" | tee "$PERF_HOME/microbench.ipc"
       - name: Simple Test - CoreMark
-        id: coremark
         run: |
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci coremark 2> perf.log | tee stdout.log
           cat perf.log | sort | tee $PERF_HOME/coremark.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
+          IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log || true)
+          printf '%s\n' "${IPC:-N/A}" | tee "$PERF_HOME/coremark.ipc"
       - name: System Test - Linux
-        id: linux
         run: |
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci linux-hello-opensbi 2> perf.log | tee stdout.log
           cat perf.log | sort | tee $PERF_HOME/linux.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
+          IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log || true)
+          printf '%s\n' "${IPC:-N/A}" | tee "$PERF_HOME/linux.ipc"
+
+  emu-xsai-extensions:
+    runs-on:
+      - bosc
+      - ${{ needs.build-xsai-emu.outputs.cluster }}
+    needs: build-xsai-emu
+    continue-on-error: false
+    timeout-minutes: 900
+    name: EMU - XSAI Other Extensions
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: true
+      - name: set env
+        run: |
+          JOB_HOME="${CI_HOME}/basics/extensions"
+          echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
+          echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
+          echo "AM_HOME=/nfs/home/share/ci-workloads/nexus-am" >> $GITHUB_ENV
+          echo "PERF_HOME=${JOB_HOME}" >> $GITHUB_ENV
+          echo "WAVE_HOME=${JOB_HOME}" >> $GITHUB_ENV
+          echo "GCPT_RESTORE_BIN=/nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin" >> $GITHUB_ENV
+          mkdir -p "${JOB_HOME}"
+          : > "${JOB_HOME}/povray.ipc"
+          : > "${JOB_HOME}/copy_and_run.ipc"
+      - name: Initialize submodules
+        run: make init-force
+      - name: clean up
+        run: |
+          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
+      - name: Get artifact
+        run: |
+          mkdir -p build
+          cp -L "${EMU_HOME}/emu" "${GITHUB_WORKSPACE}/build/emu"
       - name: Floating-point Test - povray
-        id: povray
         run: |
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --max-instr 5000000 --ci povray --gcpt-restore-bin $GCPT_RESTORE_BIN 2> perf.log | tee stdout.log
           cat perf.log | sort | tee $PERF_HOME/povray.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
+          IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log || true)
+          printf '%s\n' "${IPC:-N/A}" | tee "$PERF_HOME/povray.ipc"
       - name: Uncache Fetch Test - copy and run
-        id: copy_and_run
         run: |
           $GITHUB_WORKSPACE/build/emu  -F $GITHUB_WORKSPACE/ready-to-run/copy_and_run.bin -i $GITHUB_WORKSPACE/ready-to-run/microbench.bin --diff $GITHUB_WORKSPACE/ready-to-run/riscv64-nemu-interpreter-so --enable-fork 2> perf.log | tee stdout.log
           cat perf.log | sort | tee $PERF_HOME/copy_and_run.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
+          IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log || true)
+          printf '%s\n' "${IPC:-N/A}" | tee "$PERF_HOME/copy_and_run.ipc"
+      - name: VFEXP2 Extension Test - vfexp2test
+        run: |
+          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci vfexp2test 2> /dev/zero
       - name: V Extension Test - rvv-bench
         run: |
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci rvv-bench 2> /dev/zero
@@ -172,17 +332,59 @@ jobs:
       - name: Zcb Extension Test - zcb-test
         run: |
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci zcb-test 2> /dev/zero
+
+  emu-xsai-basics:
+    runs-on:
+      - bosc
+      - ${{ needs.build-xsai-emu.outputs.cluster }}
+    needs:
+      - build-xsai-emu
+      - emu-xsai-isa-ame
+      - emu-xsai-hypervisor
+      - emu-xsai-system
+      - emu-xsai-extensions
+    if: ${{ always() && needs.build-xsai-emu.result == 'success' }}
+    continue-on-error: false
+    timeout-minutes: 30
+    name: EMU - XSAI Basics
+    steps:
       - name: Generate summary
-        if: always()
+        shell: bash
         run: |
-          echo "## Emu - Basics summary" >> $GITHUB_STEP_SUMMARY
-          echo "| Testcase | IPC |" >> $GITHUB_STEP_SUMMARY
-          echo "| -------- | --- |" >> $GITHUB_STEP_SUMMARY
-          echo "| microbench | ${{ steps.microbench.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| coremark | ${{ steps.coremark.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| linux | ${{ steps.linux.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| povray | ${{ steps.povray.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| copy_and_run | ${{ steps.copy_and_run.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
+          write_ipc_row() {
+            local testcase="$1"
+            local ipc_file="$2"
+            local ipc="N/A"
+            if [[ -s "${ipc_file}" ]]; then
+              ipc=$(head -n 1 "${ipc_file}")
+            fi
+            echo "| ${testcase} | ${ipc} |"
+          }
+
+          {
+            echo "## Emu - Basics summary"
+            echo "| Testcase | IPC |"
+            echo "| -------- | --- |"
+            write_ipc_row microbench "${CI_HOME}/basics/system/microbench.ipc"
+            write_ipc_row coremark "${CI_HOME}/basics/system/coremark.ipc"
+            write_ipc_row linux "${CI_HOME}/basics/system/linux.ipc"
+            write_ipc_row povray "${CI_HOME}/basics/extensions/povray.ipc"
+            write_ipc_row copy_and_run "${CI_HOME}/basics/extensions/copy_and_run.ipc"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Check test jobs
+        env:
+          ISA_AME_RESULT: ${{ needs.emu-xsai-isa-ame.result }}
+          HYPERVISOR_RESULT: ${{ needs.emu-xsai-hypervisor.result }}
+          SYSTEM_RESULT: ${{ needs.emu-xsai-system.result }}
+          EXTENSIONS_RESULT: ${{ needs.emu-xsai-extensions.result }}
+        run: |
+          if [[ "$ISA_AME_RESULT" != "success" || \
+                "$HYPERVISOR_RESULT" != "success" || \
+                "$SYSTEM_RESULT" != "success" || \
+                "$EXTENSIONS_RESULT" != "success" ]]; then
+            echo "One or more XSAI test jobs failed or were cancelled."
+            exit 1
+          fi
 
   docker-build:
     name: Docker Build
@@ -200,117 +402,6 @@ jobs:
       - name: Compile generator JAR
         run: make test-jar
 
-  emu-xsai-performance:
-    runs-on: bosc
-    needs: changes
-    if: ${{ needs.changes.outputs.core == 'true' }}
-    continue-on-error: false
-    timeout-minutes: 900
-    name: EMU - XSAI General-Purpose Performance
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          submodules: true
-      - name: set env
-        run: |
-          export HEAD_SHA=${{ github.run_number }}
-          echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
-          echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
-          echo "AM_HOME=/nfs/home/share/ci-workloads/nexus-am" >> $GITHUB_ENV
-          echo "PERF_HOME=/nfs/home/ci-runner/xsai-perf/${HEAD_SHA}" >> $GITHUB_ENV
-          echo "WAVE_HOME=/nfs/home/ci-runner/xsai-wave/${HEAD_SHA}" >> $GITHUB_ENV
-          echo "GCPT_RESTORE_BIN=/nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin" >> $GITHUB_ENV
-          mkdir -p /nfs/home/ci-runner/xsai-perf/${HEAD_SHA}
-          mkdir -p /nfs/home/ci-runner/xsai-wave/${HEAD_SHA}
-      - name: Initialize submodules
-        run: make init-force
-      - name: clean up
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
-      - name: Build EMU
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --build \
-            --dramsim3 /nfs/home/share/ci-workloads/DRAMsim3 --with-dramsim3 --threads 16 \
-            --config DefaultMatrixConfig \
-            --pgo $GITHUB_WORKSPACE/ready-to-run/coremark-2-iteration.bin --llvm-profdata llvm-profdata --trace-fst
-      - name: SPEC06 Test - hmmer-Vector
-        id: hmmer_vector
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --max-instr 5000000 --numa --ci hmmer-Vector 2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/hmmer-Vector.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
-      - name: SPEC06 Test - mcf
-        id: mcf
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --max-instr 5000000 --numa --ci mcf --gcpt-restore-bin $GCPT_RESTORE_BIN 2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/mcf.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
-      - name: SPEC06 Test - xalancbmk
-        id: xalancbmk
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --max-instr 5000000 --numa --ci xalancbmk --gcpt-restore-bin $GCPT_RESTORE_BIN 2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/xalancbmk.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
-      - name: SPEC06 Test - gcc
-        id: gcc
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --max-instr 5000000 --numa --ci gcc --gcpt-restore-bin $GCPT_RESTORE_BIN 2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/gcc.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
-      - name: SPEC06 Test - namd
-        id: namd
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --max-instr 5000000 --numa --ci namd --gcpt-restore-bin $GCPT_RESTORE_BIN 2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/namd.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
-      - name: SPEC06 Test - milc
-        id: milc
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --max-instr 5000000 --numa --ci milc --gcpt-restore-bin $GCPT_RESTORE_BIN 2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/milc.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
-      - name: SPEC06 Test - lbm
-        id: lbm
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --max-instr 5000000 --numa --ci lbm --gcpt-restore-bin $GCPT_RESTORE_BIN 2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/lbm.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
-      - name: SPEC06 Test - gromacs
-        id: gromacs
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --max-instr 5000000 --numa --ci gromacs --gcpt-restore-bin $GCPT_RESTORE_BIN 2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/gromacs.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
-      - name: SPEC06 Test - wrf
-        id: wrf
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --max-instr 5000000 --numa --ci wrf --gcpt-restore-bin $GCPT_RESTORE_BIN 2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/wrf.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
-      - name: SPEC06 Test - astar
-        id: astar
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --max-instr 5000000 --numa --ci astar --gcpt-restore-bin $GCPT_RESTORE_BIN 2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/astar.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
-      - name: Generate summary
-        if: always()
-        run: |
-          echo "## Emu - Performance summary" >> $GITHUB_STEP_SUMMARY
-          echo "| Testcase | IPC |" >> $GITHUB_STEP_SUMMARY
-          echo "| -------- | --- |" >> $GITHUB_STEP_SUMMARY
-          echo "| hmmer-Vector | ${{ steps.hmmer_vector.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| mcf | ${{ steps.mcf.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| xalancbmk | ${{ steps.xalancbmk.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| gcc | ${{ steps.gcc.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| namd | ${{ steps.namd.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| milc | ${{ steps.milc.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| lbm | ${{ steps.lbm.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| gromacs | ${{ steps.gromacs.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| wrf | ${{ steps.wrf.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| astar | ${{ steps.astar.outputs.IPC }} |" >> $GITHUB_STEP_SUMMARY
-
   emu-xsai-mc:
     runs-on: bosc
     needs: changes
@@ -325,14 +416,13 @@ jobs:
           submodules: true
       - name: set env
         run: |
-          export HEAD_SHA=${{ github.run_number }}
+          JOB_HOME="${CI_HOME}/mc"
           echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
           echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
           echo "AM_HOME=/nfs/home/share/ci-workloads/nexus-am" >> $GITHUB_ENV
-          echo "PERF_HOME=/nfs/home/ci-runner/xsai-perf/${HEAD_SHA}" >> $GITHUB_ENV
-          echo "WAVE_HOME=/nfs/home/ci-runner/xsai-wave/${HEAD_SHA}" >> $GITHUB_ENV
-          mkdir -p /nfs/home/ci-runner/xsai-perf/${HEAD_SHA}
-          mkdir -p /nfs/home/ci-runner/xsai-wave/${HEAD_SHA}
+          echo "PERF_HOME=${JOB_HOME}" >> $GITHUB_ENV
+          echo "WAVE_HOME=${JOB_HOME}" >> $GITHUB_ENV
+          mkdir -p "${JOB_HOME}"
       - name: Initialize submodules
         run: make init-force
       - name: clean up
@@ -340,9 +430,14 @@ jobs:
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
       - name: Build MC EMU
         run: |
+          sed -i \
+            -e 's/--output-split 30000/--output-split 5000/' \
+            -e 's/--output-split-cfuncs 30000/--output-split-cfuncs 5000/' \
+            -e 's/OPT_FAST ?= -O3/OPT_FAST ?= -O3\\ -fno-vectorize\\ -fno-slp-vectorize/' \
+            $GITHUB_WORKSPACE/difftest/verilator.mk
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --build \
             --num-cores 2 --emu-optimize "" --config DefaultMatrixConfig \
-            --dramsim3 /nfs/home/share/ci-workloads/DRAMsim3 --with-dramsim3 --threads 16 \
+            --dramsim3 /nfs/home/share/ci-workloads/DRAMsim3 --with-dramsim3 --threads 8 \
             --pgo /nfs/home/share/ci-workloads/linux-hello-smp-new/bbl.bin --llvm-profdata llvm-profdata --trace-fst
       - name: MC Test
         run: |
@@ -350,53 +445,6 @@ jobs:
       - name: SMP Linux
         run: |
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --diff ./ready-to-run/riscv64-nemu-interpreter-dual-so --ci linux-hello-smp-new 2> /dev/null
-
-  emu-no-matrix:
-    runs-on: bosc
-    needs: changes
-    if: ${{ needs.changes.outputs.core == 'true' }}
-    continue-on-error: false
-    timeout-minutes: 900
-    name: EMU - XS without Matrix
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          submodules: true
-      - name: set env
-        run: |
-          export HEAD_SHA=${{ github.run_number }}
-          echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
-          echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
-          echo "AM_HOME=/nfs/home/share/ci-workloads/nexus-am" >> $GITHUB_ENV
-          echo "PERF_HOME=/nfs/home/ci-runner/xsai-perf/${HEAD_SHA}" >> $GITHUB_ENV
-          echo "WAVE_HOME=/nfs/home/ci-runner/xsai-wave/${HEAD_SHA}" >> $GITHUB_ENV
-          echo "GCPT_RESTORE_BIN=/nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin" >> $GITHUB_ENV
-          mkdir -p /nfs/home/ci-runner/xsai-perf/${HEAD_SHA}
-          mkdir -p /nfs/home/ci-runner/xsai-wave/${HEAD_SHA}
-      - name: Initialize submodules
-        run: make init-force
-      - name: clean up
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
-      - name: Build EMU
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --build \
-            --config DefaultConfig \
-            --dramsim3 /nfs/home/share/ci-workloads/DRAMsim3 --with-dramsim3 --threads 16 \
-            --pgo $GITHUB_WORKSPACE/ready-to-run/coremark-2-iteration.bin --llvm-profdata llvm-profdata --trace-fst
-      - name: Simple Test - CoreMark
-        id: coremark
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci coremark 2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/coremark.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
-      - name: System Test - Linux
-        id: linux
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci linux-hello-opensbi 2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/linux.log
-          echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
 
   scalafmt:
     runs-on: ubuntu-latest
@@ -409,7 +457,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: 'recursive'
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '11'

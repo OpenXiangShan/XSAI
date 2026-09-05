@@ -203,10 +203,10 @@ class LoadQueueReplay(implicit p: Parameters) extends XSModule
     val sqEmpty = Input(Bool())
     val lqFull  = Output(Bool())
     val ldWbPtr = Input(new LqPtr)
+    val robDeqPtr = Input(new RobPtr)
     val rarFull = Input(Bool())
     val rawFull = Input(Bool())
     val loadMisalignFull = Input(Bool())
-    val misalignAllowSpec = Input(Bool())
     val l2_hint  = Input(Valid(new L2ToL1Hint()))
     val tlb_hint = Flipped(new TlbHintIO)
     val tlbReplayDelayCycleCtrl = Vec(4, Input(UInt(ReSelectLen.W)))
@@ -364,7 +364,7 @@ class LoadQueueReplay(implicit p: Parameters) extends XSModule
     }
     // case C_MF
     when (cause(i)(LoadReplayCauses.C_MF)) {
-      blocking(i) := Mux(!io.loadMisalignFull && (io.misalignAllowSpec || !isAfter(uop(i).lqIdx, io.ldWbPtr)), false.B, blocking(i))
+      blocking(i) := Mux(!isAfter(uop(i).robIdx, io.robDeqPtr), false.B, blocking(i))
     }
   })
 
@@ -605,7 +605,8 @@ class LoadQueueReplay(implicit p: Parameters) extends XSModule
 
   // LoadQueueReplay can't backpressure.
   // We think LoadQueueReplay can always enter, as long as it is the same size as VirtualLoadQueue.
-  assert(freeList.io.canAllocate.reduce(_ || _) || !io.enq.map(_.valid).reduce(_ || _), s"LoadQueueReplay Overflow")
+  XSError(!freeList.io.canAllocate.reduce(_ || _) && io.enq.map{ case port =>
+    port.valid && !port.bits.isLoadReplay}.reduce(_ || _), s"LoadQueueReplay Overflow")
 
   // Allocate logic
   needEnqueue.zip(newEnqueue).zip(io.enq).map {

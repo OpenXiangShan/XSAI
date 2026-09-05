@@ -210,9 +210,9 @@ trait PMAMethod extends PMAConst {
 trait PMACheckMethod extends PMPConst {
   def pma_check(cmd: UInt, cfg: PMPConfig) = {
     val resp = Wire(new PMPRespBundle)
-    resp.ld := TlbCmd.isRead(cmd) && !cfg.r
+    resp.ld := (TlbCmd.isRead(cmd) || TlbCmd.isReadExec(cmd)) && !cfg.r || cmd === TlbCmd.atom_read && !cfg.atomic
     resp.st := Mux(TlbCmd.isAmo(cmd), !cfg.atomic || !cfg.w, Mux(TlbCmd.isWrite(cmd), !cfg.w, false.B))
-    resp.instr := TlbCmd.isExec(cmd) && !cfg.x
+    resp.instr := (TlbCmd.isExec(cmd) || TlbCmd.isReadExec(cmd)) && !cfg.x
     resp.mmio := !cfg.c
     resp.atomic := cfg.atomic
     resp
@@ -223,6 +223,7 @@ trait PMACheckMethod extends PMPConst {
     size: UInt,
     pmaEntries: Vec[PMPEntry],
     mode: UInt,
+    debug: Bool,
     lgMaxSize: Int
   ) = {
     val num = pmaEntries.size
@@ -237,7 +238,8 @@ trait PMACheckMethod extends PMPConst {
     val cfg_vec = Wire(Vec(num+1, new PMPEntry()))
 
     pmaEntries.zip(pmaDefault +: pmaEntries.take(num-1)).zipWithIndex.foreach{ case ((pma, last_pma), i) =>
-      val is_match = pma.is_match(addr, size, lgMaxSize, last_pma)
+      val is_match = pma.is_match(addr, size, lgMaxSize, last_pma) &&
+                     Mux(addr >= debugStart.U && addr <= debugEnd.U, debug, true.B)
       val aligned = pma.aligned(addr, size, lgMaxSize, last_pma)
 
       val cur = WireInit(pma)

@@ -197,10 +197,10 @@ trait HasCoreLowPowerImp[+L <: HasXSTile] { this: BaseXSSocImp with HasXSTileCHI
 trait HasXSTile { this: BaseXSSoc =>
 
   // xstile
-  val core_with_l2 = LazyModule(new XSTileWrap()(p.alter((site, here, up) => {
+  val core_with_l2 = LazyModule(new XSTileWrap()(XSCachedParametersOptional(p(CachedParameterKey), p.alter((site, here, up) => {
     case XSCoreParamsKey => tiles.head
     case PerfCounterOptionsKey => up(PerfCounterOptionsKey).copy(perfDBHartID = tiles.head.HartId)
-  })))
+  }))))
   // interrupts
   val clintIntNode = Option.when(!UsePrivateClint)(IntSourceNode(IntSourcePortSimple(1, 1, 2)))
   val debugIntNode = IntSourceNode(IntSourcePortSimple(1, 1, 1))
@@ -267,19 +267,19 @@ trait HasXSTileImp[+L <: HasXSTile] { this: BaseXSSocImp with HasAsyncClockImp =
 trait HasXSTileCHIImp[+L <: HasXSTile] extends HasXSTileImp[L] {
   this: BaseXSSocImp with HasAsyncClockImp =>
 
-  val io_chi = IO(new PortIO)
+  require(socParams.isOpenLLC, "XSNoCTop currently supports only LLC=OpenLLC")
 
-  require(socParams.enableCHI)
+  val io_chi = IO(new PortIO)
 
   socParams.EnableCHIAsyncBridge match {
     case Some(param) =>
       withClockAndReset(noc_clock.get, noc_reset_sync.get) {
         val time_sink = Module(new CHIAsyncBridgeSink(param))
-        time_sink.io.async <> core_with_l2.module.io.chi
+        time_sink.io.async <> core_with_l2.module.io.chi.get
         io_chi <> time_sink.io.deq
       }
     case None =>
-      io_chi <> core_with_l2.module.io.chi
+      io_chi <> core_with_l2.module.io.chi.get
   }
 }
 
@@ -417,41 +417,39 @@ trait HasIMSICImp[+L <: HasIMSIC] { this: BaseXSSocImp with HasAsyncClockImp
   }
 }
 
-trait HasTraceIO { this: BaseXSSoc with HasXSTile =>
-  InModuleBody {
-    val io = new Bundle {
-      val traceCoreInterface = IO(new Bundle {
-        val fromEncoder = Input(new Bundle {
-          val enable = Bool()
-          val stall  = Bool()
-        })
-        val toEncoder   = Output(new Bundle {
-          val cause     = UInt(TraceCauseWidth.W)
-          val tval      = UInt(TraceTvalWidth.W)
-          val priv      = UInt(TracePrivWidth.W)
-          val mstatus   = UInt(TraceStatusWidth.W)
-          val valid     = UInt(TraceGrpNum.W)
-          val iaddr     = UInt((TraceGrpNum * TraceIaddrWidth).W)
-          val itype     = UInt((TraceGrpNum * TraceItypeWidth).W)
-          val iretire   = UInt((TraceGrpNum * TraceIretireWidthCompressed).W)
-          val ilastsize = UInt((TraceGrpNum * TraceIlastsizeWidth).W)
-        })
+trait HasTraceIOImp[+L <: HasXSTile] {
+  this: BaseXSSocImp with HasXSTileImp[L] =>
+    val io_traceCoreInterface = IO(new Bundle {
+      val fromEncoder = Input(new Bundle {
+        val enable = Bool()
+        val stall  = Bool()
       })
-    }
-
+      val toEncoder   = Output(new Bundle {
+        val cause     = UInt(socParams.TraceCauseWidth.W)
+        val tval      = UInt(socParams.TraceTvalWidth.W)
+        val priv      = UInt(socParams.TracePrivWidth.W)
+        val mstatus   = UInt(socParams.TraceStatusWidth.W)
+        val valid     = UInt(socParams.TraceGrpNum.W)
+        val iaddr     = UInt((socParams.TraceGrpNum * socParams.TraceIaddrWidth).W)
+        val itype     = UInt((socParams.TraceGrpNum * socParams.TraceItypeWidth).W)
+        val iretire   = UInt((socParams.TraceGrpNum * socParams.TraceIretireWidthCompressed).W)
+        val ilastsize = UInt((socParams.TraceGrpNum * socParams.TraceIlastsizeWidth).W)
+      })
+    })
     // trace Interface
     val traceInterface = core_with_l2.module.io.traceCoreInterface
-    traceInterface.fromEncoder := io.traceCoreInterface.fromEncoder
-    io.traceCoreInterface.toEncoder.priv := traceInterface.toEncoder.priv
-    io.traceCoreInterface.toEncoder.cause := traceInterface.toEncoder.trap.cause
-    io.traceCoreInterface.toEncoder.tval := traceInterface.toEncoder.trap.tval
-    io.traceCoreInterface.toEncoder.mstatus := traceInterface.toEncoder.mstatus
-    io.traceCoreInterface.toEncoder.valid := VecInit(traceInterface.toEncoder.groups.map(_.valid)).asUInt
-    io.traceCoreInterface.toEncoder.iaddr := VecInit(traceInterface.toEncoder.groups.map(_.bits.iaddr)).asUInt
-    io.traceCoreInterface.toEncoder.itype := VecInit(traceInterface.toEncoder.groups.map(_.bits.itype)).asUInt
-    io.traceCoreInterface.toEncoder.iretire := VecInit(traceInterface.toEncoder.groups.map(_.bits.iretire)).asUInt
-    io.traceCoreInterface.toEncoder.ilastsize := VecInit(traceInterface.toEncoder.groups.map(_.bits.ilastsize)).asUInt
-  }
+    withClockAndReset(core_with_l2.module.clock, cpuReset_sync){
+      traceInterface.fromEncoder := RegNext(io_traceCoreInterface.fromEncoder)
+      io_traceCoreInterface.toEncoder.priv := RegEnable(traceInterface.toEncoder.priv, traceInterface.toEncoder.groups(0).valid)
+      io_traceCoreInterface.toEncoder.cause := RegEnable(traceInterface.toEncoder.trap.cause, traceInterface.toEncoder.groups(0).valid)
+      io_traceCoreInterface.toEncoder.tval := RegEnable(traceInterface.toEncoder.trap.tval, traceInterface.toEncoder.groups(0).valid)
+      io_traceCoreInterface.toEncoder.mstatus := RegNext(traceInterface.toEncoder.mstatus)
+      io_traceCoreInterface.toEncoder.valid := RegNext(VecInit(traceInterface.toEncoder.groups.map(_.valid)).asUInt, 0.U)
+      io_traceCoreInterface.toEncoder.iaddr := VecInit(traceInterface.toEncoder.groups.map(gp => RegEnable(gp.bits.iaddr, gp.valid))).asUInt
+      io_traceCoreInterface.toEncoder.itype := RegNext(VecInit(traceInterface.toEncoder.groups.map(_.bits.itype)).asUInt, 0.U)
+      io_traceCoreInterface.toEncoder.iretire := RegNext(VecInit(traceInterface.toEncoder.groups.map(_.bits.iretire)).asUInt, 0.U)
+      io_traceCoreInterface.toEncoder.ilastsize := VecInit(traceInterface.toEncoder.groups.map(gp => RegEnable(gp.bits.ilastsize, gp.valid))).asUInt
+    }
 }
 
 trait HasClintTimeImp[+L <: HasXSTile] { this: BaseXSSocImp with HasAsyncClockImp
@@ -475,7 +473,6 @@ class XSNoCTop()(implicit p: Parameters) extends BaseXSSoc
   with HasXSTile
   with HasSeperatedBusOpt
   with HasIMSIC
-  with HasTraceIO
 {
   override lazy val desiredName: String = "XSTop"
 
@@ -487,6 +484,7 @@ class XSNoCTop()(implicit p: Parameters) extends BaseXSSoc
     with HasClintTimeImp[XSNoCTop]
     with HasIMSICImp[XSNoCTop]
     with HasDTSImp[XSNoCTop]
+    with HasTraceIOImp[XSNoCTop]
   {
     /* work in SoC clock domain by default in XSTop scope */
     childClock := soc_clock
@@ -504,7 +502,7 @@ class XSNoCTop()(implicit p: Parameters) extends BaseXSSoc
 class XSNoCDiffTop(implicit p: Parameters) extends XSNoCTop
 {
   class XSNoCDiffTopImp(wrapper: XSNoCTop) extends XSNoCTopImp(wrapper) with HasDiffTestInterfaces {
-    override def cpuName: Option[String] = Some("XiangShan")
+    override def cpuName: Option[String] = Some("XiangShan-KMHV2")
     override protected def implicitClock: Clock = clock
     override protected def implicitReset: Reset = reset
 

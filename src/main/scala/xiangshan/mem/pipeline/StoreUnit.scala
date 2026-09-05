@@ -76,6 +76,8 @@ class StoreUnit(implicit p: Parameters) extends XSModule
     val sqCommitRobIdx = Input(new RobPtr)
 
     val s0_s1_s2_valid = Output(Bool())
+    val vecMisalignBlockScalaIssue = Input(Bool())
+
   })
 
   PerfCCT.updateInstPos(io.stin.bits.uop.debug_seqNum, PerfCCT.InstPos.AtFU.id.U, io.stin.valid, clock, reset)
@@ -87,7 +89,7 @@ class StoreUnit(implicit p: Parameters) extends XSModule
   // stage 0
   // --------------------------------------------------------------------------------
   // generate addr, use addr to query DCache and DTLB
-  val s0_iss_valid        = io.stin.valid
+  val s0_iss_valid        = io.stin.valid && !io.vecMisalignBlockScalaIssue
   val s0_prf_valid        = io.prefetch_req.valid && io.dcache.req.ready
   val s0_vec_valid        = io.vecstin.valid
   val s0_ma_st_valid      = io.misalign_stin.valid
@@ -221,6 +223,7 @@ class StoreUnit(implicit p: Parameters) extends XSModule
   io.tlb.req.bits.memidx.idx         := s0_mem_idx
   io.tlb.req.bits.debug.robIdx       := s0_rob_idx
   io.tlb.req.bits.no_translate       := false.B
+  io.tlb.req.bits.frm_mabuf          := s0_use_flow_ma
   io.tlb.req.bits.debug.pc           := s0_pc
   io.tlb.req.bits.debug.isFirstIssue := s0_isFirstIssue
   io.tlb.req_kill                    := false.B
@@ -411,6 +414,7 @@ class StoreUnit(implicit p: Parameters) extends XSModule
   io.lsq.bits.miss := s1_tlb_miss
   io.lsq.bits.isvec := s1_out.isvec || s1_frm_mab_vec
   io.lsq.bits.updateAddrValid := (!s1_in.isMisalign || s1_in.misalignWith16Byte) && (!s1_frm_mabuf || s1_in.isFinalSplit) || s1_exception
+  io.lsq.bits.isMisalign := s1_out.isMisalign && !s1_misalignNeedReplay
   // kill dcache write intent request when tlb miss or exception
   io.dcache.s1_kill  := (s1_tlb_miss || s1_exception || s1_out.mmio || s1_out.nc || s1_in.uop.robIdx.needFlush(io.redirect))
   io.dcache.s1_paddr := s1_paddr
@@ -470,7 +474,12 @@ class StoreUnit(implicit p: Parameters) extends XSModule
     s2_in.uop.exceptionVec(storeGuestPageFault)
   )
   // This real physical address is located in uncache space.
-  val s2_actually_uncache = s2_tlb_hit && !s2_un_access_exception && (Pbmt.isPMA(s2_pbmt) && !s2_pmp.st && s2_pmp.mmio || s2_in.nc || s2_in.mmio) && RegNext(s1_feedback.bits.hit)
+  val s2_actually_uncache = s2_tlb_hit && !s2_un_access_exception && (Pbmt.isPMA(s2_pbmt) && !s2_pmp.st && s2_pmp.mmio || s2_in.nc || s2_in.mmio)
+  val s2_actually_mmio = s2_tlb_hit && !s2_un_access_exception && Pbmt.isPMA(s2_pbmt) && !s2_pmp.st && s2_pmp.mmio
+  val s2_actually_all_mmio = s2_tlb_hit && !s2_un_access_exception && (Pbmt.isPMA(s2_pbmt) && !s2_pmp.st && s2_pmp.mmio || s2_in.mmio)
+  val s2_actually_pbmt_nc = s2_tlb_hit && !s2_un_access_exception && s2_in.nc
+  val s2_is_actually_pbmt_mmio = s2_tlb_hit && !s2_un_access_exception && s2_in.mmio
+
   val s2_isCbo  = RegEnable(s1_isCbo, s1_fire) // all cbo instr
   val s2_isCbo_noZero = LSUOpType.isCbo(s2_in.uop.fuOpType)
 
@@ -483,9 +492,11 @@ class StoreUnit(implicit p: Parameters) extends XSModule
   s2_out.uop.exceptionVec(storeAccessFault) := (s2_in.uop.exceptionVec(storeAccessFault) ||
                                                 s2_pmp.st ||
                                                 s2_pmp.ld && s2_isCbo_noZero || // cmo need read permission but produce store exception
-                                                ((s2_in.isvec || s2_isCbo) && s2_actually_uncache && RegNext(s1_feedback.bits.hit))
+                                                (s2_in.isvec && s2_actually_uncache) ||
+                                                s2_actually_all_mmio && (s2_in.isMisalign || s2_in.isFrmMisAlignBuf) ||
+                                                s2_actually_mmio && s2_isCbo
                                                 ) && s2_vecActive
-  s2_out.uop.exceptionVec(storeAddrMisaligned) := s2_actually_uncache && !s2_in.isvec && (s2_in.isMisalign || s2_in.isFrmMisAlignBuf) && !s2_un_misalign_exception
+  s2_out.uop.exceptionVec(storeAddrMisaligned) := s2_actually_pbmt_nc && !s2_in.isvec && (s2_in.isMisalign || s2_in.isFrmMisAlignBuf) && !s2_un_misalign_exception
   s2_out.uop.vpu.vstart     := s2_in.vecVaddrOffset >> s2_in.uop.vpu.veew
 
   // kill dcache write intent request when mmio or exception

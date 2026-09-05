@@ -33,11 +33,12 @@ import freechips.rocketchip.diplomacy.{AddressSet, IdRange, InModuleBody, LazyMo
 import freechips.rocketchip.interrupts.{IntSourceNode, IntSourcePortSimple}
 import freechips.rocketchip.regmapper.{RegField, RegFieldDesc, RegFieldGroup}
 import freechips.rocketchip.tilelink._
-import freechips.rocketchip.util.{AsyncQueueParams}
-import top.BusPerfMonitor
+import freechips.rocketchip.util.{AsyncQueueParams, AsyncQueueSource, AsyncBundle}
+import top.{BusPerfMonitor, LLCType}
 import xiangshan.backend.fu.{MemoryRange, PMAConfigEntry, PMAConst}
 import xiangshan.{DebugOptionsKey, PMParameKey, XSTileKey}
 import device.SYSCNTConsts.timeWidth
+import zhujiang.ZJParameters
 
 case object SoCParamsKey extends Field[SoCParameters]
 case object CVMParamsKey extends Field[CVMParameters]
@@ -84,7 +85,9 @@ case class SoCParameters
   UARTLiteForDTS: Boolean = true, // should be false in SimMMIO
   extIntrs: Int = 64,
   L3NBanks: Int = 4,
+  LLC: LLCType.Value = LLCType.OpenLLC,
   OpenLLCParamsOpt: Option[OpenLLCParam] = None,
+  ZhuJiangParams: ZJParameters = ZJParameters(),
   XSTopPrefix: Option[String] = None,
   NodeIDWidthList: Map[String, Int] = Map(
     "B" -> 7,
@@ -135,7 +138,7 @@ case class SoCParameters
   // on chip network configurations
   val L3OuterBusWidth = 256
   val UARTLiteRange = AddressSet(0x40600000, if (UARTLiteForDTS) 0x3f else 0xf)
-  val UART16550Range = AddressSet(0x310b0000, 0x1f)
+  val UART16550Range = AddressSet(0x310b0000, 0x7f)
 }
 
 trait HasSoCParameter {
@@ -147,6 +150,26 @@ trait HasSoCParameter {
   val tiles = p(XSTileKey)
   val enableCHI = true
   val issue = p(CHIIssue)
+  val isOpenLLC = soc.LLC == LLCType.OpenLLC
+  val isZhuJiang = soc.LLC == LLCType.ZhuJiang
+
+  if (isZhuJiang) {
+    require(issue == xscache.chi.Issue.Eb, "LLC=ZhuJiang only supports CHI issue E.b or newer")
+    require(
+      soc.EnableCHIAsyncBridge.isEmpty,
+      "LLC=ZhuJiang does not support EnableCHIAsyncBridge"
+    )
+    require(!soc.EnablePowerDown, "LLC=ZhuJiang does not support power-down flows")
+    require(!soc.WFIClockGate, "LLC=ZhuJiang does not support WFI clock gating")
+    require(
+      !tiles.exists(_.L2CacheParamsOpt.exists(_.enableL2Flush)),
+      "LLC=ZhuJiang does not support flushL2"
+    )
+    require(
+      !tiles.exists(_.L2CacheParamsOpt.exists(l2 => l2.dataCheck.nonEmpty || l2.enablePoison)),
+      "LLC=ZhuJiang requires CoupledL2 DataCheck and Poison disabled"
+    )
+  }
 
   val NumCores = tiles.size
   val EnableILA = soc.EnableILA
@@ -180,8 +203,7 @@ trait HasSoCParameter {
   val SeperateBus = soc.SeperateBus
   val SeperateBusRanges = soc.SeperateBusRanges
 
-  val EnableCHIAsyncBridge = if (enableCHI && soc.EnableCHIAsyncBridge.isDefined)
-    soc.EnableCHIAsyncBridge else None
+  val EnableCHIAsyncBridge = soc.EnableCHIAsyncBridge
   val EnableClintAsyncBridge = soc.EnableClintAsyncBridge
   val SeperateBusAsyncBridge = soc.SeperateBusAsyncBridge
 
@@ -571,7 +593,10 @@ class MemMisc()(implicit p: Parameters) extends BaseSoC
     val pll0_lock = IO(Input(Bool()))
     val pll0_ctrl = IO(Output(Vec(6, UInt(32.W))))
     val cacheable_check = IO(new TLPMAIO)
-    val clintTime = IO(Output(ValidIO(UInt(64.W))))
+    val clintTime = IO(EnableClintAsyncBridge match {
+      case Some(param) => new AsyncBundle(UInt(64.W), param)
+      case None => (ValidIO(UInt(64.W)))
+    })
     val scntIO = IO(new Bundle {
       val update_en = Input(Bool())
       val update_value = Input(UInt(timeWidth.W))
@@ -603,7 +628,17 @@ class MemMisc()(implicit p: Parameters) extends BaseSoC
     val pll_lock = RegNext(next = pll0_lock, init = false.B)
 
     // timer instance
-    clintTime :=   syscnt.module.io.time // syscnt ->timeasync
+    EnableClintAsyncBridge match {
+      case Some(param) =>
+        withClockAndReset(rtc_clock, rtc_reset) {
+          val time_source = Module(new AsyncQueueSource(UInt(64.W), param))
+          time_source.io.enq.valid := syscnt.module.io.time.valid
+          time_source.io.enq.bits := syscnt.module.io.time.bits
+          clintTime <> time_source.io.async
+        }
+      case None =>
+        clintTime <> syscnt.module.io.time
+    }
     timer.module.io.time <> syscnt.module.io.time
     timer.module.io.hartId := 0.U
 

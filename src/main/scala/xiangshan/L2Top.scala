@@ -27,8 +27,8 @@ import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.interrupts._
 import freechips.rocketchip.tile.{BusErrorUnit, BusErrorUnitParams, BusErrors, MaxHartIdBits}
 import freechips.rocketchip.tilelink._
-import xscache.coupledL2.{CoupledL2, EnableL2ClockGate, EnableMatrix, L2ParamKey, PrefetchCtrlFromCore}
-import xscache.chi.{CHIIssue, CHIAddrWidthKey, NonSecureKey, PortIO}
+import xscache.coupledL2.{CoupledL2, EnableL2ClockGate, EnableL2DecoupledDownstreamCHI, EnableMatrix, L2ParamKey, PrefetchCtrlFromCore}
+import xscache.chi.{CHIDataCheckKey, CHIIssue, CHIAddrWidthKey, CHIPoisonKey, DecoupledPortIO, NonSecureKey, PortIO}
 import xscache.common.BankBitsKey
 import system.HasSoCParameter
 import top.BusPerfMonitor
@@ -111,7 +111,6 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
   val beu_local_int_source = IntSourceNode(IntSourcePortSimple())
   val beu_local_int_source_buffer = IntBuffer()
 
-  println(s"enableCHI: ${enableCHI}")
   val l2cache = if (enableL2) {
     val config = new Config((_, _, _) => {
       case L2ParamKey => coreParams.L2CacheParamsOpt.get.copy(
@@ -125,6 +124,9 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
       case CHIIssue => p(CHIIssue)
       case CHIAddrWidthKey => p(CHIAddrWidthKey)
       case NonSecureKey => p(NonSecureKey)
+      case CHIDataCheckKey if isZhuJiang => "none"
+      case CHIPoisonKey if isZhuJiang => false
+      case EnableL2DecoupledDownstreamCHI => isZhuJiang
       case BankBitsKey => log2Ceil(coreParams.L2NBanks)
       case MaxHartIdBits => p(MaxHartIdBits)
       case LogUtilsOptionsKey => p(LogUtilsOptionsKey)
@@ -226,8 +228,17 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
         val fromTile = Input(ValidIO(UInt(64.W)))
         val toCore = Output(ValidIO(UInt(64.W)))
       }
-      val chi = if (enableCHI) Some(new PortIO) else None
-      val nodeID = if (enableCHI) Some(Input(UInt(NodeIDWidth.W))) else None
+      val chi = Option.when(isOpenLLC)(new PortIO)
+      val decoupledCHI = Option.when(isZhuJiang)(
+        new DecoupledPortIO()(p.alter((_, _, _) => {
+          case CHIIssue => p(CHIIssue)
+          case CHIAddrWidthKey => p(CHIAddrWidthKey)
+          case NonSecureKey => p(NonSecureKey)
+          case CHIDataCheckKey => "none"
+          case CHIPoisonKey => false
+        }))
+      )
+      val nodeID = Some(Input(UInt(NodeIDWidth.W)))
       val pfCtrlFromCore = Input(new PrefetchCtrlFromCore)
       val l2_tlb_req = new TlbRequestIO(nRespDups = 2)
       val l2_pmp_resp = Flipped(new PMPRespBundle)
@@ -266,7 +277,7 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
       teemsiInfo.toCore.bits := RegEnable(teemsiInfo.fromTile.bits, teemsiInfo.fromTile.valid)
     }
     io.cpu_halt.toTile := RegNext(io.cpu_halt.fromCore)
-    io.cpu_critical_error.toTile := RegNext(io.cpu_critical_error.fromCore)
+    io.cpu_critical_error.toTile := RegNext(io.cpu_critical_error.fromCore, false.B)
     io.msiAck.toTile := io.msiAck.fromCore
     io.teemsiAck.foreach( teemsiAck => teemsiAck.toTile := teemsiAck.fromCore)
     io.l3Miss.toCore := RegNext(io.l3Miss.fromTile)
@@ -285,7 +296,7 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
     )
     traceToTile.toEncoder.mstatus := RegNext(traceFromCore.toEncoder.mstatus)
     (0 until TraceGroupNum).foreach{ i =>
-      traceToTile.toEncoder.groups(i).valid := RegNext(traceFromCore.toEncoder.groups(i).valid)
+      traceToTile.toEncoder.groups(i).valid := RegNext(traceFromCore.toEncoder.groups(i).valid, false.B)
       traceToTile.toEncoder.groups(i).bits.iretire := RegNext(traceFromCore.toEncoder.groups(i).bits.iretire)
       traceToTile.toEncoder.groups(i).bits.itype := RegNext(traceFromCore.toEncoder.groups(i).bits.itype)
       traceToTile.toEncoder.groups(i).bits.ilastsize := RegEnable(
@@ -301,7 +312,8 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
     dontTouch(io.hartId)
     dontTouch(io.cpu_halt)
     dontTouch(io.cpu_critical_error)
-    if (!io.chi.isEmpty) { dontTouch(io.chi.get) }
+    io.chi.foreach(dontTouch(_))
+    io.decoupledCHI.foreach(dontTouch(_))
 
     // Initialize matrixDataOut512L2 with zero
     io.matrixDataOut512L2.foreach { data =>
@@ -364,9 +376,11 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
       l2.io.l2_tlb_req.pmp_resp.mmio := io.l2_pmp_resp.mmio
       l2.io.l2_tlb_req.pmp_resp.atomic := io.l2_pmp_resp.atomic
       l2.io.nodeID := io.nodeID.get
-      // CoupledL2 exposes the legacy credit-based CHI port as lcreditCHI;
-      // keep the wrapper connection optional for decoupled-downstream builds.
-      l2.io.lcreditCHI.foreach(_ <> io.chi.get)
+      if (isOpenLLC) {
+        io.chi.get <> l2.io.lcreditCHI.get
+      } else {
+        io.decoupledCHI.get <> l2.io.decoupledCHI.get
+      }
       l2.io.cpu_wfi.foreach { _ := io.cpu_halt.fromCore }
       l2.io.matrixDataOut.foreach { matrixDataOut =>
         io.matrixDataOut512L2 <> matrixDataOut

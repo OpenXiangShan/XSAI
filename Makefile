@@ -53,12 +53,23 @@ MEM_GEN_SEP = ./scripts/gen_sep_mem.sh
 
 CONFIG ?= DefaultConfig
 NUM_CORES ?= 1
+VFEXP2_ENABLE ?= 1
 ISSUE ?= E.b
+LLC ?= ZhuJiang
 CHISEL_TARGET ?= systemverilog
 
 SUPPORT_CHI_ISSUE = B C E.b
 ifeq ($(findstring $(ISSUE), $(SUPPORT_CHI_ISSUE)),)
 $(error "Unsupported CHI issue: $(ISSUE)")
+endif
+SUPPORT_LLC = OpenLLC ZhuJiang
+ifeq ($(filter $(LLC), $(SUPPORT_LLC)),)
+$(error "Unknown LLC: $(LLC)")
+endif
+ifeq ($(LLC),ZhuJiang)
+ifneq ($(ISSUE),E.b)
+$(error "LLC=ZhuJiang only supports ISSUE=E.b or newer")
+endif
 endif
 
 ifneq ($(shell echo "$(MAKECMDGOALS)" | grep ' '),)
@@ -90,6 +101,13 @@ endif
 
 ifneq ($(FIRTOOL),)
 MFC_ARGS += --firtool-binary-path $(abspath $(FIRTOOL))
+endif
+
+# vfexp2 and vfexp2bf16 share one functional unit and are controlled together.
+ifeq ($(VFEXP2_ENABLE),0)
+COMMON_EXTRA_ARGS += --disable-vfexp2
+else ifneq ($(VFEXP2_ENABLE),1)
+$(error "VFEXP2_ENABLE must be 0 or 1")
 endif
 
 # prefix of XSTop or XSNoCTop
@@ -127,6 +145,9 @@ ifneq ($(CHI_ADDR_WIDTH),)
 COMMON_EXTRA_ARGS += --chi-addr-width $(CHI_ADDR_WIDTH)
 endif
 
+# LLC backend selection
+COMMON_EXTRA_ARGS += --llc $(LLC)
+
 # L2 cache size in KB
 ifneq ($(L2_CACHE_SIZE),)
 COMMON_EXTRA_ARGS += --l2-cache-size $(L2_CACHE_SIZE)
@@ -145,6 +166,11 @@ endif
 # disable xmr
 ifeq ($(DISABLE_XMR),1)
 COMMON_EXTRA_ARGS += --disable-xmr
+endif
+
+# disable the tile-level CDE parameter cache
+ifeq ($(CACHED_PARAM_DISABLE),1)
+COMMON_EXTRA_ARGS += --disable-cached-parameters
 endif
 
 # configuration from yaml file
@@ -211,7 +237,7 @@ endif
 # emu for the release version
 RELEASE_ARGS += --fpga-platform --disable-all --remove-assert --reset-gen --firtool-opt --ignore-read-enable-mem
 ifeq ($(FPGA), 1)
-override DEBUG_ARGS	+= --fpga-platform --disable-all --remove-assert --disable-clockgate
+override DEBUG_ARGS	+= --fpga-platform --disable-all --remove-assert --disable-clockgate --sim-mem-size 8
 else
 override DEBUG_ARGS	+= --enable-difftest
 endif
@@ -315,7 +341,7 @@ GIT_FORCE_FLAG := $(if $(GIT_FORCE_INIT),--force)
 init:
 	git submodule update --init $(GIT_FORCE_FLAG)
 	cd rocket-chip && git submodule update --init $(GIT_FORCE_FLAG) cde hardfloat
-	cd XSAICache && git submodule update --init $(GIT_FORCE_FLAG) OpenNCB
+	cd XSAICache && git submodule update --init $(GIT_FORCE_FLAG) OpenNCB ZhuJiang
 	cd CUTE && git submodule update --init $(GIT_FORCE_FLAG) cute-fpe
 
 # Initialize necessary submodules (force)

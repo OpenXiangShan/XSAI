@@ -27,7 +27,7 @@ import xiangshan.frontend.FtqPtr
 import xiangshan.backend._
 import xiangshan.backend.fu.fpu._
 import xiangshan.backend.rob.RobLsqIO
-import xiangshan.backend.Bundles.{DynInst, MemExuOutput, MemMicroOpRbExt}
+import xiangshan.backend.Bundles.{DynInst, MemExuOutput, MemMicroOpRbExt, UopIdx}
 import xiangshan.backend.rob.RobPtr
 import xiangshan.mem.mdp._
 import xiangshan.mem.Bundles._
@@ -53,7 +53,7 @@ trait HasLoadHelper { this: XSModule =>
     val fpWen = uop.fpWen
     LookupTree(uop.fuOpType, List(
       LSUOpType.lb   -> SignExt(rdata(7, 0) , XLEN),
-      LSUOpType.lh   -> SignExt(rdata(15, 0), XLEN),
+      LSUOpType.lh   -> Mux(fpWen,FPU.box(rdata, FPU.H), SignExt(rdata(15, 0), XLEN)),
       /*
           riscv-spec-20191213: 12.2 NaN Boxing of Narrower Values
           Any operation that writes a narrower result to an f register must write
@@ -194,7 +194,6 @@ class LoadQueue(implicit p: Parameters) extends XSModule
     val uncache = new UncacheWordIO
     val exceptionAddr = new ExceptionAddrIO
     val loadMisalignFull = Input(Bool())
-    val misalignAllowSpec = Input(Bool())
     val lqFull = Output(Bool())
     val lqDeq = Output(UInt(log2Up(CommitWidth + 1).W))
     val lqCancelCnt = Output(UInt(log2Up(VirtualLoadQueueSize+1).W))
@@ -206,10 +205,11 @@ class LoadQueue(implicit p: Parameters) extends XSModule
 
     val lqDeqPtr = Output(new LqPtr)
 
-    val rarValidCount = Output(UInt())
-
     val debugTopDown = new LoadQueueTopDownIO
     val noUopsIssed = Input(Bool())
+
+    val lqDeqRobIdx = Output(new RobPtr)
+    val lqDeqUopIdx = Output(UopIdx())
   })
 
   val loadQueueRAR = Module(new LoadQueueRAR)  //  read-after-read violation
@@ -224,7 +224,6 @@ class LoadQueue(implicit p: Parameters) extends XSModule
   loadQueueRAR.io.redirect  <> io.redirect
   loadQueueRAR.io.release   <> io.release
   loadQueueRAR.io.ldWbPtr   <> virtualLoadQueue.io.ldWbPtr
-  loadQueueRAR.io.validCount<> io.rarValidCount
   for (w <- 0 until LoadPipelineWidth) {
     loadQueueRAR.io.query(w).req    <> io.ldu.ldld_nuke_query(w).req // from load_s1
     loadQueueRAR.io.query(w).resp   <> io.ldu.ldld_nuke_query(w).resp // to load_s2
@@ -256,6 +255,8 @@ class LoadQueue(implicit p: Parameters) extends XSModule
   virtualLoadQueue.io.lqCancelCnt   <> io.lqCancelCnt
   virtualLoadQueue.io.lqEmpty       <> io.lqEmpty
   virtualLoadQueue.io.ldWbPtr       <> io.lqDeqPtr
+  virtualLoadQueue.io.lqDeqRobIdx   <> io.lqDeqRobIdx
+  virtualLoadQueue.io.lqDeqUopIdx   <> io.lqDeqUopIdx
 
   /**
    * Load queue exception buffer
@@ -279,13 +280,13 @@ class LoadQueue(implicit p: Parameters) extends XSModule
     exceptionBuffer.io.req(LoadPipelineWidth + i).bits.uop.vpu.vstart   := io.vecFeedback(i).bits.vstart
     exceptionBuffer.io.req(LoadPipelineWidth + i).bits.uop.vpu.vl       := io.vecFeedback(i).bits.vl
     exceptionBuffer.io.req(LoadPipelineWidth + i).bits.uop.exceptionVec := io.vecFeedback(i).bits.exceptionVec
+    exceptionBuffer.io.req(LoadPipelineWidth + i).bits.isForVSnonLeafPTE := io.vecFeedback(i).bits.isForVSnonLeafPTE
   }
   // mmio non-data error exception
   exceptionBuffer.io.req(LoadPipelineWidth + VecLoadPipelineWidth) := uncacheBuffer.io.exception
   exceptionBuffer.io.req(LoadPipelineWidth + VecLoadPipelineWidth).bits.vaNeedExt := true.B
 
   loadQueueReplay.io.loadMisalignFull := io.loadMisalignFull
-  loadQueueReplay.io.misalignAllowSpec := io.misalignAllowSpec
 
   io.exceptionAddr <> exceptionBuffer.io.exceptionAddr
 
@@ -330,6 +331,7 @@ class LoadQueue(implicit p: Parameters) extends XSModule
   loadQueueReplay.io.sqEmpty          <> io.sq.sqEmpty
   loadQueueReplay.io.lqFull           <> io.lq_rep_full
   loadQueueReplay.io.ldWbPtr          <> virtualLoadQueue.io.ldWbPtr
+  loadQueueReplay.io.robDeqPtr        <> io.rob.pendingPtr
   loadQueueReplay.io.rarFull          <> loadQueueRAR.io.lqFull
   loadQueueReplay.io.rawFull          <> loadQueueRAW.io.lqFull
   loadQueueReplay.io.l2_hint          <> io.l2_hint

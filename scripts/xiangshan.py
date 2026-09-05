@@ -366,6 +366,12 @@ class XiangShan(object):
         ]
         misc_tests = map(lambda x: os.path.join(base_dir, x), workloads)
         return misc_tests
+
+    def __get_ci_vfexp2test(self, name=None):
+        return [
+            "/nfs/home/share/ci-workloads/vfexp2test/"
+            "vfexp2test-riscv64-xs.bin"
+        ]
     
     def __get_ci_rvhtest(self, name=None):
         base_dir = "/nfs/home/share/ci-workloads/H-extension-tests"
@@ -381,7 +387,7 @@ class XiangShan(object):
 
     def __get_ci_ametests(self, bench=None):
         base_dir = "/nfs/home/share/ci-workloads/"
-        bench_list = ["ame-gemm", "ame-ls-ab", "bf16"]
+        bench_list = ["ame-gemm", "ame-ls-ab", "ame-ls-whole", "bf16"]
         bench_path_list = [os.path.join(base_dir, bench, f"{bench}.bin") for bench in bench_list]
         return bench_path_list
 
@@ -559,18 +565,15 @@ class XiangShan(object):
         # select a random SPEC checkpoint
         assert(name == "random")
         all_cpt_dir = [
-            "/nfs/home/share/checkpoints_profiles/spec06_rv64gcb_o2_20m/take_cpt",
-            "/nfs/home/share/checkpoints_profiles/spec06_rv64gcb_o3_20m/take_cpt",
-            "/nfs/home/share/checkpoints_profiles/spec06_rv64gc_o2_20m/take_cpt",
-            "/nfs/home/share/checkpoints_profiles/spec06_rv64gc_o2_50m/take_cpt",
-            "/nfs/home/share/checkpoints_profiles/spec17_rv64gcb_o2_20m/take_cpt",
-            "/nfs/home/share/checkpoints_profiles/spec17_rv64gcb_o3_20m/take_cpt",
-            "/nfs/home/share/checkpoints_profiles/spec17_rv64gc_o2_50m/take_cpt",
-            "/nfs/home/share/checkpoints_profiles/spec17_speed_rv64gcb_o3_20m/take_cpt",
-            "/nfs/home/share/checkpoints_profiles/spec06_rv64gcb_O3_20m_gcc12.2.0-intFpcOff-jeMalloc/zstd-checkpoint-0-0-0",
-            "/nfs/home/share/checkpoints_profiles/spec06_gcc15_rv64gcbv_O3_lto_base_nemu_single_core_NEMU_archgroup_2024-10-12-16-05/checkpoint-0-0-0"
+            "/nfs/home/share/checkpoints_profiles/spec06_gcc16_rv64gcb_260819/checkpoint",
+            "/nfs/home/share/checkpoints_profiles/spec17_rate_gcc16_rv64gcb_260812/checkpoint"
         ]
+        missing_cpt_dir = [path for path in all_cpt_dir if not os.path.isdir(path)]
+        if missing_cpt_dir:
+            raise FileNotFoundError(f"Checkpoint pool directories not found: {missing_cpt_dir}")
         all_gcpt = load_all_gcpt(all_cpt_dir)
+        if not all_gcpt:
+            raise RuntimeError(f"No checkpoint images found under: {all_cpt_dir}")
         return [random.choice(all_gcpt)]
 
     def run_ci(self, test):
@@ -578,6 +581,7 @@ class XiangShan(object):
             "cputest": self.__get_ci_cputest,
             "riscv-tests": self.__get_ci_rvtest,
             "misc-tests": self.__get_ci_misc,
+            "vfexp2test": self.__get_ci_vfexp2test,
             "mc-tests": self.__get_ci_mc,
             "nodiff-tests": self.__get_ci_nodiff,
             "rvh-tests": self.__get_ci_rvhtest,

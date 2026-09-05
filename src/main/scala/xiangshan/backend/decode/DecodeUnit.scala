@@ -35,6 +35,7 @@ import xiangshan.backend.fu.vector.Bundles.{VType, Vl}
 import xiangshan.backend.fu.wrapper.CSRToDecode
 import xiangshan.backend.decode.Zimop._
 import xiangshan.backend.decode.Zfbf._
+import xiangshan.backend.decode.Zvfexp._
 import yunsuan.{VfaluType, VfcvtType}
 import xiangshan.backend.decode
 
@@ -871,7 +872,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     CBODecode.table ++
     SvinvalDecode.table ++
     HypervisorDecode.table ++
-    VecDecoder.table ++
+    VecDecoder.table(HasVfexp2) ++
     OptionWrapper(HasMatrixExtension, MatrixDecoder.table(MatrixExtension)).getOrElse(Array()) ++
     ZicondDecode.table ++
     ZimopDecode.table ++
@@ -1086,7 +1087,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     VFCVT_XU_F_V, VFCVT_X_F_V, VFCVT_RTZ_XU_F_V, VFCVT_RTZ_X_F_V, VFCVT_F_XU_V, VFCVT_F_X_V,
     VFWCVT_XU_F_V, VFWCVT_X_F_V, VFWCVT_RTZ_XU_F_V, VFWCVT_RTZ_X_F_V, VFWCVT_F_XU_V, VFWCVT_F_X_V, VFWCVT_F_F_V, VFWCVTBF16_F_F_V,
     VFNCVT_XU_F_W, VFNCVT_X_F_W, VFNCVT_RTZ_XU_F_W, VFNCVT_RTZ_X_F_W, VFNCVT_F_XU_W, VFNCVT_F_X_W, VFNCVT_F_F_W,
-    VFNCVT_ROD_F_F_W, VFNCVTBF16_F_F_W, VFRSQRT7_V, VFREC7_V,
+    VFNCVT_ROD_F_F_W, VFNCVTBF16_F_F_W, VFRSQRT7_V, VFREC7_V, VFEXP2_V, VFEXP2BF16_V,
     // zfa
     FLEQ_H, FLEQ_S, FLEQ_D, FLTQ_H, FLTQ_S, FLTQ_D,
     FMINM_H, FMINM_S, FMINM_D, FMAXM_H, FMAXM_S, FMAXM_D,
@@ -1188,8 +1189,8 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   val isFLI = inst.FUNCT7 === BitPat("b11110??") && inst.RS2 === 1.U && inst.RM === 0.U && inst.OPCODE5Bit === OPCODE5Bit.OP_FP
 
   val isMsettilex = FuType.isMsettilex(decodedInst.fuType)
-  val isMcfg = MSetOpType.isMcfg(decodedInst.fuOpType)
-  val isMsetcfg = MSetOpType.isMsetcfg(decodedInst.fuOpType)
+  val isMcfg = FuType.isMcfg(decodedInst.fuType)
+  val isMsetcfg = isMcfg && MSetOpType.isMsetcfg(decodedInst.fuOpType)
   val isMMA = FuType.isMMA(decodedInst.fuType)
   val isMls = FuType.isMls(decodedInst.fuType)
   val isMarith = FuType.isMarith(decodedInst.fuType)
@@ -1276,11 +1277,12 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     decodedInst.lsrc(4) := Mtilek_IDX.U
   }.elsewhen (isMls) {
     decodedInst.srcType(0) := SrcType.xp
-    decodedInst.srcType(1) := SrcType.xp
     when (MldstOpType.isWholeReg(decodedInst.fuOpType)) {
+      decodedInst.srcType(1) := SrcType.no
       decodedInst.srcType(2) := SrcType.no
       decodedInst.srcType(3) := SrcType.no
     }.otherwise {
+      decodedInst.srcType(1) := SrcType.xp
       decodedInst.srcType(2) := SrcType.mx
       decodedInst.srcType(3) := SrcType.mx
     }

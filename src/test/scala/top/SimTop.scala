@@ -39,10 +39,6 @@ class XiangShanSim(implicit p: Parameters) extends Module with HasDiffTestInterf
   // so that we can re-use this XiangShanSim for any generated Verilog RTL.
   dontTouch(soc.io)
 
-  if (!l_soc.module.dma.isEmpty) {
-    l_soc.module.dma.get <> WireDefault(0.U.asTypeOf(l_soc.module.dma.get))
-  }
-
   val l_simMMIO = LazyModule(new SimMMIO(l_soc.misc.peripheralNode.in.head._2)(p.alter((site, here, up) => {
     case SoCParamsKey => up(SoCParamsKey).copy(UARTLiteForDTS = false)
   })))
@@ -88,7 +84,7 @@ class XiangShanSim(implicit p: Parameters) extends Module with HasDiffTestInterf
   soc.io.systemjtag.part_number := 0.U(16.W)
   soc.io.systemjtag.version := 0.U(4.W)
 
-  override def cpuName: Option[String] = Some("XiangShan")
+  override def cpuName: Option[String] = Some("XiangShan-KMHV2")
 
   val uart = IO(new UARTIO)
   simMMIO.io.uart <> uart

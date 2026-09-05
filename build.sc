@@ -151,6 +151,29 @@ object openNCB extends SbtModule with HasChisel {
 
 }
 
+object zhujiangCompat extends SbtModule with HasChisel {
+
+  override def millSourcePath = pwd / "XSAICache" / "ZhuJiang"
+
+  override def moduleDeps = super.moduleDeps ++ Seq(
+    rocketchip,
+    utility
+  )
+
+  override def sources = T.sources {
+    val sourceRoots = Seq(
+      millSourcePath / "src" / "main" / "scala",
+      millSourcePath / "xs-utils" / "src" / "main" / "scala"
+    )
+    sourceRoots
+      .flatMap(os.walk(_))
+      .filter(path => os.isFile(path) && path.ext == "scala")
+      .filterNot(_.last == "XsStage.scala")
+      .map(PathRef(_))
+  }
+
+}
+
 object XSAICache extends $file.XSAICache.common.XSCacheModule with HasChisel {
 
   override def millSourcePath = pwd / "XSAICache"
@@ -160,6 +183,14 @@ object XSAICache extends $file.XSAICache.common.XSCacheModule with HasChisel {
   def rocketModule: ScalaModule = rocketchip
 
   def utilityModule: ScalaModule = utility
+
+  override def moduleDeps = super.moduleDeps ++ Seq(zhujiangCompat)
+
+  override def sources = T.sources {
+    super.sources() ++ Seq(
+      PathRef(millSourcePath / "src" / "test" / "scala" / "ZhuJiangBridge.scala")
+    )
+  }
 
 }
 
@@ -269,6 +300,8 @@ trait XiangShanModule extends ScalaModule {
 
   def cuteModule: ScalaModule
 
+  def zhujiangCompatModule: ScalaModule
+
   override def moduleDeps = super.moduleDeps ++ Seq(
     rocketModule,
     difftestModule,
@@ -279,7 +312,8 @@ trait XiangShanModule extends ScalaModule {
     chiselAIAModule,
     macrosModule,
     chiselIOPMPModule,
-    cuteModule
+    cuteModule,
+    zhujiangCompatModule
   )
 
   val resourcesPATH = pwd.toString() + "/src/main/resources"
@@ -311,6 +345,8 @@ object xiangshan extends XiangShanModule with HasChisel with ScalafmtModule {
   def chiselIOPMPModule = chiselIOPMP
 
   def cuteModule = CUTE
+
+  def zhujiangCompatModule = zhujiangCompat
 
   // properties may be changed by user. Use `Task.Input` here.
   def forkArgsTask = Task.Input {
