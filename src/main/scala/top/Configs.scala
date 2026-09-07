@@ -574,6 +574,7 @@ class DefaultMatrixConfig(n: Int = 1) extends Config(
 // DefaultMatrixConfig remains the reproducible prefetch-off baseline.
 class DefaultMatrixPrefetchConfig(n: Int = 1) extends Config(
   new DefaultMatrixConfig(n).alter((site, here, up) => {
+    case CuteParamsKey => up(CuteParamsKey).copy(EnableMatrixPrefetch = true)
     case XSTileKey => up(XSTileKey).map { core =>
       core.copy(
         L2CacheParamsOpt = core.L2CacheParamsOpt.map { l2 =>
@@ -589,6 +590,7 @@ class DefaultMatrixPrefetchConfig(n: Int = 1) extends Config(
 // receiver sources while retaining the Matrix-guided prefetch datapath.
 class DefaultMatrixOnlyPrefetchConfig(n: Int = 1) extends Config(
   new DefaultMatrixConfig(n).alter((site, here, up) => {
+    case CuteParamsKey => up(CuteParamsKey).copy(EnableMatrixPrefetch = true)
     case XSTileKey => up(XSTileKey).map { core =>
       core.copy(
         prefetcher = None,
