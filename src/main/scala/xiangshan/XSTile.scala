@@ -268,7 +268,10 @@ class XSTile()(implicit p: Parameters) extends LazyModule
         amuRelease.bits := cute.module.io.cute.ctrl2top.mrelease.bits
         amuRelease.valid := cute.module.io.cute.ctrl2top.mrelease.valid
       }
-      l2top.module.io.matrixPrefetch.foreach(_ := cute.module.io.cute.matrixPrefetch)
+      for {
+        l2Prefetch <- l2top.module.io.matrixPrefetch
+        cutePrefetch <- cute.module.io.cute.matrixPrefetch
+      } l2Prefetch := cutePrefetch
 
       val matrix_data_out = l2top.module.io.matrixDataOut512L2
       val matrix_data_in = cute.module.io.matrix_data_in
