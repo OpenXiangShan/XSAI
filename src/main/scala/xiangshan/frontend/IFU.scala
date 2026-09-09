@@ -386,6 +386,7 @@ class NewIFU(implicit p: Parameters) extends XSModule
 
   val f2_exception_in     = fromICache.bits.exception
   val f2_backendException = fromICache.bits.backendException
+  val f2_hasSatpFlush     = fromICache.bits.hasSatpFlush
   // paddr and gpaddr of [startAddr, nextLineAddr]
   val f2_paddrs            = fromICache.bits.paddr
   val f2_gpaddr            = fromICache.bits.gpaddr
@@ -564,6 +565,7 @@ class NewIFU(implicit p: Parameters) extends XSModule
   val f3_pmp_mmio         = RegEnable(f2_pmp_mmio, f2_fire)
   val f3_itlb_pbmt        = RegEnable(f2_itlb_pbmt, f2_fire)
   val f3_backendException = RegEnable(f2_backendException, f2_fire)
+  val f3_hasSatpFlush     = RegEnable(f2_hasSatpFlush, f2_fire)
 
   val f3_instr = RegEnable(f2_instr, f2_fire)
 
@@ -663,7 +665,7 @@ class NewIFU(implicit p: Parameters) extends XSModule
    *        but we actually can do speculative execution if pbmt is NC, maybe fix this later for performance
    */
   val f3_req_is_mmio =
-    f3_valid && (f3_pmp_mmio || Pbmt.isUncache(f3_itlb_pbmt)) && !ExceptionType.hasException(f3_exception)
+    f3_valid && (f3_pmp_mmio || Pbmt.isUncache(f3_itlb_pbmt)) && !ExceptionType.hasException(f3_exception(0))
   val mmio_commit = VecInit(io.rob_commits.map { commit =>
     commit.valid && commit.bits.ftqIdx === f3_ftq_req.ftqIdx && commit.bits.ftqOffset === 0.U
   }).asUInt.orR
@@ -748,8 +750,16 @@ class NewIFU(implicit p: Parameters) extends XSModule
 
     is(m_waitResp) {
       when(fromUncache.fire) {
-        val isRVC      = fromUncache.bits.data(1, 0) =/= 3.U
-        val exception  = ExceptionType.fromTilelink(fromUncache.bits.corrupt)
+        val isRVC        = fromUncache.bits.data(1, 0) =/= 3.U
+        val busException = ExceptionType.fromTilelink(fromUncache.bits.corrupt)
+        // if the instr we just fetched is last 2B in a cacheline, and this instr is RVI
+        // we need to ensure the second cacheline has no exception
+        // we should have f3_exception(1) != f3_exception(0) only if crossing page boundary
+        val crossPageException = Mux(!isRVC && isLastInLine(f3_paddrs(0)), f3_exception(1), ExceptionType.none)
+
+        // the bus exception of the current request has higher priority
+        val exception = ExceptionType.merge(busException, crossPageException)
+
         val needResend = !isRVC && f3_paddrs(0)(2, 1) === 3.U && !ExceptionType.hasException(exception)
         mmio_state      := Mux(needResend, m_sendTLB, m_waitCommit)
         mmio_exception  := exception
@@ -875,6 +885,7 @@ class NewIFU(implicit p: Parameters) extends XSModule
   io.iTLBInter.req.bits.debug.robIdx       := DontCare
   io.iTLBInter.req.bits.debug.isFirstIssue := DontCare
   io.iTLBInter.req.bits.pmp_addr           := DontCare
+  io.iTLBInter.req.bits.frm_mabuf          := DontCare
   // whats the difference between req_kill and req.bits.kill?
   io.iTLBInter.req_kill := false.B
   // wait for itlb response in m_tlbResp state
@@ -961,6 +972,10 @@ class NewIFU(implicit p: Parameters) extends XSModule
   // which is a side effect of the first instruction and actually not necessary.
   io.toIbuffer.bits.backendException := (0 until PredictWidth).map {
     case 0 => f3_backendException
+    case _ => false.B
+  }
+  io.toIbuffer.bits.satpFlushFirstFetchFault := (0 until PredictWidth).map {
+    case 0 => f3_hasSatpFlush && ExceptionType.hasException(io.toIbuffer.bits.exceptionType(0))
     case _ => false.B
   }
   io.toIbuffer.bits.crossPageIPFFix := f3_crossPage_exception_vec.map(ExceptionType.hasException)

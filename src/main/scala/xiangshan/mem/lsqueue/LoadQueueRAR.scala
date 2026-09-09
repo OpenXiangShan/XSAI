@@ -47,8 +47,6 @@ class LoadQueueRAR(implicit p: Parameters) extends XSModule
 
     // global
     val lqFull = Output(Bool())
-
-    val validCount = Output(UInt())
   })
 
   private val PartialPAddrStride: Int = 6
@@ -244,7 +242,7 @@ class LoadQueueRAR(implicit p: Parameters) extends XSModule
                          robIdxMask(i) &&
                          released(i))
       }
-    val matchMask = GatedValidRegNext(matchMaskReg)
+    val matchMask = RegEnable(matchMaskReg, query.req.valid)
     //  Load-to-Load violation check result
     val ldLdViolationMask = matchMask
     ldLdViolationMask.suggestName("ldLdViolationMask_" + w)
@@ -268,7 +266,6 @@ class LoadQueueRAR(implicit p: Parameters) extends XSModule
   })
 
   io.lqFull := freeList.io.empty
-  io.validCount := freeList.io.validCount
 
   // perf cnt
   val canEnqCount = PopCount(io.query.map(_.req.fire))

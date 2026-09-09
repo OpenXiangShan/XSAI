@@ -194,7 +194,7 @@ class CtrlBlockImp(
   private val exuRedirects: Seq[ValidIO[Redirect]] = io.fromWB.wbData.filter(_.bits.redirect.nonEmpty).map(x => {
     val hasCSR = x.bits.params.hasCSR
     val out = Wire(Valid(new Redirect()))
-    out.valid := x.valid && x.bits.redirect.get.valid && (x.bits.redirect.get.bits.cfiUpdate.isMisPred || x.bits.redirect.get.bits.cfiUpdate.hasBackendFault) && !x.bits.robIdx.needFlush(Seq(s1_s3_redirect, s2_s4_redirect))
+    out.valid := x.valid && x.bits.redirect.get.valid && !x.bits.robIdx.needFlush(Seq(s1_s3_redirect, s2_s4_redirect))
     out.bits := x.bits.redirect.get.bits
     out.bits.debugIsCtrl := true.B
     out.bits.debugIsMemVio := false.B
@@ -518,6 +518,7 @@ class CtrlBlockImp(
   decode.io.mxRat.foreach(_ <> rat.io.mxReadPorts.get)
   decode.io.fusion := 0.U.asTypeOf(decode.io.fusion) // Todo
   decode.io.stallReason.in <> io.frontend.stallReason
+  decode.io.backendCanAccept := io.frontend.canAccept
 
   // snapshot check
   class CFIRobIdx extends Bundle {

@@ -249,13 +249,24 @@ abstract class BaseTrigger()(implicit val p: Parameters) extends Module with Has
 
   val tiggerVaddrHit = Mux(isCacheLine, cacheLineEq, Mux(isVectorStride, hitVecVectorStride, triggerHitVec))
   TriggerCheckCanFire(TriggerNum, triggerCanFireVec, tiggerVaddrHit, triggerTimingVec, triggerChainVec)
-  val triggerFireOH = PriorityEncoderOH(triggerCanFireVec)
-  val triggerVaddr  = PriorityMux(triggerFireOH, VecInit(tdataVec.map(_.tdata2))).asUInt
-  val triggerMask   = PriorityMux(triggerFireOH, VecInit(tdataVec.map(x => UIntToOH(x.tdata2(lowBitWidth-1, 0))))).asUInt
 
   val actionVec = VecInit(tdataVec.map(_.action))
   val triggerAction = Wire(TriggerAction())
-  TriggerUtil.triggerActionGen(triggerAction, triggerCanFireVec, actionVec, triggerCanRaiseBpExp)
+  val fireDebugModeVec = TriggerUtil.triggerActionMatchVec(triggerCanFireVec, actionVec, TriggerAction.DebugMode)
+  val fireBreakpointExpVec = TriggerUtil.triggerActionMatchVec(triggerCanFireVec, actionVec, TriggerAction.BreakpointExp)
+  val fireDebugMode = fireDebugModeVec.asUInt.orR
+  val breakPointExp = fireBreakpointExpVec.asUInt.orR && triggerCanRaiseBpExp
+  triggerAction := MuxCase(TriggerAction.None, Seq(
+    fireDebugMode -> TriggerAction.DebugMode,
+    breakPointExp -> TriggerAction.BreakpointExp,
+  ))
+  val triggerFireVec = MuxCase(VecInit(Seq.fill(TriggerNum)(false.B)), Seq(
+    fireDebugMode -> fireDebugModeVec,
+    breakPointExp -> fireBreakpointExpVec,
+  ))
+  val triggerFireOH = PriorityEncoderOH(triggerFireVec)
+  val triggerVaddr  = Mux(triggerFireVec.asUInt.orR, PriorityMux(triggerFireOH, VecInit(tdataVec.map(_.tdata2))).asUInt, 0.U(VAddrBits.W))
+  val triggerMask   = Mux(triggerFireVec.asUInt.orR, PriorityMux(triggerFireOH, VecInit(tdataVec.map(x => UIntToOH(x.tdata2(lowBitWidth-1, 0))))).asUInt, 0.U((VLEN/8).W))
 
   io.toLoadStore.triggerAction := triggerAction
   io.toLoadStore.triggerVaddr  := triggerVaddr
@@ -295,12 +306,19 @@ class MemTrigger(memType: Boolean = MemType.LOAD)(override implicit val p: Param
   }
 
   def DcacheLineBitsEq(): (Bool, Vec[Bool])= {
+    val cacheLineBase = Cat(vaddr(VAddrBits - 1, DCacheLineOffset), 0.U(DCacheLineOffset.W))
+    val cacheLineLast = Cat(vaddr(VAddrBits - 1, DCacheLineOffset), Fill(DCacheLineOffset, 1.U(1.W)))
     (
     io.isCbo.getOrElse(false.B),
     VecInit(tdataVec.zip(tEnableVec).map{ case(tdata, en) =>
+      val tdata2 = tdata.tdata2(VAddrBits - 1, 0)
+      val cacheLineMatch = MuxLookup(tdata.matchType, false.B)(Seq(
+        TrigMatchEnum.EQ -> (vaddr(VAddrBits - 1, DCacheLineOffset) === tdata2(VAddrBits - 1, DCacheLineOffset)),
+        TrigMatchEnum.GE -> (cacheLineLast >= tdata2),
+        TrigMatchEnum.LT -> (cacheLineBase < tdata2)
+      ))
       !tdata.select && !debugMode && en &&
-        tdata.store && io.isCbo.getOrElse(false.B) &&
-        (vaddr >> DCacheLineOffset) === (tdata.tdata2 >> DCacheLineOffset)
+        tdata.store && io.isCbo.getOrElse(false.B) && cacheLineMatch
     })
     )
   }

@@ -148,6 +148,7 @@ class CtrlFlow(implicit p: Parameters) extends XSBundle {
   val foldpc = UInt(MemPredPCWidth.W)
   val exceptionVec = ExceptionVec()
   val backendException = Bool()
+  val satpFlushFirstFetchFault = Bool()
   val trigger = TriggerAction()
   val pd = new PreDecodeInfo
   val pred_taken = Bool()
@@ -311,6 +312,8 @@ class Redirect(implicit p: Parameters) extends XSBundle {
   val interrupt = Bool()
   val cfiUpdate = new CfiUpdateInfo
   val fullTarget = UInt(XLEN.W) // only used for tval storage in backend
+  val satpFlush = Bool()
+  val isVlsException = Bool()
 
   val stFtqIdx = new FtqPtr // for load violation predict
   val stFtqOffset = UInt(log2Up(PredictWidth).W)
@@ -577,6 +580,7 @@ class TlbCsrBundle(implicit p: Parameters) extends XSBundle {
     val spvp = UInt(1.W)
     val imode = UInt(2.W)
     val dmode = UInt(2.W)
+    val debug = Bool()
   }
   val mPBMTE = Bool()
   val hPBMTE = Bool()
@@ -846,8 +850,8 @@ class TopDownFromL2Top(implicit p: Parameters) extends XSBundle {
 
 class LowPowerIO(implicit p: Parameters) extends Bundle {
   /* i_*: SoC -> CPU   o_*: CPU -> SoC */
-  val o_cpu_no_op = Output(Bool()) 
-  //physical power down 
+  val o_cpu_no_op = Output(Bool())
+  //physical power down
   val i_cpu_pwrdown_req_n = Input(Bool())
   val o_cpu_pwrdown_ack_n = Output(Bool())
   // power on/off sequence control for Core iso/rst

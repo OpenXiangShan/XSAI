@@ -92,6 +92,7 @@ trait HasVLSUParameters extends HasXSParameter with VLSUConstants {
   def isNotIndexed(instType: UInt) = instType(0) === "b0".U
   def isSegment(instType: UInt) = instType(2) === "b1".U
   def is128Bit(alignedType: UInt) = alignedType(2) === "b1".U
+  def isOrderIndexed(instType: UInt) = instType === "b11".U
 
   def mergeDataWithMask(oldData: UInt, newData: UInt, mask: UInt): Vec[UInt] = {
     require(oldData.getWidth == newData.getWidth)
@@ -300,7 +301,7 @@ class VecMemExuOutput(isVector: Boolean = false)(implicit p: Parameters) extends
   val mask        = UInt(VLENB.W)
   val vaddr       = UInt(XLEN.W)
   val vaNeedExt   = Bool()
-  val gpaddr      = UInt(GPAddrBits.W)
+  val gpaddr      = UInt(XLEN.W)
   val isForVSnonLeafPTE = Bool()
   val vecTriggerMask = UInt((VLEN/8).W)
 }
@@ -917,4 +918,3 @@ object skidBuffer{
     out <> buffer.io.out
   }
 }
-

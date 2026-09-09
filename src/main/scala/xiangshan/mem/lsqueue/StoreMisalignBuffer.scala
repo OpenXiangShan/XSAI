@@ -121,8 +121,10 @@ class StoreMisalignBuffer(implicit p: Parameters) extends XSModule
     val toVecSplit = Output(new MisBuffertoVecSplitIO) // robIdx in misalignedBuffer
   })
 
-  io.rob.mmio := 0.U.asTypeOf(Vec(LoadPipelineWidth, Bool()))
-  io.rob.uop  := 0.U.asTypeOf(Vec(LoadPipelineWidth, new DynInst))
+  io.rob.loadMmio := DontCare
+  io.rob.loadMmioUop  := DontCare
+  io.rob.storeMmio := DontCare
+  io.rob.storeMmioUop  := DontCare
 
   class StoreMisalignBufferEntry(implicit p: Parameters) extends LsPipelineBundle {
     val portIndex = UInt(log2Up(enqPortNum).W)
@@ -222,11 +224,15 @@ class StoreMisalignBuffer(implicit p: Parameters) extends XSModule
     ExceptionNO.selectByFu(io.splitStoreResp.bits.uop.exceptionVec, StaCfg).asUInt.orR || TriggerAction.isDmode(io.splitStoreResp.bits.uop.trigger)
   val isUncache = (io.splitStoreResp.bits.mmio || io.splitStoreResp.bits.nc) && !io.splitStoreResp.bits.need_rep
 
-  io.sqControl.toStoreQueue.crossPageWithHit := io.sqControl.toStoreMisalignBuffer.sqPtr === req.uop.sqIdx && isCrossPage
-  io.sqControl.toStoreQueue.crossPageCanDeq := !isCrossPage || bufferState === s_block
+  val sameSqPtr = io.sqControl.toStoreMisalignBuffer.sqPtr === req.uop.sqIdx
+  val sameUop = io.sqControl.toStoreMisalignBuffer.uop.robIdx === req.uop.robIdx &&
+    io.sqControl.toStoreMisalignBuffer.uop.uopIdx === req.uop.uopIdx
+
+  io.sqControl.toStoreQueue.crossPageWithHit := sameSqPtr && isCrossPage && req_valid
+  io.sqControl.toStoreQueue.crossPageCanDeq := bufferState === s_block
   io.sqControl.toStoreQueue.paddr := Cat(splitStoreResp(1).paddr(splitStoreResp(1).paddr.getWidth - 1, 3), 0.U(3.W))
 
-  io.sqControl.toStoreQueue.withSameUop := io.sqControl.toStoreMisalignBuffer.uop.robIdx === req.uop.robIdx && io.sqControl.toStoreMisalignBuffer.uop.uopIdx === req.uop.uopIdx && req.isvec && robMatch && isCrossPage
+  io.sqControl.toStoreQueue.withSameUop := sameUop && req.isvec && robMatch && isCrossPage && bufferState === s_block
 
   //state transition
   switch(bufferState) {
@@ -285,42 +291,24 @@ class StoreMisalignBuffer(implicit p: Parameters) extends XSModule
     }
 
     is (s_wb) {
-      when (req.isvec) {
-        when (io.vecWriteBack.map(x => x.fire).reduce( _ || _)) {
-          bufferState := s_idle
-          req_valid := false.B
-          curPtr := 0.U
-          unSentStores := 0.U
-          unWriteStores := 0.U
-          globalException := false.B
-          globalUncache := false.B
-          isCrossPage := false.B
+      val writeBack = req.isvec && io.vecWriteBack.map(x => x.fire).reduce( _ || _) || io.writeBack.fire
+      when (writeBack && (!isCrossPage || globalUncache || globalException)) {
+        bufferState := s_idle
+        req_valid := false.B
+        curPtr := 0.U
+        unSentStores := 0.U
+        unWriteStores := 0.U
+        globalException := false.B
+        globalUncache := false.B
+        isCrossPage := false.B
 
-          globalMMIO := false.B
-          globalNC   := false.B
-          globalMemBackTypeMM := false.B
-        }
-
-      }.otherwise {
-        when (io.writeBack.fire && (!isCrossPage || globalUncache || globalException)) {
-          bufferState := s_idle
-          req_valid := false.B
-          curPtr := 0.U
-          unSentStores := 0.U
-          unWriteStores := 0.U
-          globalException := false.B
-          globalUncache := false.B
-          isCrossPage := false.B
-
-          globalMMIO := false.B
-          globalNC   := false.B
-          globalMemBackTypeMM := false.B
-        } .elsewhen(io.writeBack.fire && isCrossPage) {
-          bufferState := s_block
-        } .otherwise {
-          bufferState := s_wb
-        }
-
+        globalMMIO := false.B
+        globalNC   := false.B
+        globalMemBackTypeMM := false.B
+      } .elsewhen(writeBack && isCrossPage) {
+        bufferState := s_block
+      } .otherwise {
+        bufferState := s_wb
       }
     }
 
@@ -564,10 +552,24 @@ class StoreMisalignBuffer(implicit p: Parameters) extends XSModule
       exceptionVec := ExceptionNO.selectByFu(0.U.asTypeOf(exceptionVec.cloneType), StaCfg)
       // delegate to software
       exceptionVec(storeAddrMisaligned) := true.B
+      req.vaddr := resp.vaddr
+      req.fullva := resp.fullva
+      req.vaNeedExt := resp.vaNeedExt
+      req.paddr := resp.paddr
+      req.gpaddr := resp.gpaddr
+      req.isForVSnonLeafPTE := resp.isForVSnonLeafPTE
+      req.isHyper := resp.isHyper
     } .elsewhen (hasException) {
       unWriteStores := 0.U
       unSentStores := 0.U
       StaCfg.exceptionOut.map(no => exceptionVec(no) := exceptionVec(no) || resp.uop.exceptionVec(no))
+      req.vaddr := resp.vaddr
+      req.fullva := resp.fullva
+      req.vaNeedExt := resp.vaNeedExt
+      req.paddr := resp.paddr
+      req.gpaddr := resp.gpaddr
+      req.isForVSnonLeafPTE := resp.isForVSnonLeafPTE
+      req.isHyper := resp.isHyper
     } .elsewhen (!io.splitStoreResp.bits.need_rep) {
       unSentStores := unSentStores & (~UIntToOH(curPtr)).asUInt
       curPtr := curPtr + 1.U

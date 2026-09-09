@@ -127,10 +127,12 @@ class LsqWrapper(implicit p: Parameters) extends XSModule with HasDCacheParamete
     val sqCommitPtr = Output(new SqPtr)
     val sqCommitUopIdx = Output(UopIdx())
     val sqCommitRobIdx = Output(new RobPtr)
+    val sqDeqIsVec = Output(Bool())
     val mlsqDeqPtr = Option.when(HasMatrixExtension)(Output(new MlsqPtr))
+    val lqDeqRobIdx = Output(new RobPtr)
+    val lqDeqUopIdx = Output(UopIdx())
     val exceptionAddr = new ExceptionAddrIO
     val loadMisalignFull = Input(Bool())
-    val misalignAllowSpec = Input(Bool())
     val issuePtrExt = Output(new SqPtr)
     val l2_hint = Input(Valid(new L2ToL1Hint()))
     val tlb_hint = Flipped(new TlbHintIO)
@@ -140,7 +142,6 @@ class LsqWrapper(implicit p: Parameters) extends XSModule with HasDCacheParamete
     val force_write = Output(Bool())
     val lqEmpty = Output(Bool())
     val mlsqEmpty = Option.when(HasMatrixExtension)(Output(Bool()))
-    val rarValidCount = Output(UInt())
     val wfi = Flipped(new WfiReqBundle)
     // top-down
     val debugTopDown = new LoadQueueTopDownIO
@@ -187,8 +188,10 @@ class LsqWrapper(implicit p: Parameters) extends XSModule with HasDCacheParamete
   }
   io.sqCommitRobIdx := storeQueue.io.sqCommitRobIdx
   io.sqCommitUopIdx := storeQueue.io.sqCommitUopIdx
+  io.sqDeqIsVec := storeQueue.io.sqDeqIsVec
+  io.lqDeqRobIdx := loadQueue.io.lqDeqRobIdx
+  io.lqDeqUopIdx := loadQueue.io.lqDeqUopIdx
   io.sqCommitPtr    := storeQueue.io.sqCommitPtr
-  io.rarValidCount := loadQueue.io.rarValidCount
   for (i <- io.enq.req.indices) {
     loadQueue.io.enq.needAlloc(i)      := io.enq.needAlloc(i)(0)
     loadQueue.io.enq.req(i).valid      := io.enq.needAlloc(i)(0) && io.enq.req(i).valid
@@ -256,7 +259,6 @@ class LsqWrapper(implicit p: Parameters) extends XSModule with HasDCacheParamete
   loadQueue.io.release             <> io.release
   loadQueue.io.exceptionAddr.isStore := DontCare
   loadQueue.io.loadMisalignFull    := io.loadMisalignFull
-  loadQueue.io.misalignAllowSpec   := io.misalignAllowSpec
   loadQueue.io.lqCancelCnt         <> io.lqCancelCnt
   loadQueue.io.sq.stAddrReadySqPtr <> storeQueue.io.stAddrReadySqPtr
   loadQueue.io.sq.stAddrReadyVec   <> storeQueue.io.stAddrReadyVec
@@ -301,6 +303,11 @@ class LsqWrapper(implicit p: Parameters) extends XSModule with HasDCacheParamete
   io.exceptionAddr.gpaddr := Mux(RegNext(io.exceptionAddr.isStore), storeQueue.io.exceptionAddr.gpaddr, loadQueue.io.exceptionAddr.gpaddr)
   io.exceptionAddr.isForVSnonLeafPTE:= Mux(RegNext(io.exceptionAddr.isStore), storeQueue.io.exceptionAddr.isForVSnonLeafPTE, loadQueue.io.exceptionAddr.isForVSnonLeafPTE)
   io.issuePtrExt := storeQueue.io.stAddrReadySqPtr
+  io.rob.loadMmio := loadQueue.io.rob.loadMmio
+  io.rob.loadMmioUop := loadQueue.io.rob.loadMmioUop
+  io.rob.storeMmio := storeQueue.io.rob.storeMmio
+  io.rob.storeMmioUop := storeQueue.io.rob.storeMmioUop
+
 
   // naive uncache arbiter
   val s_idle :: s_load :: s_store :: Nil = Enum(3)

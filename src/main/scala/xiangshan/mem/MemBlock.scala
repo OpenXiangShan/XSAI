@@ -100,11 +100,9 @@ class ooo_to_mem(implicit p: Parameters) extends MemBlockBundle {
   val lsqio = new Bundle {
     val lcommit = Input(UInt(log2Up(CommitWidth + 1).W))
     val scommit = Input(UInt(log2Up(CommitWidth + 1).W))
-    val mcommit = Input(UInt(log2Up(CommitWidth + 1).W))
     val pendingMMIOld = Input(Bool())
     val pendingld = Input(Bool())
     val pendingst = Input(Bool())
-    val pendingmls = Input(Bool())
     val pendingVst = Input(Bool())
     val commit = Input(Bool())
     val pendingPtr = Input(new RobPtr)
@@ -157,8 +155,10 @@ class mem_to_ooo(implicit p: Parameters) extends MemBlockBundle {
     val vl = Output(UInt((log2Up(VLEN) + 1).W))
     val gpaddr = Output(UInt(XLEN.W))
     val isForVSnonLeafPTE = Output(Bool())
-    val mmio = Output(Vec(LoadPipelineWidth, Bool()))
-    val uop = Output(Vec(LoadPipelineWidth, new DynInst))
+    val loadMmio = Output(Vec(LoadPipelineWidth, Bool()))
+    val loadMmioUop = Output(Vec(LoadPipelineWidth, new DynInst))
+    val storeMmio = Output(Bool())
+    val storeMmioUop = Output(new DynInst)
     val lqCanAccept = Output(Bool())
     val sqCanAccept = Output(Bool())
     val mlsqCanAccept = Option.when(HasMatrixExtension)(Output(Bool()))
@@ -405,7 +405,9 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
   dontTouch(io.inner_hc_perfEvents)
   dontTouch(io.outer_hc_perfEvents)
 
-  val redirect = RegNextWithEnable(io.redirect)
+  val redirectModifyLevel = WireInit(io.redirect)
+  redirectModifyLevel.bits.level := Mux(io.redirect.bits.isVlsException, RedirectLevel.flushAfter, io.redirect.bits.level)
+  val redirect = RegNextWithEnable(redirectModifyLevel)
 
   private val dcache = outer.dcache.module
   val uncache = outer.uncache.module
@@ -483,8 +485,8 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
         val loadPc = RegNext(io.ooo_to_mem.issueLda(i).bits.uop.pc) // for s1
         l1Prefetcher.stride_train(i).bits.uop.pc := Mux(
           loadUnits(i).io.s2_ptr_chasing,
-          RegEnable(loadPc, loadUnits(i).io.s2_prefetch_spec),
-          RegEnable(RegEnable(loadPc, loadUnits(i).io.s1_prefetch_spec), loadUnits(i).io.s2_prefetch_spec)
+          RegEnable(loadPc, loadUnits(i).io.s2_prefetch_spec_l1),
+          RegEnable(RegEnable(loadPc, loadUnits(i).io.s1_prefetch_spec_l1), loadUnits(i).io.s2_prefetch_spec_l1)
         )
       }
       for (i <- 0 until HyuCnt) {
@@ -702,11 +704,13 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
   val ptwio = Wire(new VectorTlbPtwIO(DTlbSize))
   val dtlb_reqs = dtlb.map(_.requestor).flatten
   val dtlb_pmps = dtlb.map(_.pmp).flatten
+  val dtlb_pmp_modes = dtlb.map(_.pmpMode).flatten
   dtlb.map(_.hartId := io.hartId)
   dtlb.map(_.sfence := sfence)
   dtlb.map(_.csr := tlbcsr)
   dtlb.map(_.flushPipe.map(a => a := false.B)) // non-block doesn't need
   dtlb.map(_.redirect := redirect)
+  dtlb.map(_.robPendingPtr := io.ooo_to_mem.lsqio.pendingPtr)
   if (refillBothTlb) {
     require(ldtlbParams.outReplace == sttlbParams.outReplace)
     require(ldtlbParams.outReplace == hytlbParams.outReplace)
@@ -788,15 +792,15 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
 
   val pmp_checkers = Seq.fill(DTlbSize)(Module(new PMPChecker(4, leaveHitMux = true)))
   val pmp_check = pmp_checkers.map(_.io)
-  for ((p,d) <- pmp_check zip dtlb_pmps) {
+  for (((p, d), pmpMode) <- pmp_check.zip(dtlb_pmps).zip(dtlb_pmp_modes)) {
     if (HasBitmapCheck) {
       if (KeyIDBits > 0) {
-        p.apply(tlbcsr.mbmc.KEYIDEN.asBool, tlbcsr.mbmc.CMODE.asBool, tlbcsr.priv.dmode, pmp.io.pmp, pmp.io.pma, d)
+        p.apply(tlbcsr.mbmc.KEYIDEN.asBool, tlbcsr.mbmc.CMODE.asBool, pmpMode, tlbcsr.priv.debug, pmp.io.pmp, pmp.io.pma, d)
       } else {
-        p.apply(tlbcsr.mbmc.CMODE.asBool, tlbcsr.priv.dmode, pmp.io.pmp, pmp.io.pma, d)
+        p.apply(tlbcsr.mbmc.CMODE.asBool, pmpMode, tlbcsr.priv.debug, pmp.io.pmp, pmp.io.pma, d)
       }
     } else {
-      p.apply(tlbcsr.priv.dmode, pmp.io.pmp, pmp.io.pma, d)
+      p.apply(pmpMode, tlbcsr.priv.debug, pmp.io.pmp, pmp.io.pma, d)
     }
     require(p.req.bits.size.getWidth == d.bits.size.getWidth)
   }
@@ -847,25 +851,20 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
     vSegmentFlag := false.B
   }
 
-  val misalign_allow_spec = RegInit(true.B)
-  val ldu_rollback_with_misalign_nack = loadUnits.map(ldu =>
-    ldu.io.lsq.ldin.bits.isFrmMisAlignBuf && ldu.io.lsq.ldin.bits.rep_info.rar_nack && ldu.io.rollback.valid
-  ).reduce(_ || _)
-  when (ldu_rollback_with_misalign_nack) {
-    misalign_allow_spec := false.B
-  } .elsewhen(lsq.io.rarValidCount < (LoadQueueRARSize - 4).U) {
-    misalign_allow_spec := true.B
-  }
+  // Kill the request left in DCache load port 0 S1 when segment takes over.
+  // Only a hardware prefetch can occupy this boundary slot.
+  val vSegmentFlagPrev = RegNext(vSegmentFlag, false.B)
+  val vSegmentS1Kill = vSegmentFlag && !vSegmentFlagPrev
 
   // LoadUnit
   val correctMissTrain = Constantin.createRecord(s"CorrectMissTrain$hartId", initValue = false)
 
   for (i <- 0 until LduCnt) {
     loadUnits(i).io.redirect <> redirect
-    loadUnits(i).io.misalign_allow_spec := misalign_allow_spec
 
     // get input form dispatch
     loadUnits(i).io.ldin <> io.ooo_to_mem.issueLda(i)
+    loadUnits(i).io.robDeqIdx <> io.ooo_to_mem.lsqio.pendingPtr
     loadUnits(i).io.feedback_slow <> io.mem_to_ooo.ldaIqFeedback(i).feedbackSlow
     io.mem_to_ooo.ldaIqFeedback(i).feedbackFast := DontCare
     loadUnits(i).io.correctMissTrain := correctMissTrain
@@ -906,7 +905,8 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
       dcache.io.lsu.load(0).pf_source              := vSegmentUnit.io.rdcache.pf_source
       dcache.io.lsu.load(0).s1_paddr_dup_lsu       := vSegmentUnit.io.rdcache.s1_paddr_dup_lsu
       dcache.io.lsu.load(0).s1_paddr_dup_dcache    := vSegmentUnit.io.rdcache.s1_paddr_dup_dcache
-      dcache.io.lsu.load(0).s1_kill                := vSegmentUnit.io.rdcache.s1_kill
+      dcache.io.lsu.load(0).s1_kill_data_read      := vSegmentUnit.io.rdcache.s1_kill_data_read
+      dcache.io.lsu.load(0).s1_kill                := vSegmentUnit.io.rdcache.s1_kill || vSegmentS1Kill
       dcache.io.lsu.load(0).s2_kill                := vSegmentUnit.io.rdcache.s2_kill
       dcache.io.lsu.load(0).s0_pc                  := vSegmentUnit.io.rdcache.s0_pc
       dcache.io.lsu.load(0).s1_pc                  := vSegmentUnit.io.rdcache.s1_pc
@@ -918,6 +918,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
       dcache.io.lsu.load(0).pf_source              := loadUnits(0).io.dcache.pf_source
       dcache.io.lsu.load(0).s1_paddr_dup_lsu       := loadUnits(0).io.dcache.s1_paddr_dup_lsu
       dcache.io.lsu.load(0).s1_paddr_dup_dcache    := loadUnits(0).io.dcache.s1_paddr_dup_dcache
+      dcache.io.lsu.load(0).s1_kill_data_read      := loadUnits(0).io.dcache.s1_kill_data_read
       dcache.io.lsu.load(0).s1_kill                := loadUnits(0).io.dcache.s1_kill
       dcache.io.lsu.load(0).s2_kill                := loadUnits(0).io.dcache.s2_kill
       dcache.io.lsu.load(0).s0_pc                  := loadUnits(0).io.dcache.s0_pc
@@ -1218,27 +1219,22 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
   loadMisalignBuffer.io.redirect                <> redirect
   loadMisalignBuffer.io.rob.lcommit             := io.ooo_to_mem.lsqio.lcommit
   loadMisalignBuffer.io.rob.scommit             := io.ooo_to_mem.lsqio.scommit
-  loadMisalignBuffer.io.rob.mcommit             := io.ooo_to_mem.lsqio.mcommit
   loadMisalignBuffer.io.rob.pendingMMIOld       := io.ooo_to_mem.lsqio.pendingMMIOld
   loadMisalignBuffer.io.rob.pendingld           := io.ooo_to_mem.lsqio.pendingld
   loadMisalignBuffer.io.rob.pendingst           := io.ooo_to_mem.lsqio.pendingst
-  loadMisalignBuffer.io.rob.pendingmls          := io.ooo_to_mem.lsqio.pendingmls
   loadMisalignBuffer.io.rob.pendingVst          := io.ooo_to_mem.lsqio.pendingVst
   loadMisalignBuffer.io.rob.commit              := io.ooo_to_mem.lsqio.commit
   loadMisalignBuffer.io.rob.pendingPtr          := io.ooo_to_mem.lsqio.pendingPtr
   loadMisalignBuffer.io.rob.pendingPtrNext      := io.ooo_to_mem.lsqio.pendingPtrNext
 
   lsq.io.loadMisalignFull                       := loadMisalignBuffer.io.loadMisalignFull
-  lsq.io.misalignAllowSpec                      := misalign_allow_spec
 
   storeMisalignBuffer.io.redirect               <> redirect
   storeMisalignBuffer.io.rob.lcommit            := io.ooo_to_mem.lsqio.lcommit
   storeMisalignBuffer.io.rob.scommit            := io.ooo_to_mem.lsqio.scommit
-  storeMisalignBuffer.io.rob.mcommit            := io.ooo_to_mem.lsqio.mcommit
   storeMisalignBuffer.io.rob.pendingMMIOld      := io.ooo_to_mem.lsqio.pendingMMIOld
   storeMisalignBuffer.io.rob.pendingld          := io.ooo_to_mem.lsqio.pendingld
   storeMisalignBuffer.io.rob.pendingst          := io.ooo_to_mem.lsqio.pendingst
-  storeMisalignBuffer.io.rob.pendingmls         := io.ooo_to_mem.lsqio.pendingmls
   storeMisalignBuffer.io.rob.pendingVst         := io.ooo_to_mem.lsqio.pendingVst
   storeMisalignBuffer.io.rob.commit             := io.ooo_to_mem.lsqio.commit
   storeMisalignBuffer.io.rob.pendingPtr         := io.ooo_to_mem.lsqio.pendingPtr
@@ -1441,15 +1437,16 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
   lsq.io.uncacheOutstanding := io.ooo_to_mem.csrCtrl.uncache_write_outstanding_enable
 
   // Lsq
-  io.mem_to_ooo.lsqio.mmio       := lsq.io.rob.mmio
-  io.mem_to_ooo.lsqio.uop        := lsq.io.rob.uop
+  io.mem_to_ooo.lsqio.loadMmio     := lsq.io.rob.loadMmio
+  io.mem_to_ooo.lsqio.loadMmioUop  := lsq.io.rob.loadMmioUop
+  io.mem_to_ooo.lsqio.storeMmio    := lsq.io.rob.storeMmio
+  io.mem_to_ooo.lsqio.storeMmioUop := lsq.io.rob.storeMmioUop
+
   lsq.io.rob.lcommit             := io.ooo_to_mem.lsqio.lcommit
   lsq.io.rob.scommit             := io.ooo_to_mem.lsqio.scommit
-  lsq.io.rob.mcommit             := io.ooo_to_mem.lsqio.mcommit
   lsq.io.rob.pendingMMIOld       := io.ooo_to_mem.lsqio.pendingMMIOld
   lsq.io.rob.pendingld           := io.ooo_to_mem.lsqio.pendingld
   lsq.io.rob.pendingst           := io.ooo_to_mem.lsqio.pendingst
-  lsq.io.rob.pendingmls          := io.ooo_to_mem.lsqio.pendingmls
   lsq.io.rob.pendingVst          := io.ooo_to_mem.lsqio.pendingVst
   lsq.io.rob.commit              := io.ooo_to_mem.lsqio.commit
   lsq.io.rob.pendingPtr          := io.ooo_to_mem.lsqio.pendingPtr
@@ -1628,6 +1625,8 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
    *  RS1 -> VlSplit1  -> ldu1 -> |  -> vlMergebuffer
    *        replayIO   -> ldu3 -> |
    * */
+  val vecMisalignBlockScalaIssue = vsSplit.map(_.io.vstdMisalign.get.blockScalaIssue).reduce(_ || _)
+
   (0 until VstuCnt).foreach{i =>
     vsMergeBuffer(i).io.fromPipeline := DontCare
     vsMergeBuffer(i).io.fromSplit := DontCare
@@ -1652,7 +1651,9 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
     vsSplit(i).io.vstdMisalign.get.storeMisalignBufferEmpty  := storeMisalignBuffer.io.toVecSplit.empty
     vsSplit(i).io.vstdMisalign.get.storeMisalignBufferRobIdx := storeMisalignBuffer.io.toVecSplit.robIdx
     vsSplit(i).io.vstdMisalign.get.storeMisalignBufferUopIdx := storeMisalignBuffer.io.toVecSplit.uopIdx
+    vsSplit(i).io.vstdMisalign.get.sqDeqIsVec := lsq.io.sqDeqIsVec
     vsSplit(i).io.vstdMisalign.get.storePipeEmpty := !storeUnits.map(_.io.s0_s1_s2_valid).reduce(_||_)
+    storeUnits(i).io.vecMisalignBlockScalaIssue := vecMisalignBlockScalaIssue
 
   }
   (0 until VlduCnt).foreach{i =>
@@ -1662,7 +1663,22 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
                               vLoadCanAccept(i) && !isSegment && !isFixVlUop(i)
     vlSplit(i).io.toMergeBuffer <> vlMergeBuffer.io.fromSplit(i)
     vlSplit(i).io.threshold.get.valid := vlMergeBuffer.io.toSplit.get.threshold
-    vlSplit(i).io.threshold.get.bits  := lsq.io.lqDeqPtr
+    vlSplit(i).io.threshold.get.bits.robIdx := lsq.io.lqDeqRobIdx
+    vlSplit(i).io.threshold.get.bits.uopIdx := lsq.io.lqDeqUopIdx
+    vlSplit(i).io.fromPipeline.get.zipWithIndex.foreach { case (sink, j) =>
+      if (j == MisalignWBPort) {
+        when(loadUnits(j).io.vecldout.valid) {
+          sink.valid := loadUnits(j).io.vecldout.valid
+          sink.bits := loadUnits(j).io.vecldout.bits
+        }.otherwise {
+          sink.valid := loadMisalignBuffer.io.vecWriteBack.valid
+          sink.bits := loadMisalignBuffer.io.vecWriteBack.bits
+        }
+      } else {
+        sink.valid := loadUnits(j).io.vecldout.valid
+        sink.bits := loadUnits(j).io.vecldout.bits
+      }
+    }
     NewPipelineConnect(
       vlSplit(i).io.out, loadUnits(i).io.vecldin, loadUnits(i).io.vecldin.fire,
       Mux(vlSplit(i).io.out.fire, vlSplit(i).io.out.bits.uop.robIdx.needFlush(io.redirect), loadUnits(i).io.vecldin.bits.uop.robIdx.needFlush(io.redirect)),
@@ -1707,7 +1723,11 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
   }
 
   (0 until VlduCnt).foreach{i=>
-    io.ooo_to_mem.issueVldu(i).ready := vLoadCanAccept(i) || vStoreCanAccept(i)
+    if (i == 0) {
+      io.ooo_to_mem.issueVldu(i).ready := vLoadCanAccept(i) || vStoreCanAccept(i) || isSegment
+    } else {
+      io.ooo_to_mem.issueVldu(i).ready := vLoadCanAccept(i) || vStoreCanAccept(i)
+    }
   }
 
   vlMergeBuffer.io.redirect <> redirect
@@ -2062,7 +2082,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
   io.outer_cpu_halt := RegNext(io.ooo_to_mem.backendToTopBypass.cpuHalted)
   io.outer_l2_flush_en := io.ooo_to_mem.csrCtrl.flush_l2_enable
   io.outer_power_down_en := io.ooo_to_mem.csrCtrl.power_down_enable
-  io.outer_cpu_critical_error := RegNext(io.ooo_to_mem.backendToTopBypass.cpuCriticalError)
+  io.outer_cpu_critical_error := RegNext(io.ooo_to_mem.backendToTopBypass.cpuCriticalError, false.B)
   io.outer_msi_ack := io.ooo_to_mem.backendToTopBypass.msiAck
   io.outer_teemsi_ack zip io.ooo_to_mem.backendToTopBypass.teemsiAck foreach { case (teemsi_ack, teemsiAck) =>
     teemsi_ack := teemsiAck
@@ -2074,7 +2094,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
   // vector segmentUnit
   vSegmentUnit.io.in.bits <> io.ooo_to_mem.issueVldu.head.bits
   vSegmentUnit.io.csrCtrl <> csrCtrl
-  vSegmentUnit.io.in.valid := isSegment && io.ooo_to_mem.issueVldu.head.valid// is segment instruction
+  vSegmentUnit.io.in.valid := isSegment// is segment instruction
   vSegmentUnit.io.dtlb.resp.bits <> dtlb_reqs.take(LduCnt).head.resp.bits
   vSegmentUnit.io.dtlb.resp.valid <> dtlb_reqs.take(LduCnt).head.resp.valid
   vSegmentUnit.io.pmpResp <> pmp_check.head.resp
@@ -2135,7 +2155,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
   )
   traceToL2Top.toEncoder.mstatus := RegNext(traceFromBackend.toEncoder.mstatus)
   (0 until TraceGroupNum).foreach { i =>
-    traceToL2Top.toEncoder.groups(i).valid := RegNext(traceFromBackend.toEncoder.groups(i).valid)
+    traceToL2Top.toEncoder.groups(i).valid := RegNext(traceFromBackend.toEncoder.groups(i).valid, false.B)
     traceToL2Top.toEncoder.groups(i).bits.iretire := RegNext(traceFromBackend.toEncoder.groups(i).bits.iretire)
     traceToL2Top.toEncoder.groups(i).bits.itype := RegNext(traceFromBackend.toEncoder.groups(i).bits.itype)
     traceToL2Top.toEncoder.groups(i).bits.ilastsize := RegEnable(

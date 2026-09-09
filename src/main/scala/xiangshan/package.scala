@@ -171,7 +171,6 @@ package object xiangshan {
     def BRANCH = "b001".U  // branch
     def LOAD   = "b010".U  // load
     def STORE  = "b011".U  // store
-    def MLS    = "b100".U  // mls
 
     def apply() = UInt(3.W)
     def isFused(commitType: UInt): Bool = commitType(2)
@@ -981,6 +980,7 @@ package object xiangshan {
     def isCboClean(op: UInt): Bool = isCbo(op) && (op(3, 0) === cbo_clean)
     def isCboFlush(op: UInt): Bool = isCbo(op) && (op(3, 0) === cbo_flush)
     def isCboInval(op: UInt): Bool = isCbo(op) && (op(3, 0) === cbo_inval)
+    def isCboZero(op:UInt): Bool = op(3,0) === cbo_zero
 
     // atomics
     // bit(1, 0) are size

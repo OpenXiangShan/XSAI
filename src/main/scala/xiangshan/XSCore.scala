@@ -181,8 +181,10 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
   backend.io.mem.writebackStd <> memBlock.io.mem_to_ooo.writebackStd
   backend.io.mem.writebackVldu <> memBlock.io.mem_to_ooo.writebackVldu
   backend.io.mem.writebackMls.foreach(_ <> memBlock.io.mem_to_ooo.writebackMls.get)
-  backend.io.mem.robLsqIO.mmio := memBlock.io.mem_to_ooo.lsqio.mmio
-  backend.io.mem.robLsqIO.uop := memBlock.io.mem_to_ooo.lsqio.uop
+  backend.io.mem.robLsqIO.loadMmio := memBlock.io.mem_to_ooo.lsqio.loadMmio
+  backend.io.mem.robLsqIO.loadMmioUop := memBlock.io.mem_to_ooo.lsqio.loadMmioUop
+  backend.io.mem.robLsqIO.storeMmio := memBlock.io.mem_to_ooo.lsqio.storeMmio
+  backend.io.mem.robLsqIO.storeMmioUop := memBlock.io.mem_to_ooo.lsqio.storeMmioUop
 
   // memblock error exception writeback, 1 cycle after normal writeback
   backend.io.mem.s3_delayed_load_error := memBlock.io.mem_to_ooo.s3_delayed_load_error
@@ -263,11 +265,9 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
   memBlock.io.ooo_to_mem.tlbCsr := backend.io.mem.tlbCsr
   memBlock.io.ooo_to_mem.lsqio.lcommit          := backend.io.mem.robLsqIO.lcommit
   memBlock.io.ooo_to_mem.lsqio.scommit          := backend.io.mem.robLsqIO.scommit
-  memBlock.io.ooo_to_mem.lsqio.mcommit          := backend.io.mem.robLsqIO.mcommit
   memBlock.io.ooo_to_mem.lsqio.pendingMMIOld    := backend.io.mem.robLsqIO.pendingMMIOld
   memBlock.io.ooo_to_mem.lsqio.pendingld        := backend.io.mem.robLsqIO.pendingld
   memBlock.io.ooo_to_mem.lsqio.pendingst        := backend.io.mem.robLsqIO.pendingst
-  memBlock.io.ooo_to_mem.lsqio.pendingmls       := backend.io.mem.robLsqIO.pendingmls
   memBlock.io.ooo_to_mem.lsqio.pendingVst       := backend.io.mem.robLsqIO.pendingVst
   memBlock.io.ooo_to_mem.lsqio.commit           := backend.io.mem.robLsqIO.commit
   memBlock.io.ooo_to_mem.lsqio.pendingPtr       := backend.io.mem.robLsqIO.pendingPtr

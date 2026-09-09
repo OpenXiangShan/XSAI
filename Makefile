@@ -237,7 +237,7 @@ endif
 # emu for the release version
 RELEASE_ARGS += --fpga-platform --disable-all --remove-assert --reset-gen --firtool-opt --ignore-read-enable-mem
 ifeq ($(FPGA), 1)
-override DEBUG_ARGS	+= --fpga-platform --disable-all --remove-assert --disable-clockgate
+override DEBUG_ARGS	+= --fpga-platform --disable-all --remove-assert --disable-clockgate --sim-mem-size 8
 else
 override DEBUG_ARGS	+= --enable-difftest
 endif

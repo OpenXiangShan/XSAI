@@ -69,7 +69,7 @@ object RobBundles extends HasCircularQueuePtrHelper {
     val needAmuCtrl = OptionWrapper(HasMatrixExtension, Bool())
     val amuCtrl = OptionWrapper(HasMatrixExtension, new AmuCtrlIO)
     // data end
-    
+
     // trace
     val traceBlockInPipe = new TracePipe(IretireWidthInPipe)
     // status begin
@@ -263,20 +263,20 @@ class RobCSRIO(implicit p: Parameters) extends XSBundle {
 class RobLsqIO(implicit p: Parameters) extends XSBundle {
   val lcommit = Output(UInt(log2Up(CommitWidth + 1).W))
   val scommit = Output(UInt(log2Up(CommitWidth + 1).W))
-  val mcommit = Output(UInt(log2Up(CommitWidth + 1).W))
   val pendingMMIOld = Output(Bool())
   val pendingld = Output(Bool())
   val pendingst = Output(Bool())
-  val pendingmls = Output(Bool())
   // set when vector store at the head of ROB
   val pendingVst = Output(Bool())
   val commit = Output(Bool())
   val pendingPtr = Output(new RobPtr)
   val pendingPtrNext = Output(new RobPtr)
 
-  val mmio = Input(Vec(LoadPipelineWidth, Bool()))
-  // Todo: what's this?
-  val uop = Input(Vec(LoadPipelineWidth, new DynInst))
+  // lsq to rob for mmio flag
+  val loadMmio = Input(Vec(LoadPipelineWidth, Bool()))
+  val loadMmioUop = Input(Vec(LoadPipelineWidth, new DynInst))
+  val storeMmio = Input(Bool())
+  val storeMmioUop = Input(new DynInst)
 }
 
 class RobEnqIO(implicit p: Parameters) extends XSBundle {
@@ -315,7 +315,9 @@ class RobExceptionInfo(implicit p: Parameters) extends XSBundle {
   val isEnqExcp = Bool()
   val exceptionVec = ExceptionVec()
   val isFetchMalAddr = Bool()
+  val satpFlushFirstFetchFault = Bool()
   val flushPipe = Bool()
+  val satpFlushPipe = Bool()
   val isVset = Bool()
   val needAmuCtrl = OptionWrapper(HasMatrixExtension, Bool())
   val replayInst = Bool() // redirect to that inst itself

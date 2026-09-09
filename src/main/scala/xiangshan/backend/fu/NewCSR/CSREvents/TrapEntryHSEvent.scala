@@ -35,6 +35,8 @@ class TrapEntryHSEventModule(implicit val p: Parameters) extends Module with CSR
   private val satp = current.satp
   private val vsatp = current.vsatp
   private val hgatp = current.hgatp
+  private val oldSatp = current.oldSatp
+  private val oldVsatp = current.oldVsatp
 
   private val highPrioTrapNO = in.causeNO.ExceptionCode.asUInt
   private val isException = !in.causeNO.Interrupt.asBool
@@ -42,13 +44,21 @@ class TrapEntryHSEventModule(implicit val p: Parameters) extends Module with CSR
 
   private val trapPC = genTrapVA(
     iMode,
-    satp,
-    vsatp,
+    oldSatp,
+    oldVsatp,
     hgatp,
     in.trapPc,
   )
 
   private val trapPCGPA = in.trapPcGPA
+
+  private val trapPCGPAFromSatpFlush = genTrapVA(
+    iMode,
+    oldSatp,
+    oldVsatp,
+    hgatp,
+    in.trapPcGPA,
+  )
 
   private val trapMemVA = in.memExceptionVAddr
 
@@ -68,6 +78,7 @@ class TrapEntryHSEventModule(implicit val p: Parameters) extends Module with CSR
   private val fetchCrossPage = in.isCrossPageIPF
   private val isFetchMalAddr = in.isFetchMalAddr
   private val isFetchMalAddrExcp = isException && isFetchMalAddr
+  private val satpFlushFirstFetchFault = in.satpFlushFirstFetchFault
   private val isIllegalInst  = isException && (ExceptionNO.EX_II.U === highPrioTrapNO || ExceptionNO.EX_VI.U === highPrioTrapNO)
 
   private val isLSGuestExcp    = isException && ExceptionNO.getLSGuestPageFault.map(_.U === highPrioTrapNO).reduce(_ || _)
@@ -78,10 +89,9 @@ class TrapEntryHSEventModule(implicit val p: Parameters) extends Module with CSR
   private val tvalFillPcPlus2  = (isFetchExcp || isFetchGuestExcp) && fetchCrossPage
   private val tvalFillMemVaddr = isMemExcp || isMemBkpt
   private val tvalFillGVA      =
-    isHlsExcp && isMemExcp ||
     isLSGuestExcp|| isFetchGuestExcp ||
     (isFetchExcp || isFetchBkpt) && fetchIsVirt ||
-    (isMemExcp || isMemBkpt) && memIsVirt
+    (isMemExcp || isMemBkpt) && (memIsVirt || isHlsExcp)
   private val tvalFillInst     = isIllegalInst
 
   private val tval = Mux1H(Seq(
@@ -95,6 +105,13 @@ class TrapEntryHSEventModule(implicit val p: Parameters) extends Module with CSR
     (isFetchGuestExcp && isFetchMalAddr                    ) -> in.fetchMalTval,
     (isFetchGuestExcp && !isFetchMalAddr && !fetchCrossPage) -> trapPCGPA,
     (isFetchGuestExcp && !isFetchMalAddr && fetchCrossPage ) -> (trapPCGPA + 2.U),
+    (isLSGuestExcp                                         ) -> trapMemGPA,
+  ))
+
+  private val tval2FromSatpFlush = Mux1H(Seq(
+    (isFetchGuestExcp && isFetchMalAddr                    ) -> in.fetchMalTval,
+    (isFetchGuestExcp && !isFetchMalAddr && !fetchCrossPage) -> trapPCGPAFromSatpFlush,
+    (isFetchGuestExcp && !isFetchMalAddr && fetchCrossPage ) -> (trapPCGPAFromSatpFlush + 2.U),
     (isLSGuestExcp                                         ) -> trapMemGPA,
   ))
 
@@ -129,11 +146,11 @@ class TrapEntryHSEventModule(implicit val p: Parameters) extends Module with CSR
     // SPVP is not PrivMode enum type, so asUInt and shrink the width
   out.hstatus.bits.SPVP         := Mux(!current.privState.isVirtual, in.hstatus.SPVP.asUInt, current.privState.PRVM.asUInt(0, 0))
   out.hstatus.bits.GVA          := tvalFillGVA
-  out.sepc.bits.epc             := Mux(isFetchMalAddr, in.fetchMalTval(63, 1), trapPC(63, 1))
+  out.sepc.bits.epc             := Mux(satpFlushFirstFetchFault, trapPC(63, 1), Mux(isFetchMalAddr, in.fetchMalTval(63, 1), trapPC(63, 1)))
   out.scause.bits.Interrupt     := isInterrupt
   out.scause.bits.ExceptionCode := highPrioTrapNO
-  out.stval.bits.ALL            := Mux(isFetchMalAddrExcp, in.fetchMalTval, tval)
-  out.htval.bits.ALL            := tval2 >> 2
+  out.stval.bits.ALL            := Mux(satpFlushFirstFetchFault, tval, Mux(isFetchMalAddrExcp, in.fetchMalTval, tval))
+  out.htval.bits.ALL            := Mux(satpFlushFirstFetchFault, tval2FromSatpFlush >> 2, tval2 >> 2)
   out.htinst.bits.ALL           := Mux(isFetchGuestExcp && in.trapIsForVSnonLeafPTE || isLSGuestExcp && in.memExceptionIsForVSnonLeafPTE, 0x3000.U, 0.U)
   out.targetPc.bits.pc          := in.pcFromXtvec
   out.targetPc.bits.raiseIPF    := instrAddrTransType.checkPageFault(in.pcFromXtvec)

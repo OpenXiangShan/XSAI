@@ -15,77 +15,77 @@ import scala.collection.immutable.SeqMap
 
 trait CSRIND { self: NewCSR with HypervisorLevel =>
   val mireg2 = Module(new CSRModule("Mireg2") {
-    rdata := 0.U
+    regOut := 0.U
   })
     .setAddr(CSRs.mireg2)
 
   val mireg3 = Module(new CSRModule("Mireg3") {
-    rdata := 0.U
+    regOut := 0.U
   })
     .setAddr(CSRs.mireg3)
 
   val mireg4 = Module(new CSRModule("Mireg4") {
-    rdata := 0.U
+    regOut := 0.U
   })
     .setAddr(CSRs.mireg4)
 
   val mireg5 = Module(new CSRModule("Mireg5") {
-    rdata := 0.U
+    regOut := 0.U
   })
     .setAddr(CSRs.mireg5)
 
   val mireg6 = Module(new CSRModule("Mireg6") {
-    rdata := 0.U
+    regOut := 0.U
   })
     .setAddr(CSRs.mireg6)
 
   val sireg2 = Module(new CSRModule("Sireg2") {
-    rdata := 0.U
+    regOut := 0.U
   })
     .setAddr(CSRs.sireg2)
 
   val sireg3 = Module(new CSRModule("Sireg3") {
-    rdata := 0.U
+    regOut := 0.U
   })
     .setAddr(CSRs.sireg3)
 
   val sireg4 = Module(new CSRModule("Sireg4") {
-    rdata := 0.U
+    regOut := 0.U
   })
     .setAddr(CSRs.sireg4)
 
   val sireg5 = Module(new CSRModule("Sireg5") {
-    rdata := 0.U
+    regOut := 0.U
   })
     .setAddr(CSRs.sireg5)
 
   val sireg6 = Module(new CSRModule("Sireg6") {
-    rdata := 0.U
+    regOut := 0.U
   })
     .setAddr(CSRs.sireg6)
 
   val vsireg2 = Module(new CSRModule("VSireg2") {
-    rdata := 0.U
+    regOut := 0.U
   })
     .setAddr(CSRs.vsireg2)
 
   val vsireg3 = Module(new CSRModule("VSireg3") {
-    rdata := 0.U
+    regOut := 0.U
   })
     .setAddr(CSRs.vsireg3)
 
   val vsireg4 = Module(new CSRModule("VSireg4") {
-    rdata := 0.U
+    regOut := 0.U
   })
     .setAddr(CSRs.vsireg4)
 
   val vsireg5 = Module(new CSRModule("VSireg5") {
-    rdata := 0.U
+    regOut := 0.U
   })
     .setAddr(CSRs.vsireg5)
 
   val vsireg6 = Module(new CSRModule("VSireg6") {
-    rdata := 0.U
+    regOut := 0.U
   })
     .setAddr(CSRs.vsireg6)
 
