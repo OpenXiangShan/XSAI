@@ -15,6 +15,7 @@ import xiangshan.backend.decode.Zvbb._
 import xiangshan.backend.decode.Zfbf._
 import xiangshan.backend.decode.Zvfexp._
 import xiangshan.backend.decode.XX8._
+import xiangshan.backend.decode.XMXFP._
 
 abstract class VecDecode extends XSDecodeBase {
   def generate() : List[BitPat]
@@ -577,6 +578,8 @@ object VecDecoder extends DecodeConstants {
     VFNCVTXX8_INT8 -> OPFVV(SrcType.X, SrcType.vp, FuType.vfcvt, VfcvtType.vfncvtxx8_int8, F, T, F, UopSplitType.VEC_XX8),
     VFNCVTXX8_E4M3 -> OPFVV(SrcType.X, SrcType.vp, FuType.vfcvt, VfcvtType.vfncvtxx8_e4m3, F, T, F, UopSplitType.VEC_XX8),
     VFNCVTXX8_E5M2 -> OPFVV(SrcType.X, SrcType.vp, FuType.vfcvt, VfcvtType.vfncvtxx8_e5m2, F, T, F, UopSplitType.VEC_XX8),
+    VFNCVTMXFP4_F_F_W -> OPFVV(SrcType.vp, SrcType.vp, FuType.vfcvt, VfcvtType.vfncvtmxfp4_ffw, F, T, F, UopSplitType.VEC_MXFP4),
+    VFNCVTMXFP8_F_F_W -> OPFVV(SrcType.vp, SrcType.vp, FuType.vfcvt, VfcvtType.vfncvtmxfp8_ffw, F, T, F, UopSplitType.VEC_MXFP8),
 
     // 13.2. Vector Single-Width Floating-Point Add/Subtract Instructions
     VFADD_VV           -> OPFVV(SrcType.vp, SrcType.vp , FuType.vfalu, VfaluType.vfadd, F, T, F, UopSplitType.VEC_VVV),

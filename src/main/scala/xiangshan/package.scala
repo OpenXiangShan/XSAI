@@ -1188,7 +1188,7 @@ package object xiangshan {
     def VEC_VRED         = "b100100".U // VEC_VRED
     def VEC_SLIDEUP      = "b100101".U // VEC_SLIDEUP
     def VEC_SLIDEDOWN    = "b100111".U // VEC_SLIDEDOWN
-    def VEC_XX8          = "b100110".U // FP32 to packed INT8/E4M3/E5M2
+    def VEC_XX8          = "b101011".U // FP32 to packed INT8/E4M3/E5M2
     def VEC_M0X          = "b101001".U // VEC_M0X  0MV
     def VEC_MVV          = "b101010".U // VEC_MVV  VMV
     def VEC_VWW          = "b101100".U //
@@ -1207,6 +1207,8 @@ package object xiangshan {
     def VEC_VFRED        = "b111100".U // VEC_VFRED
     def VEC_VFREDOSUM    = "b111101".U // VEC_VFREDOSUM
     def VEC_MVNR         = "b000100".U // vmvnr
+    def VEC_MXFP8        = "b100110".U // FP32 to packed MXFP8
+    def VEC_MXFP4        = "b101000".U // FP32 to packed MXFP4
 
     def AMO_CAS_W        = "b110101".U // amocas_w
     def AMO_CAS_D        = "b110110".U // amocas_d
