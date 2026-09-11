@@ -134,7 +134,7 @@ class XSTile()(implicit p: Parameters) extends LazyModule
         val l3MissMatch = Input(Bool())
       }
       val l3Miss = Input(Bool())
-      val chi = Option.when(isOpenLLC)(new PortIO)
+      val chi = Option.when(usesLcreditCHI)(new PortIO)
       val decoupledCHI = Option.when(isZhuJiang)(
         new DecoupledPortIO()(p.alter((_, _, _) => {
           case CHIIssue => p(CHIIssue)

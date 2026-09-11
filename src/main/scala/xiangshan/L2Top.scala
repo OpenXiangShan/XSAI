@@ -224,7 +224,7 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
         val fromTile = Input(ValidIO(UInt(64.W)))
         val toCore = Output(ValidIO(UInt(64.W)))
       }
-      val chi = Option.when(isOpenLLC)(new PortIO)
+      val chi = Option.when(usesLcreditCHI)(new PortIO)
       val decoupledCHI = Option.when(isZhuJiang)(
         new DecoupledPortIO()(p.alter((_, _, _) => {
           case CHIIssue => p(CHIIssue)
@@ -370,7 +370,7 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
       l2.io.l2_tlb_req.pmp_resp.mmio := io.l2_pmp_resp.mmio
       l2.io.l2_tlb_req.pmp_resp.atomic := io.l2_pmp_resp.atomic
       l2.io.nodeID := io.nodeID.get
-      if (isOpenLLC) {
+      if (usesLcreditCHI) {
         io.chi.get <> l2.io.lcreditCHI.get
       } else {
         io.decoupledCHI.get <> l2.io.decoupledCHI.get

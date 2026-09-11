@@ -123,7 +123,11 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
     })))
   )
 
-  val chi_mmioBridge_opt = Seq.fill(NumCores)(Option.when(isOpenLLC)(
+  val noLLCBridge_opt = Option.when(isNoLLC)(
+    LazyModule(new NoLLCCHI2AXI(entries = 128))
+  )
+
+  val chi_mmioBridge_opt = Seq.fill(NumCores)(Option.when(usesLcreditCHI)(
     LazyModule(new OpenNCB()(p.alter((site, here, up) => {
       case NCBParametersKey => new NCBParameters(
         outstandingDepth            = 32,
@@ -171,6 +175,10 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
     case Some(ncb) =>
       misc.soc_xbar.get := ncb.axi4node
     case None =>
+  }
+
+  noLLCBridge_opt.foreach { bridge =>
+    misc.soc_xbar.get := bridge.axi4node
   }
 
   chi_mmioBridge_opt.foreach { e =>
@@ -381,7 +389,7 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
     }
 
     withClockAndReset(io.clock, io.reset) {
-      Option.when(isOpenLLC)(true.B).foreach { _ =>
+      Option.when(usesLcreditCHI)(true.B).foreach { _ =>
         for ((core, i) <- core_with_l2.zipWithIndex) {
           val mmioLogger = CHILogger(s"L2[${i}]_MMIO", true)
           val llcLogger = CHILogger(s"L2[${i}]_LLC", true)
@@ -393,21 +401,35 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
             Map((NumCores + i) -> mmioLogger.io.up, (NumCores * 2) -> llcLogger.io.up)
           )
           chi_mmioBridge_opt(i).get.module.io.chi.connect(mmioLogger.io.down)
-          chi_openllc_opt.get.io.rn(i) <> llcLogger.io.down
           require(core.module.io.chi.get.getWidth == llcLogger.io.up.getWidth)
-          require(llcLogger.io.down.getWidth == chi_openllc_opt.get.io.rn(i).getWidth)
+          if (isOpenLLC) {
+            chi_openllc_opt.get.io.rn(i) <> llcLogger.io.down
+            require(llcLogger.io.down.getWidth == chi_openllc_opt.get.io.rn(i).getWidth)
+          } else {
+            noLLCBridge_opt.get.module.io.rn <> llcLogger.io.down
+            require(llcLogger.io.down.getWidth == noLLCBridge_opt.get.module.io.rn.getWidth)
+          }
         }
-        val memLogger = CHILogger(s"LLC_MEM", true)
-        chi_openllc_opt.get.io.sn.connect(memLogger.io.up)
-        chi_llcBridge_opt.get.module.io.chi.connect(memLogger.io.down)
-        chi_openllc_opt.get.io.nodeID := (NumCores * 2).U
-        chi_openllc_opt.foreach { l3 =>
-          l3.io.debugTopDown.robHeadPaddr := core_with_l2.map(_.module.io.debugTopDown.robHeadPaddr)
+        if (isOpenLLC) {
+          val memLogger = CHILogger(s"LLC_MEM", true)
+          chi_openllc_opt.get.io.sn.connect(memLogger.io.up)
+          chi_llcBridge_opt.get.module.io.chi.connect(memLogger.io.down)
+          chi_openllc_opt.get.io.nodeID := (NumCores * 2).U
+          chi_openllc_opt.foreach { l3 =>
+            l3.io.debugTopDown.robHeadPaddr := core_with_l2.map(_.module.io.debugTopDown.robHeadPaddr)
+          }
+          core_with_l2.zip(chi_openllc_opt.get.io.debugTopDown.addrMatch).foreach { case (tile, l3Match) =>
+            tile.module.io.debugTopDown.l3MissMatch := l3Match
+          }
+          core_with_l2.foreach(_.module.io.l3Miss := chi_openllc_opt.get.io.l3Miss)
+        } else {
+          noLLCBridge_opt.get.module.io.nodeID := (NumCores * 2).U
+          dontTouch(noLLCBridge_opt.get.module.io.occupancy)
+          dontTouch(noLLCBridge_opt.get.module.io.highWatermark)
+          dontTouch(noLLCBridge_opt.get.module.io.accepted)
+          core_with_l2.foreach(_.module.io.debugTopDown.l3MissMatch := false.B)
+          core_with_l2.foreach(_.module.io.l3Miss := false.B)
         }
-        core_with_l2.zip(chi_openllc_opt.get.io.debugTopDown.addrMatch).foreach { case (tile, l3Match) =>
-          tile.module.io.debugTopDown.l3MissMatch := l3Match
-        }
-        core_with_l2.map(_.module.io.l3Miss := (if (chi_openllc_opt.nonEmpty) chi_openllc_opt.get.io.l3Miss else false.B))
       }
     }
 

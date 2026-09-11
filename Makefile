@@ -62,7 +62,7 @@ SUPPORT_CHI_ISSUE = B C E.b
 ifeq ($(findstring $(ISSUE), $(SUPPORT_CHI_ISSUE)),)
 $(error "Unsupported CHI issue: $(ISSUE)")
 endif
-SUPPORT_LLC = OpenLLC ZhuJiang
+SUPPORT_LLC = OpenLLC ZhuJiang NoLLC
 ifeq ($(filter $(LLC), $(SUPPORT_LLC)),)
 $(error "Unknown LLC: $(LLC)")
 endif

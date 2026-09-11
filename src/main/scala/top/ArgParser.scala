@@ -37,7 +37,7 @@ object ArgParser {
       |--xs-help                  print this help message
       |--version                  print version info
       |--config <ConfigClassName>
-      |--llc <OpenLLC|ZhuJiang>
+      |--llc <OpenLLC|ZhuJiang|NoLLC>
       |--num-cores <Int>
       |--hartidbits <Int>
       |--with-dramsim3
