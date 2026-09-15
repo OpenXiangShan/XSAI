@@ -565,8 +565,8 @@ class XiangShan(object):
         # select a random SPEC checkpoint
         assert(name == "random")
         all_cpt_dir = [
-            "/nfs/home/share/checkpoints_profiles/spec06_gcc16_rv64gcb_260819/checkpoint",
-            "/nfs/home/share/checkpoints_profiles/spec17_rate_gcc16_rv64gcb_260812/checkpoint"
+            "/nfs/home/share/checkpoints_profiles/spec06_gcc16_rva23_novec_260820/checkpoint",
+            "/nfs/home/share/checkpoints_profiles/spec17_rate_gcc16_rva23_novec_260904/checkpoint"
         ]
         missing_cpt_dir = [path for path in all_cpt_dir if not os.path.isdir(path)]
         if missing_cpt_dir:
