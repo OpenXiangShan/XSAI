@@ -22,13 +22,14 @@ import chisel3.util._
 import xiangshan._
 import xiangshan.backend.fu.vector.Bundles.{VConfig, VType, Vl, VSew, VLmul, VsetVType}
 
-class VsetModuleIO(implicit p: Parameters) extends XSBundle {
+class VsetModuleIO(readOldVtype: Boolean = false)(implicit p: Parameters) extends XSBundle {
   private val vlWidth = p(XSCoreParamsKey).vlWidth
 
   val in = Input(new Bundle {
     val avl   : UInt = UInt(XLEN.W)
     val vtype : VsetVType = VsetVType()
     val func  : UInt = FuOpType()
+    val oldVt = Option.when(readOldVtype)(VType())
   })
 
   val out = Output(new Bundle {
@@ -43,8 +44,8 @@ class VsetModuleIO(implicit p: Parameters) extends XSBundle {
   })
 }
 
-class VsetModule(implicit p: Parameters) extends XSModule {
-  val io = IO(new VsetModuleIO)
+class VsetModule(readOldVtype: Boolean = false)(implicit p: Parameters) extends XSModule {
+  val io = IO(new VsetModuleIO(readOldVtype))
 
   private val avl   = io.in.avl
   private val func  = io.in.func
@@ -56,6 +57,7 @@ class VsetModule(implicit p: Parameters) extends XSModule {
 
   private val isSetVlmax = VSETOpType.isSetVlmax(func)
   private val isVsetivli = VSETOpType.isVsetivli(func)
+  private val isKeepVl = VSETOpType.isKeepVl(func)
 
   private val vlmul: UInt = vtype.vlmul
   private val vsew : UInt = vtype.vsew
@@ -97,7 +99,16 @@ class VsetModule(implicit p: Parameters) extends XSModule {
   private val lmulIllegal = VLmul.isReserved(vlmul)
   private val vtypeIllegal = vtype.reserved.orR
 
-  private val illegal = lmulIllegal | sewIllegal | vtypeIllegal | vtype.illegal
+  private val oldVt = io.in.oldVt.getOrElse(VType.initVtype())
+  private val log2NewRatio = vlmul - vsew
+  private val log2OldRatio = oldVt.vlmul - oldVt.vsew
+  private val isCsrrVl = func === VSETOpType.csrrvl
+  private val keepVlIllegal = if (readOldVtype) {
+    isKeepVl && !isCsrrVl && (oldVt.illegal || log2NewRatio =/= log2OldRatio)
+  } else {
+    false.B
+  }
+  private val illegal = lmulIllegal | sewIllegal | vtypeIllegal | vtype.illegal | keepVlIllegal
 
   outVConfig.vl := Mux(illegal, 0.U, vl)
   outVConfig.vtype.illegal := illegal

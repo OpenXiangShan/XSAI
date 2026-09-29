@@ -65,6 +65,12 @@ class VsetTop(implicit p: Parameters) extends XSModule {
   vsetRvfWvf.io.out.ready := true.B
   vsetRvfWvf.io.in.bits := 0.U.asTypeOf(vsetRvfWvf.io.in.bits.cloneType)
   vsetRvfWvf.io.in.bits.ctrl.fuOpType := io.in.func
+  vsetRvfWvf.io.in.bits.ctrl.vpu.get := 0.U.asTypeOf(vsetRvfWvf.io.in.bits.ctrl.vpu.get)
+  vsetRvfWvf.io.in.bits.ctrl.vpu.get.specVill := io.in.vtype.illegal
+  vsetRvfWvf.io.in.bits.ctrl.vpu.get.specVma := io.in.vtype.vma
+  vsetRvfWvf.io.in.bits.ctrl.vpu.get.specVta := io.in.vtype.vta
+  vsetRvfWvf.io.in.bits.ctrl.vpu.get.specVsew := io.in.vtype.vsew
+  vsetRvfWvf.io.in.bits.ctrl.vpu.get.specVlmul := io.in.vtype.vlmul
   vsetRvfWvf.io.in.bits.data.src(0) := vconfig.asUInt
   vsetRvfWvf.io.in.bits.data.src(1) := Mux(VSETOpType.isVsetvl(io.in.func), vtypeStruct.asUInt, vtypeStruct.asUInt(7, 0))
 
