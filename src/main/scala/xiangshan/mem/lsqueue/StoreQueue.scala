@@ -158,6 +158,7 @@ class StoreQueue(implicit p: Parameters) extends XSModule
     val hartId = Input(UInt(hartIdLen.W))
     val enq = new SqEnqIO
     val brqRedirect = Flipped(ValidIO(new Redirect))
+    val exceptionRedirect = Flipped(ValidIO(new Redirect))
     val vecFeedback = Vec(VecLoadPipelineWidth, Flipped(ValidIO(new FeedbackToLsqIO)))
     val storeAddrIn = Vec(StorePipelineWidth, Flipped(Valid(new LsPipelineBundle))) // store addr, data is not included
     val storeAddrInRe = Vec(StorePipelineWidth, Input(new LsPipelineBundle())) // store more mmio and exception
@@ -227,7 +228,7 @@ class StoreQueue(implicit p: Parameters) extends XSModule
   vaddrModule.io := DontCare
   val dataBuffer = Module(new DatamoduleResultBuffer(new DataBufferEntry))
   val exceptionBuffer = Module(new StoreExceptionBuffer)
-  exceptionBuffer.io.redirect := io.brqRedirect
+  exceptionBuffer.io.redirect := io.exceptionRedirect
   exceptionBuffer.io.exceptionAddr.isStore := DontCare
   // vlsu exception!
   for (i <- 0 until VecStorePipelineWidth) {
@@ -320,13 +321,16 @@ class StoreQueue(implicit p: Parameters) extends XSModule
   val sqReadCnt = WireInit(0.U(log2Ceil(EnsbufferWidth + 1).W))
   val readyReadGoVec = Wire(Vec(EnsbufferWidth, Bool()))
   for (i <- 0 until EnsbufferWidth) {
+    // A split store uses both enqueue ports but retires only the SQ entry selected by sqPtr.
+    val dataBufferReadGo = dataBuffer.io.enq.map(enq =>
+      enq.fire && enq.bits.sqNeedDeq && (enq.bits.sqPtr === rdataPtrExt(i))
+    ).reduce(_ || _)
+    val ncReadGo = allocated(rdataPtrExt(i).value) && completed(rdataPtrExt(i).value) && nc(rdataPtrExt(i).value)
     if (i == 0) {
-      readyReadGoVec(i) := dataBuffer.io.enq(i).fire && dataBuffer.io.enq(i).bits.sqNeedDeq ||
-        allocated(rdataPtrExt(i).value) && completed(rdataPtrExt(i).value) && nc(rdataPtrExt(i).value) ||
+      readyReadGoVec(i) := dataBufferReadGo || ncReadGo ||
         io.mmioStout.fire || io.vecmmioStout.fire
     } else {
-      readyReadGoVec(i) := dataBuffer.io.enq(i).fire && dataBuffer.io.enq(i).bits.sqNeedDeq ||
-        allocated(rdataPtrExt(i).value) && completed(rdataPtrExt(i).value) && nc(rdataPtrExt(i).value) && readyReadGoVec(i - 1)
+      readyReadGoVec(i) := (dataBufferReadGo || ncReadGo) && readyReadGoVec(i - 1)
     }
   }
   sqReadCnt := PopCount(readyReadGoVec)  
@@ -871,13 +875,12 @@ class StoreQueue(implicit p: Parameters) extends XSModule
           mmioState := Mux(cboZeroOffset.andR, s_wb, s_req)
         }
 
-        when (io.uncache.resp.bits.denied || io.cmoOpResp.bits.denied) {
+        when (io.uncache.resp.bits.denied) {
           uncacheUop.exceptionVec(storeAccessFault) := true.B
           mmioState := s_wb
         }
 
-        when (io.uncache.resp.bits.corrupt && !io.uncache.resp.bits.denied ||
-              io.cmoOpResp.bits.corrupt && !io.cmoOpResp.bits.denied) {
+        when (io.uncache.resp.bits.corrupt && !io.uncache.resp.bits.denied) {
           uncacheUop.exceptionVec(hardwareError) := true.B
           mmioState := s_wb
         }
@@ -1023,6 +1026,14 @@ class StoreQueue(implicit p: Parameters) extends XSModule
       when (io.cmoOpResp.fire) {
         noPending := true.B
         mmioState := s_wb
+
+        when (io.cmoOpResp.bits.denied) {
+          uncacheUop.exceptionVec(storeAccessFault) := true.B
+        }
+
+        when (io.cmoOpResp.bits.corrupt && !io.cmoOpResp.bits.denied) {
+          uncacheUop.exceptionVec(hardwareError) := true.B
+        }
       }
     }
   }
