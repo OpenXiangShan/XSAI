@@ -17,7 +17,7 @@ class VSetBase(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUnit(cfg)
   protected val in = io.in.bits
   protected val out = io.out.bits
 
-  protected val vsetModule = Module(new VsetModule)
+  protected val vsetModule = Module(new VsetModule(cfg.readOldVtype))
 
   protected val flushed = io.in.bits.ctrl.robIdx.needFlush(io.flush)
 
@@ -95,9 +95,12 @@ class VSetRiWvf(cfg: FuConfig)(implicit p: Parameters) extends VSetBase(cfg) {
   * @param p [[Parameters]]
   */
 class VSetRvfWvf(cfg: FuConfig)(implicit p: Parameters) extends VSetBase(cfg) {
+  require(cfg.readOldVtype && cfg.needVecCtrl,
+    "VSetRvfWvf requires old VType and vector control inputs")
   val oldVL = in.data.src(4).asTypeOf(VConfig()).vl
   vsetModule.io.in.avl := oldVL
   vsetModule.io.in.vtype := vtype
+  vsetModule.io.in.oldVt.get := in.ctrl.vpu.get.specVType
 
   val vl = vsetModule.io.out.vconfig.vl
   val vlmax = vsetModule.io.out.vlmax
