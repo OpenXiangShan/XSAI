@@ -190,12 +190,17 @@ class XSCuteImp(wrapper: XSCute)(implicit p: Parameters) extends LazyModuleImp(w
 
   // DiffTest: Monitor CUTE write requests to L2 Cache
   if (env.EnableDifftest) {
+    DifftestModule.addCppMacro("CONFIG_DIFF_MATRIX_STORE_SOURCE_TAG", BigInt(MemTraceId.CWriteTag))
+    DifftestModule.addCppMacro("CONFIG_DIFF_MATRIX_SOURCE_TAG_MASK", MemTraceId.SourceTagMask)
     DifftestModule.addCppMacro(
       "CONFIG_DIFF_MMA_REDUCE_WIDTH_BYTES",
       BigInt(wrapper.cuteParams.ReduceWidthByte)
     )
 
-    val matrixStoreDiffLaneCount = CStoreDiffTestLaneCount
+    // The number of observable store lanes follows the configured C-store
+    // response bridge.  The old standalone constant was removed when the
+    // multi-channel loader made this a per-CUTE configuration.
+    val matrixStoreDiffLaneCount = wrapper.cuteParams.parsedLoaderBridgeChannelConfig.cStore.responseChannelCount
     require(
       matrixStoreDiffLaneCount >= 1 && matrixStoreDiffLaneCount <= ABMatrixRegNBanks,
       s"CUTE matrix-store DiffTest lane count ($matrixStoreDiffLaneCount) must be within [1, $ABMatrixRegNBanks]"

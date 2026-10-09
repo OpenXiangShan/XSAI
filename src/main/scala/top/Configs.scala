@@ -570,6 +570,20 @@ class DefaultMatrixConfig(n: Int = 1) extends Config(
   })
 )
 
+// Leverage full 8-channel config to achieve maximum L2 bandwidth.
+class DefaultMatrixFullBandWidthConfig(n: Int = 1) extends Config(
+  new DefaultMatrixConfig(n).alter((site, here, up) => {
+    case CuteParamsKey => up(CuteParamsKey).copy(LoaderBridgeChannelConfig = "A8B8CL8CS8")
+  })
+)
+
+// Legacy A/B loaders, two C-load response channels and eight C-store channels.
+class DefaultMatrixMediumBandWidthConfig(n: Int = 1) extends Config(
+  new DefaultMatrixConfig(n).alter((site, here, up) => {
+    case CuteParamsKey => up(CuteParamsKey).copy(LoaderBridgeChannelConfig = "ALBLCL2CS8")
+  })
+)
+
 // Keep the prefetch-enabled experiment as a separate static configuration so
 // DefaultMatrixConfig remains the reproducible prefetch-off baseline.
 class DefaultMatrixPrefetchConfig(n: Int = 1) extends Config(
