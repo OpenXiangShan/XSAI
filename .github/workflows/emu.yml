@@ -182,6 +182,47 @@ jobs:
         run: |
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci ame-tests 2> /dev/zero
 
+  emu-xsai-matrix-FullBandWidth:
+    runs-on: bosc
+    needs: changes
+    if: ${{ needs.changes.outputs.core == 'true' }}
+    continue-on-error: false
+    timeout-minutes: 900
+    name: EMU - Matrix FullBandWidth Workloads
+    env:
+      MMA_BACKEND: cpu
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: true
+      - name: set env
+        run: |
+          JOB_HOME="${CI_HOME}/basics/matrix-FullBandWidth"
+          echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
+          echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
+          echo "AM_HOME=/nfs/home/share/ci-workloads/nexus-am" >> $GITHUB_ENV
+          echo "PERF_HOME=${JOB_HOME}" >> $GITHUB_ENV
+          echo "WAVE_HOME=${JOB_HOME}" >> $GITHUB_ENV
+          mkdir -p "${JOB_HOME}"
+      - name: Initialize submodules
+        run: make init-force
+      - name: clean up
+        run: python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
+      - name: Build DefaultMatrixFullBandWidthConfig EMU
+        run: |
+          sed -i \
+            -e 's/--output-split 30000/--output-split 5000/' \
+            -e 's/--output-split-cfuncs 30000/--output-split-cfuncs 5000/' \
+            $GITHUB_WORKSPACE/difftest/verilator.mk
+          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --build --threads 8 \
+            --config DefaultMatrixFullBandWidthConfig --trace-fst
+      - name: Matrix FullBandWidth - AME workloads with DiffTest
+        run: |
+          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME \
+            --threads 16 --numa --diff $GITHUB_WORKSPACE/ready-to-run/riscv64-nemu-interpreter-so \
+            --ci ame-tests 2> "$PERF_HOME/ame-tests.log"
+
   emu-xsai-hypervisor:
     runs-on:
       - bosc
@@ -338,6 +379,7 @@ jobs:
     needs:
       - build-xsai-emu
       - emu-xsai-isa-ame
+      - emu-xsai-matrix-FullBandWidth
       - emu-xsai-hypervisor
       - emu-xsai-system
       - emu-xsai-extensions
@@ -372,11 +414,13 @@ jobs:
       - name: Check test jobs
         env:
           ISA_AME_RESULT: ${{ needs.emu-xsai-isa-ame.result }}
+          MATRIX_FullBandWidth_RESULT: ${{ needs.emu-xsai-matrix-FullBandWidth.result }}
           HYPERVISOR_RESULT: ${{ needs.emu-xsai-hypervisor.result }}
           SYSTEM_RESULT: ${{ needs.emu-xsai-system.result }}
           EXTENSIONS_RESULT: ${{ needs.emu-xsai-extensions.result }}
         run: |
           if [[ "$ISA_AME_RESULT" != "success" || \
+                "$MATRIX_FullBandWidth_RESULT" != "success" || \
                 "$HYPERVISOR_RESULT" != "success" || \
                 "$SYSTEM_RESULT" != "success" || \
                 "$EXTENSIONS_RESULT" != "success" ]]; then
