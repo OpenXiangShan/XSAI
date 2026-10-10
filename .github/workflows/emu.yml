@@ -86,7 +86,6 @@ jobs:
           sed -i \
             -e 's/--output-split 30000/--output-split 5000/' \
             -e 's/--output-split-cfuncs 30000/--output-split-cfuncs 5000/' \
-            -e 's/OPT_FAST ?= -O3/OPT_FAST ?= -O3\\ -fno-vectorize\\ -fno-slp-vectorize/' \
             $GITHUB_WORKSPACE/difftest/verilator.mk
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --build \
             --threads 8 --config MinimalMatrixConfig --release --trace-fst
@@ -124,7 +123,6 @@ jobs:
           sed -i \
             -e 's/--output-split 30000/--output-split 5000/' \
             -e 's/--output-split-cfuncs 30000/--output-split-cfuncs 5000/' \
-            -e 's/OPT_FAST ?= -O3/OPT_FAST ?= -O3\\ -fno-vectorize\\ -fno-slp-vectorize/' \
             $GITHUB_WORKSPACE/difftest/verilator.mk
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --build --threads 8 \
             --config DefaultMatrixConfig --pgo $GITHUB_WORKSPACE/ready-to-run/coremark-2-iteration.bin --llvm-profdata llvm-profdata --trace-fst
@@ -433,7 +431,6 @@ jobs:
           sed -i \
             -e 's/--output-split 30000/--output-split 5000/' \
             -e 's/--output-split-cfuncs 30000/--output-split-cfuncs 5000/' \
-            -e 's/OPT_FAST ?= -O3/OPT_FAST ?= -O3\\ -fno-vectorize\\ -fno-slp-vectorize/' \
             $GITHUB_WORKSPACE/difftest/verilator.mk
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --build \
             --num-cores 2 --emu-optimize "" --config DefaultMatrixConfig \
