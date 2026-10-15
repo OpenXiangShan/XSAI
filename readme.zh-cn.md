@@ -1,161 +1,114 @@
-# 香山
+# XSAI（香山·香炉峰）
 
-香山（XiangShan）是一款开源的高性能 RISC-V 处理器。
+XSAI（香山·香炉峰）是面向通用计算与 AI 推理的开源 RISC-V 处理器项目。
 
-English Readme is [here](README.md).
+> 香山原生的通推一体 AI CPU
+
+XSAI 基于香山（XiangShan，XS）演进而来，即 **XSAI = XS + AI**。技术方案以香山昆明湖 V2 微架构为基础，在保留通用处理器编程模型的同时，增加 AI 矩阵计算和面向 AI 负载的存储系统能力。
+
+English README is [here](README.md)。
 
 ## 文档和报告
 
-香山的文档托管在 [docs.xiangshan.cc](https://docs.xiangshan.cc)。
-
-香山设计文档（适用于昆明湖 V2R2）已经发布，您可在此处查看：[docs.xiangshan.cc/projects/design](https://docs.xiangshan.cc/projects/design/)
-
-香山用户文档已单独发布，您可在此处查看：[docs.xiangshan.cc/projects/user-guide](https://docs.xiangshan.cc/projects/user-guide/)、[XiangShan-User-Guide/releases](https://github.com/OpenXiangShan/XiangShan-User-Guide/releases).
-
-我们正在使用 [Weblate](https://hosted.weblate.org/projects/openxiangshan/) 将本项目文档翻译为英文及其他语言。欢迎大家参与翻译工作，帮助我们一起完善文档！
-
-所有香山文档均采用 CC-BY-4.0 协议授权。
-
-## 论文发表情况
-
-### MICRO 2022: Towards Developing High Performance RISC-V Processors Using Agile Methodology
-
-我们在 MICRO'22 会议上的论文介绍了香山处理器及敏捷开发实践经验，包括一些面向设计、功能验证、调试、性能评估等方面的敏捷开发工具。论文得到了 Artifact Evaluation 的所有三个徽章。
-
-![Artifacts Available](https://github.com/OpenXiangShan/XiangShan-doc/raw/main/publications/images/artifacts_available_dl.jpg)
-![Artifacts Evaluated — Functional](https://github.com/OpenXiangShan/XiangShan-doc/raw/main/publications/images/artifacts_evaluated_functional_dl.jpg)
-![Results Reproduced](https://github.com/OpenXiangShan/XiangShan-doc/raw/main/publications/images/results_reproduced_dl.jpg)
-
-[Paper PDF](https://github.com/OpenXiangShan/XiangShan-doc/blob/main/publications/micro2022-xiangshan.pdf) | [IEEE Xplore](https://ieeexplore.ieee.org/abstract/document/9923860) | [BibTeX](https://github.com/OpenXiangShan/XiangShan-doc/blob/main/publications/micro2022-xiangshan.bib) | [Presentation Slides](https://github.com/OpenXiangShan/XiangShan-doc/blob/main/publications/micro2022-xiangshan-slides.pdf) | [Presentation Video](https://www.bilibili.com/video/BV1FB4y1j7Jy)
-
-
+- [XSAI 设计文档（中文）](https://docs.xiangshan.cc/projects/design/zh-cn/kunminghu-v2r2a/)
 ## 关注我们
 
 Wechat/微信：香山开源处理器
 
 <div align=left><img width="340" height="117" src="images/wechat.png"/></div>
 
-Zhihu/知乎：[香山开源处理器](https://www.zhihu.com/people/openxiangshan)
+知乎：[香山开源处理器](https://www.zhihu.com/people/openxiangshan)
 
-Weibo/微博：[香山开源处理器](https://weibo.com/u/7706264932)
+微博：[香山开源处理器](https://weibo.com/u/7706264932)
 
-可以通过[我们的邮件列表](mailto:xiangshan-all@ict.ac.cn)联系我们。列表中的所有邮件会存档到[这里](https://www.mail-archive.com/xiangshan-all@ict.ac.cn/)。
-
+您可以通过[我们的邮件列表](mailto:xiangshan-all@ict.ac.cn)联系我们。列表中的所有邮件会存档于[这里](https://www.mail-archive.com/xiangshan-all@ict.ac.cn/)。
 ## 处理器架构
 
-自 2020 年 6 月开始开发的[雁栖湖](https://github.com/OpenXiangShan/XiangShan/tree/yanqihu)为香山处理器的首个稳定的微架构。
+### 昆明湖 V2 控制核与 AME 扩展
 
-香山的第二代微架构被命名为[南湖](https://github.com/OpenXiangShan/XiangShan/tree/nanhu)。
+XSAI 在香山昆明湖 V2 控制核的基础上，扩展 AME 矩阵指令译码、配置、控制、同步和矩阵访存支持。
 
-香山的第三代微架构（昆明湖）正在 master 分支上不断开发中。
+### AI 矩阵单元（AMU）
 
-昆明湖微架构概览：
-![xs-arch-kunminghu](images/xs-arch-kunminghu.svg)
+[CUTE](https://github.com/OpenXiangShan/CUTE) 子模块实现 AI 矩阵单元（AMU）。AmuCtrl 通过 `mload`、`mma`、`mstore` 和 `mrelease` 连接矩阵单元与控制核。
 
+### 高带宽 L2 缓存（HBL2）
+
+[XSAICache](https://github.com/OpenXiangShan/XSAICache) 子模块实现 XSAI 缓存子系统。HBL2 是面向矩阵负载的高带宽 L2 架构。
+
+![XSAI 架构](images/xsai-architecture.png)
+
+## 编程模型与软件生态
+
+XSAI 在同一个 RISC-V CPU 编程模型中结合通用、向量和矩阵计算，支持 AI 推理与普通软件执行。
 ## 目录概览
 
-以下是一些关键目录：
+关键目录和仓库如下：
 
-```
+```text
 .
-├── src
-│   └── main/scala         # 设计文件
-│       ├── device         # 用于仿真的虚拟设备
-│       ├── system         # SoC 封装
-│       ├── top            # 顶层模块
-│       ├── utils          # 复用封装
-│       └── xiangshan      # 主体设计代码
-│           └── transforms # 一些实用的 firrtl 变换代码
-├── scripts                # 用于敏捷开发的脚本文件
-├── fudian                 # 香山浮点子模块
-├── XSAICache              # XSAI 缓存子系统子模块
-├── difftest               # 香山协同仿真框架
-└── read-to-run            # 预建的仿真镜像文件
+├── src                 # XSAI 顶层集成和香山处理器核改动
+├── CUTE                # AMU 矩阵单元（子模块）
+├── XSAICache           # XSAI 缓存子系统（子模块）
+├── difftest            # 差分协同仿真基础设施（子模块）
+├── ready-to-run        # 参考仿真镜像和二进制文件（子模块）
+└── scripts             # 构建、仿真和分析脚本
 ```
 
+相关仓库包括提供构建和评估环境的 [xsai-env](https://github.com/OurCompArchGroup/xsai-env)，以及提供参考模型和调试支持的 [NEMU](https://github.com/OpenXiangShan/NEMU)。
 ## IDE 支持
 
-### bsp
-```
-make bsp
-```
+生成 BSP 或 IntelliJ IDEA 工程文件：
 
-### IDEA
-```
+```bash
+make bsp
 make idea
 ```
 
-
 ## 生成 Verilog
 
-* 运行 `make verilog` 以生成 verilog 代码。该命令会在 `build/rtl/` 目录下生成多个 `.sv` 文件（例如 `build/rtl/XSTop.sv`）。
-* 更多信息详见 `Makefile`。
+运行 `make verilog` 生成 SystemVerilog RTL，文件位于 `build/rtl/`，其中包括 `build/rtl/XSTop.sv`。更多配置选项请参阅 `Makefile`。
 
 ## 仿真运行
 
-### 环境搭建
+### 环境准备
 
-* 设定环境变量 `NEMU_HOME` 为[香山 NEMU](https://github.com/OpenXiangShan/NEMU) 在您机器上的绝对路径。
-* 设定环境变量 `NOOP_HOME` 为香山工程文件夹的绝对路径。
-* 设定环境变量 `AM_HOME` 为[香山 AM](https://github.com/OpenXiangShan/nexus-am) 的绝对路径。
-* 项目使用 `mill` 进行 scala 编译，因此需要安装 `mill`，详见 [mill 手动安装指南](https://com-lihaoyi.github.io/mill/mill/Intro_to_Mill.html#_installation)（目前仅英文版本）。
-* 克隆本项目，运行 `make init` 以初始化本项目引用的开源子模块。
+- 设置 `NEMU_HOME` 为 [NEMU 项目](https://github.com/OpenXiangShan/NEMU) 的绝对路径。
+- 设置 `NOOP_HOME` 为当前 XSAI 仓库的绝对路径。
+- 运行 AM workload 时，将 `AM_HOME` 设置为 [nexus-am 项目](https://github.com/OpenXiangShan/nexus-am) 的绝对路径。
+- 安装 [Mill](https://mill-build.org/mill/cli/installation-ide.html#_bootstrap_scripts)。
+- 克隆 XSAI 后运行 `make init` 初始化子模块。
 
-### 运行仿真
+### 运行仿真器
 
-* 安装开源 verilog 仿真器 [Verilator](https://verilator.org/guide/latest/)。
-* 运行 `make emu` 以利用 Verilator 构建 C++ 仿真器 `./build/emu`。
-* 运行 `./build/emu --help` 可以获得仿真器的各种运行时参数。
-* 更多细节详见 `Makefile` 与 `verilator.mk`。
+安装 [Verilator](https://verilator.org/guide/latest/) 后运行：
 
-运行示例：
+```bash
+make emu
+./build/emu --help
+```
+
+示例：
 
 ```bash
 make emu CONFIG=MinimalConfig EMU_THREADS=2 -j10
 ./build/emu -b 0 -e 0 -i ./ready-to-run/coremark-2-iteration.bin --diff ./ready-to-run/riscv64-nemu-interpreter-so
 ```
 
-### 运行xspdb 
+### 运行 xspdb
 
-* 安装多语言芯片验证辅助工具 [picker](https://github.com/XS-MLVP/picker)
-* 运行 `make pdb` 以利用 picker 构建香山的二进制版本
-* 运行 `make pdb-run` 来运行香山二进制版本
+仓库提供基于 picker 的 `pdb` 和 `pdb-run` 目标：
 
-运行示例：
-
-```bash 
-$ make pdb-run
-[Info] Set PMEM_BASE to 0x80000000 (Current: 0x80000000)
-[Info] Set FIRST_INST_ADDRESS to 0x80000000 (Current: 0x80000000)
-Using simulated 32768B flash
-[Info] reset dut complete
-> XiangShan/scripts/pdb-run.py(13)run()
--> while True:
-(XiangShan) xload ready-to-run/microbench.bin   # 加载需要运行的bin文件
-(XiangShan) xwatch_commit_pc 0x80000004         # 设置观察点 
-(XiangShan) xistep 3                            # 执行到下三条指令提交，如设置观察点则执行到观察点
-[Info] Find break point (Inst commit), break (step 2107 cycles) at cycle: 2207 (0x89f)
-[Info] Find break point (Inst commit, Target commit), break (step 2108 cycles) at cycle: 2208 (0x8a0)
-(XiangShan) xpc                                 # 打印pc信息
-PC[0]: 0x80000000    Instr: 0x00000093
-PC[1]: 0x80000004    Instr: 0x00000113
-PC[2]: 0x0    Instr: 0x0
-...
-PC[7]: 0x0    Instr: 0x0
-(XiangShan) xistep 1000000                      # 执行到结束
-[Info] Find break point (Inst commit), break (step 2037 cycles) at cycle: 2207 (0x89f)
-[Info] Find break point (Inst commit), break (step 2180 cycles) at cycle: 2207 (0x89f)
-...
-HIT GOOD LOOP at pc = 0xf0001cb0
+```bash
+make pdb
+make pdb-run
 ```
 
-## 错误排除指南
-
-[Troubleshooting Guide](https://github.com/OpenXiangShan/XiangShan/wiki/Troubleshooting-Guide)
+使用前请安装 [picker](https://github.com/XS-MLVP/picker)，并安装 `scripts/xspdb/requirements.txt` 中列出的 Python 依赖。
 
 ## 致谢
 
-香山处理器是绝佳的微架构学术研究平台，能够充分支持学术界的试验创新想法。香山处理器中已经实现或参考借鉴了如下论文，列举如下：[致谢](https://docs.xiangshan.cc/zh-cn/latest/acknowledgments/)。我们非常鼓励并期待，未来能够基于香山处理器实现更多的学术创新。
+XSAI 由香山团队开发，在香山昆明湖 V2 控制核的基础上集成 CUTE 矩阵单元和 XSAICache 缓存子系统。
 
 ## 许可证
 
@@ -165,4 +118,4 @@ HIT GOOD LOOP at pc = 0xf0001cb0
 
 版权所有 © 2020-2022 鹏城实验室
 
-香山以 [木兰宽松许可证 第2版](LICENSE) 授权。
+XSAI 采用 [木兰宽松许可证，第 2 版](LICENSE)授权。
