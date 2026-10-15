@@ -233,6 +233,9 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
 
     val io = IO(new Bundle {
       val clock = Input(Clock())
+      val acceleratorClock = Option.when(
+        p(ExternalAcceleratorCDCKey).enable && p(MatAccKey) == MatAcc.CUTE
+      )(Input(Clock()))
       val reset = Input(AsyncReset())
       val sram_config = Input(UInt(16.W))
       val extIntrs = Input(UInt(NrExtIntr.W))
@@ -356,6 +359,9 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
     }
 
     for ((core, i) <- core_with_l2.zipWithIndex) {
+      core.module.io.acceleratorClock.zip(io.acceleratorClock).foreach { case (tileClock, topClock) =>
+        tileClock := topClock
+      }
       core.module.io.hartId := i.U
       core.module.io.msiInfo := msiInfo
       core.module.io.teemsiInfo.foreach(_ := msiInfo)

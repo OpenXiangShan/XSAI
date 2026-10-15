@@ -150,6 +150,8 @@ class XSCuteIO(implicit p: Parameters) extends CuteBundle {
   val cute = new CUTETopIO
   val matrix_data_in = Flipped(Vec(ABMatrixRegNBanks, Decoupled(new MatrixDataBundle())))
   val hartId = Input(UInt(8.W))
+  val difftestClock = Option.when(EnableDifftest && DifftestAsyncClockName.nonEmpty)(Input(Clock()))
+  val difftestReset = Option.when(EnableDifftest && DifftestAsyncClockName.nonEmpty)(Input(Bool()))
 }
 
 class XSCuteImp(wrapper: XSCute)(implicit p: Parameters) extends LazyModuleImp(wrapper) 
@@ -165,6 +167,11 @@ class XSCuteImp(wrapper: XSCute)(implicit p: Parameters) extends LazyModuleImp(w
     }
 
     val io = IO(new XSCuteIO())
+    if (EnableDifftest) {
+      DifftestAsyncClockName.foreach { tag =>
+        CuteDifftest.publishSinkClock(tag, io.difftestClock.get, io.difftestReset.get)
+      }
+    }
     val cute = Module(new CUTEV2Top)
     io.cute <> cute.io
     io.cute.mmu2llc := DontCare
@@ -202,7 +209,7 @@ class XSCuteImp(wrapper: XSCute)(implicit p: Parameters) extends LazyModuleImp(w
     )
 
     val mmu = wrapper.cute_tl.module.io.mmu
-    val difftests = DifftestModule.applyVec(
+    val difftests = CuteDifftest.applyVec(
       Seq.fill(matrixStoreDiffLaneCount)(new DiffMatrixStoreEvent),
       delay = 1
     )

@@ -27,11 +27,18 @@ import freechips.rocketchip.amba.axi4.AXI4Bundle
 import freechips.rocketchip.diplomacy.{DisableMonitors, LazyModule}
 import freechips.rocketchip.util.HeterogeneousBag
 import utility.{ChiselDB, Constantin, FileRegisters, GTimer, XSLog}
-import xiangshan.DebugOptionsKey
+import xiangshan.{DebugOptionsKey, ExternalAcceleratorCDCKey, MatAcc, MatAccKey}
 import system.SoCParamsKey
 
 class XiangShanSim(implicit p: Parameters) extends Module with HasDiffTestInterfaces {
   val debugOpts = p(DebugOptionsKey)
+  private val hasAcceleratorClock =
+    p(ExternalAcceleratorCDCKey).enable && p(MatAccKey) == MatAcc.CUTE
+  val acceleratorClock = Option.when(hasAcceleratorClock)(IO(Input(Clock())))
+  acceleratorClock.foreach(dontTouch(_))
+  if (hasAcceleratorClock) {
+    DifftestModule.addCppMacro("CONFIG_HAS_ACCELERATOR_CLOCK", BigInt(1))
+  }
 
   val l_soc = LazyModule(new XSTop())
   val soc = Module(l_soc.module)
@@ -55,6 +62,9 @@ class XiangShanSim(implicit p: Parameters) extends Module with HasDiffTestInterf
   l_simAXIMem.io_axi4.elements.head._2 :<>= soc.memory.viewAs[AXI4Bundle].waiveAll
 
   soc.io.clock := clock
+  soc.io.acceleratorClock.zip(acceleratorClock).foreach { case (socClock, simClock) =>
+    socClock := simClock
+  }
   soc.io.reset := (reset.asBool || soc.io.debug_reset).asAsyncReset
   soc.io.extIntrs := simMMIO.io.interrupt.intrVec
   soc.io.sram_config := 0.U

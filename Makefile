@@ -54,6 +54,7 @@ MEM_GEN_SEP = ./scripts/gen_sep_mem.sh
 CONFIG ?= DefaultConfig
 NUM_CORES ?= 1
 VFEXP2_ENABLE ?= 1
+ACCELERATOR_CDC_ENABLE ?= 0
 ISSUE ?= E.b
 LLC ?= ZhuJiang
 CHISEL_TARGET ?= systemverilog
@@ -108,6 +109,15 @@ ifeq ($(VFEXP2_ENABLE),0)
 COMMON_EXTRA_ARGS += --disable-vfexp2
 else ifneq ($(VFEXP2_ENABLE),1)
 $(error "VFEXP2_ENABLE must be 0 or 1")
+endif
+
+# External accelerator clock-domain crossing is disabled by default.
+ifeq ($(ACCELERATOR_CDC_ENABLE),0)
+COMMON_EXTRA_ARGS += --disable-accelerator-cdc
+else ifeq ($(ACCELERATOR_CDC_ENABLE),1)
+COMMON_EXTRA_ARGS += --enable-accelerator-cdc
+else
+$(error "ACCELERATOR_CDC_ENABLE must be 0 or 1")
 endif
 
 # prefix of XSTop or XSNoCTop

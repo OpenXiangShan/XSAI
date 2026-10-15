@@ -97,6 +97,7 @@ class ConfigStateMachine(top: XSCuteTopImpl)(implicit p: Parameters) extends Cut
   
   // State machine logic
   def update(cycle_cnt: UInt): Unit = {
+    top.io.ctrl2top.mrelease.ready := true.B
     switch(state) {
       is(ConfigState.sIdle) {
         // Wait for start() call
