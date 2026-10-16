@@ -18,11 +18,12 @@ package xiangshan
 
 import org.chipsalliance.cde.config.{Config, Field, Parameters}
 import chisel3._
-import chisel3.util.{Valid, ValidIO, log2Up, Arbiter}
+import chisel3.util.{Valid, ValidIO, log2Up, Arbiter, Decoupled}
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.interrupts._
 import freechips.rocketchip.tile.{BusErrorUnit, BusErrorUnitParams, BusErrors}
 import freechips.rocketchip.tilelink._
+import freechips.rocketchip.util.{AsyncQueue, AsyncQueueParams}
 import freechips.rocketchip.amba.axi4._
 import system.HasSoCParameter
 import top.{ArgParser, BusPerfMonitor, Generator}
@@ -32,7 +33,7 @@ import xscache.chi.{CHIAddrWidthKey, CHIDataCheckKey, CHIIssue, CHIPoisonKey, De
 import xiangshan.backend.trace.TraceCoreInterface
 import xiangshan.backend.fu.matrix._
 import xiangshan.backend.fu.matrix.Bundles._
-import cute.{CutePerfToCoreIO, XSCute}
+import cute.{CutePerfAsyncCrossing, CutePerfToCoreIO, XSCute}
 
 object MatAcc extends Enumeration {
   type MatAcc = Value
@@ -40,6 +41,18 @@ object MatAcc extends Enumeration {
 }
 
 case object MatAccKey extends Field[MatAcc.Value](MatAcc.AME)
+
+case class ExternalAcceleratorCDCParams(
+  enable: Boolean = false,
+  command: AsyncQueueParams = AsyncQueueParams(depth = 4, sync = 3, safe = true),
+  completion: AsyncQueueParams = AsyncQueueParams(depth = 4, sync = 3, safe = true),
+  matrixData: AsyncQueueParams = AsyncQueueParams(depth = 2, sync = 3, safe = true),
+  tileLink: AsyncQueueParams = AsyncQueueParams(depth = 8, sync = 3, safe = true),
+  perfSnapshot: AsyncQueueParams = AsyncQueueParams.singleton(sync = 3, safe = true)
+)
+
+case object ExternalAcceleratorCDCKey
+  extends Field[ExternalAcceleratorCDCParams](ExternalAcceleratorCDCParams())
 
 class XSTile()(implicit p: Parameters) extends LazyModule
   with HasXSParameter
@@ -53,6 +66,8 @@ class XSTile()(implicit p: Parameters) extends LazyModule
     case MatAcc.AME => None
     case MatAcc.CUTE => Some(LazyModule(new XSCute()))
   }
+  private val acceleratorCDC = p(ExternalAcceleratorCDCKey)
+  private val useAcceleratorCDC = cuteOpt.nonEmpty && acceleratorCDC.enable
 
   val enableL2 = coreParams.L2CacheParamsOpt.isDefined
   // =========== Public Ports ============
@@ -79,11 +94,21 @@ class XSTile()(implicit p: Parameters) extends LazyModule
       memBlock.l1d_to_l2_buffer.node := memBlock.dcache.clientNode
   }
 
-  cuteOpt.foreach(
-    _.node.zipWithIndex.foreach { case (node, i) =>
-      l2top.inner.misc_l2_pmu := l2top.inner.cute_logger := node
+  val cuteTLAsyncCrossings = cuteOpt.toSeq.flatMap { cute =>
+    cute.node.map { node =>
+      if (useAcceleratorCDC) {
+        val source = LazyModule(new TLAsyncCrossingSource())
+        val sink = LazyModule(new TLAsyncCrossingSink(acceleratorCDC.tileLink))
+        source.node := node
+        sink.node := source.node
+        l2top.inner.misc_l2_pmu := l2top.inner.cute_logger := sink.node
+        Some((source, sink))
+      } else {
+        l2top.inner.misc_l2_pmu := l2top.inner.cute_logger := node
+        None
+      }
     }
-  )
+  }.flatten
 
   l2top.inner.misc_l2_pmu := l2top.inner.l1i_logger := memBlock.frontendBridge.icache_node
   if (!coreParams.softPTW) {
@@ -150,6 +175,7 @@ class XSTile()(implicit p: Parameters) extends LazyModule
       val dft_reset = Option.when(hasMbist)(Input(new DFTResetSignals()))
       val l2_flush_en = Option.when(EnablePowerDown) (Output(Bool()))
       val l2_flush_done = Option.when(EnablePowerDown) (Output(Bool()))
+      val acceleratorClock = Option.when(useAcceleratorCDC)(Input(Clock()))
     })
 
     dontTouch(io.hartId)
@@ -258,15 +284,68 @@ class XSTile()(implicit p: Parameters) extends LazyModule
 
     l2top.module.io.matrixPrefetch.foreach(_ := 0.U.asTypeOf(new xscache.coupledL2.prefetch.MatrixPrefetchControl))
 
+    val acceleratorClock = io.acceleratorClock.getOrElse(clock)
+    val acceleratorReset = if (useAcceleratorCDC) {
+      withClockAndReset(acceleratorClock, reset) { ResetGen(io.dft_reset) }
+    } else {
+      reset.asAsyncReset
+    }
+
     cuteOpt.foreach { case cute =>
       l2top.module.io.matrixDataOut512L2 := DontCare
       cute.module.io := DontCare
+      cute.module.clock := acceleratorClock
+      cute.module.reset := acceleratorReset
+
+      cuteTLAsyncCrossings.foreach { case (source, sink) =>
+        source.module.clock := acceleratorClock
+        source.module.reset := acceleratorReset
+        sink.module.clock := clock
+        sink.module.reset := reset
+      }
+
       core.module.io.amuCtrl.foreach { amuCtrl =>
-        cute.module.io.cute.ctrl2top.amuCtrl <> amuCtrl
+        if (useAcceleratorCDC) {
+          val commandCrossing = Module(new AsyncQueue(new AmuCtrlIO, acceleratorCDC.command))
+          commandCrossing.io.enq_clock := clock
+          commandCrossing.io.enq_reset := reset.asBool
+          commandCrossing.io.deq_clock := acceleratorClock
+          commandCrossing.io.deq_reset := acceleratorReset.asBool
+          commandCrossing.io.enq <> amuCtrl
+          val coreCommand = commandCrossing.io.deq.bits
+          val cuteCommand = cute.module.io.cute.ctrl2top.amuCtrl.bits
+          require(coreCommand.op.getWidth == cuteCommand.op.getWidth)
+          require(coreCommand.data.getWidth == cuteCommand.data.getWidth)
+          require(coreCommand.pc.isDefined == cuteCommand.pc.isDefined)
+          require(coreCommand.coreid.isDefined == cuteCommand.coreid.isDefined)
+          cute.module.io.cute.ctrl2top.amuCtrl.valid := commandCrossing.io.deq.valid
+          cuteCommand.op := coreCommand.op
+          cuteCommand.data := coreCommand.data
+          cuteCommand.pc.zip(coreCommand.pc).foreach { case (sink, source) => sink := source }
+          cuteCommand.coreid.zip(coreCommand.coreid).foreach { case (sink, source) => sink := source }
+          commandCrossing.io.deq.ready := cute.module.io.cute.ctrl2top.amuCtrl.ready
+        } else {
+          cute.module.io.cute.ctrl2top.amuCtrl <> amuCtrl
+        }
       }
       core.module.io.amuRelease.foreach { amuRelease =>
-        amuRelease.bits := cute.module.io.cute.ctrl2top.mrelease.bits
-        amuRelease.valid := cute.module.io.cute.ctrl2top.mrelease.valid
+        if (useAcceleratorCDC) {
+          val completionCrossing = Module(new AsyncQueue(new AmuReleaseIO2XS, acceleratorCDC.completion))
+          completionCrossing.io.enq_clock := acceleratorClock
+          completionCrossing.io.enq_reset := acceleratorReset.asBool
+          completionCrossing.io.deq_clock := clock
+          completionCrossing.io.deq_reset := reset.asBool
+          completionCrossing.io.enq.valid := cute.module.io.cute.ctrl2top.mrelease.valid
+          completionCrossing.io.enq.bits := cute.module.io.cute.ctrl2top.mrelease.bits.asTypeOf(
+            completionCrossing.io.enq.bits
+          )
+          cute.module.io.cute.ctrl2top.mrelease.ready := completionCrossing.io.enq.ready
+          amuRelease <> completionCrossing.io.deq
+        } else {
+          amuRelease.bits := cute.module.io.cute.ctrl2top.mrelease.bits.asTypeOf(amuRelease.bits)
+          amuRelease.valid := cute.module.io.cute.ctrl2top.mrelease.valid
+          cute.module.io.cute.ctrl2top.mrelease.ready := amuRelease.ready
+        }
       }
       for {
         l2Prefetch <- l2top.module.io.matrixPrefetch
@@ -282,13 +361,14 @@ class XSTile()(implicit p: Parameters) extends LazyModule
       require(inCount > 0, "matrix_data_in must have at least one channel")
 
       matrix_data_out.foreach(_.ready := false.B)
-      matrix_data_in.foreach { in =>
+      val matrixDataToCute = Wire(Vec(inCount, Decoupled(chiselTypeOf(matrix_data_out(0).bits))))
+      matrixDataToCute.foreach { in =>
         in.valid := false.B
         in.bits := DontCare
       }
 
       if (inCount >= outCount) {
-        (matrix_data_in zip matrix_data_out) foreach { case (in, out) =>
+        (matrixDataToCute zip matrix_data_out) foreach { case (in, out) =>
           in <> out
         }
       }
@@ -308,13 +388,41 @@ class XSTile()(implicit p: Parameters) extends LazyModule
           for ((outIdx, arbIdx) <- (groupStart until groupEnd).zipWithIndex) {
             arb.io.in(arbIdx) <> matrix_data_out(outIdx)
           }
-          matrix_data_in(inIdx) <> arb.io.out
+          matrixDataToCute(inIdx) <> arb.io.out
         }
       }
 
-      core.module.io.cutePerf.foreach(_ <> cute.module.io.cute.perf)
+      for (i <- 0 until inCount) {
+        if (useAcceleratorCDC) {
+          val matrixCrossing = Module(new AsyncQueue(chiselTypeOf(matrixDataToCute(i).bits), acceleratorCDC.matrixData))
+          matrixCrossing.io.enq_clock := clock
+          matrixCrossing.io.enq_reset := reset.asBool
+          matrixCrossing.io.deq_clock := acceleratorClock
+          matrixCrossing.io.deq_reset := acceleratorReset.asBool
+          matrixCrossing.io.enq <> matrixDataToCute(i)
+          matrix_data_in(i) <> matrixCrossing.io.deq
+        } else {
+          matrix_data_in(i) <> matrixDataToCute(i)
+        }
+      }
+
+      core.module.io.cutePerf.foreach { corePerf =>
+        if (useAcceleratorCDC) {
+          val perfCrossing = Module(new CutePerfAsyncCrossing(acceleratorCDC.perfSnapshot))
+          perfCrossing.io.sourceClock := acceleratorClock
+          perfCrossing.io.sourceReset := acceleratorReset.asBool
+          perfCrossing.io.source := cute.module.io.cute.perf
+          perfCrossing.io.sinkClock := clock
+          perfCrossing.io.sinkReset := reset.asBool
+          corePerf := perfCrossing.io.sink
+        } else {
+          corePerf <> cute.module.io.cute.perf
+        }
+      }
 
       cute.module.io.hartId := io.hartId
+      cute.module.io.difftestClock.foreach(_ := clock)
+      cute.module.io.difftestReset.foreach(_ := reset.asBool)
     }
 
     if (HasMatrixExtension && cuteOpt.isEmpty) {

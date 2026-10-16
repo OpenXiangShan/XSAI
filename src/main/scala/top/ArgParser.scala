@@ -19,7 +19,7 @@ package top
 
 import org.chipsalliance.cde.config.{Config, Parameters}
 import system.SoCParamsKey
-import xiangshan.{DebugOptionsKey, DFTOptionsKey, XSTileKey}
+import xiangshan.{DebugOptionsKey, DFTOptionsKey, ExternalAcceleratorCDCKey, XSTileKey}
 import freechips.rocketchip.tile.MaxHartIdBits
 import difftest.DifftestModule
 
@@ -51,6 +51,8 @@ object ArgParser {
       |--disable-alwaysdb
       |--disable-clockgate
       |--disable-vfexp2
+      |--enable-accelerator-cdc
+      |--disable-accelerator-cdc
       |--enable-dfx
       |""".stripMargin
 
@@ -157,6 +159,14 @@ object ArgParser {
         case "--disable-vfexp2" :: tail =>
           nextOption(config.alter((site, here, up) => {
             case XSTileKey => up(XSTileKey).map(_.copy(HasVfexp2 = false))
+          }), tail)
+        case "--enable-accelerator-cdc" :: tail =>
+          nextOption(config.alter((site, here, up) => {
+            case ExternalAcceleratorCDCKey => up(ExternalAcceleratorCDCKey).copy(enable = true)
+          }), tail)
+        case "--disable-accelerator-cdc" :: tail =>
+          nextOption(config.alter((site, here, up) => {
+            case ExternalAcceleratorCDCKey => up(ExternalAcceleratorCDCKey).copy(enable = false)
           }), tail)
         case "--xstop-prefix" :: value :: tail =>
           nextOption(config.alter((site, here, up) => {

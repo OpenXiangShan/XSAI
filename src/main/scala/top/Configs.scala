@@ -297,6 +297,9 @@ class MinimalMatrixConfig(n: Int) extends Config(
         Tensor_K = tensorK,
         Debug = CuteDebugParams.NoDebug,
         EnableDifftest = site(DebugOptionsKey).EnableDifftest,
+        DifftestAsyncClockName = Option.when(
+          site(DebugOptionsKey).EnableDifftest && site(ExternalAcceleratorCDCKey).enable
+        )(s"cute_hart_${xp.HartId}"),
         v3config = Cutev3extParams(
           TaskCtrl_AutoClear = true,
         ),
@@ -561,6 +564,9 @@ class DefaultMatrixConfig(n: Int = 1) extends Config(
         Tensor_K = tensorK,
         Debug = CuteDebugParams.NoDebug,
         EnableDifftest = site(DebugOptionsKey).EnableDifftest,
+        DifftestAsyncClockName = Option.when(
+          site(DebugOptionsKey).EnableDifftest && site(ExternalAcceleratorCDCKey).enable
+        )(s"cute_hart_${xp.HartId}"),
         v3config = Cutev3extParams(
           TaskCtrl_AutoClear = true,
         ),
