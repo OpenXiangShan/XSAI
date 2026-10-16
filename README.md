@@ -36,7 +36,21 @@ The [CUTE](https://github.com/OpenXiangShan/CUTE) submodule implements the AI Ma
 
 The [XSAICache](https://github.com/OpenXiangShan/XSAICache) submodule implements the XSAI cache subsystem. HBL2 is the high-bandwidth L2 architecture used by matrix workloads.
 
-![XSAI architecture](images/xsai-architecture.png)
+### Overall architecture
+
+![XSAI overall architecture](images/xsai-architecture.svg)
+
+[SVG](images/xsai-architecture.svg) · [draw.io source](images/xsai-architecture.drawio)
+
+### XSAI extensions
+
+The comparison diagram shows components retained from Kunminghu V2 at 50% opacity to highlight XSAI additions and modifications.
+
+![Architecture comparison between XSAI and Kunminghu V2](images/xsai-architecture-comparison.svg)
+
+[SVG](images/xsai-architecture-comparison.svg) · [draw.io source](images/xsai-architecture-comparison.drawio)
+
+The diagrams are from the [XSAI design documentation](https://docs.xiangshan.cc/projects/design/zh-cn/kunminghu-v2r2a/overview/) by the XiangShan Team · Beijing Institute of Open Source Chip, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 ## Programming model and software ecosystem
 

@@ -36,7 +36,21 @@ XSAI 在香山昆明湖 V2 控制核的基础上，扩展 AME 矩阵指令译码
 
 [XSAICache](https://github.com/OpenXiangShan/XSAICache) 子模块实现 XSAI 缓存子系统。HBL2 是面向矩阵负载的高带宽 L2 架构。
 
-![XSAI 架构](images/xsai-architecture.png)
+### 整体架构
+
+![XSAI 整体架构](images/xsai-architecture.svg)
+
+[SVG](images/xsai-architecture.svg) · [draw.io 源文件](images/xsai-architecture.drawio)
+
+### XSAI 扩展对比
+
+对比图将沿用昆明湖 V2 的部分设为 50% 透明度，以突出 XSAI 的新增与调整。
+
+![XSAI 与昆明湖 V2 的架构对比](images/xsai-architecture-comparison.svg)
+
+[SVG](images/xsai-architecture-comparison.svg) · [draw.io 源文件](images/xsai-architecture-comparison.drawio)
+
+架构图来自[香山AI设计文档](https://docs.xiangshan.cc/projects/design/zh-cn/kunminghu-v2r2a/overview/)，由香山团队·北京开源芯片研究院以 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) 协议发布。
 
 ## 编程模型与软件生态
 
