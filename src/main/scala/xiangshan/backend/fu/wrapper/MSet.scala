@@ -39,7 +39,8 @@ class Mcfg(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUnit(cfg) {
 
   val isMgetcfg = MSetOpType.isMgetcfg(io.in.bits.ctrl.fuOpType)
   val mcfgRaw = io.in.bits.data.src(0)
-  val unsupported = MSetOpType.isMsetcfg(io.in.bits.ctrl.fuOpType) && !McfgHelpers.isSupported(mcfgRaw(3, 0), mcfgRaw(7, 4))
+  val unsupported = MSetOpType.isMsetcfg(io.in.bits.ctrl.fuOpType) &&
+    !McfgHelpers.isSupported(mcfgRaw(3, 0), mcfgRaw(7, 4), MatrixExtension.enableBitMTE)
 
   io.out.bits.res.data := Mux(isMgetcfg, io.in.bits.ctrl.mcfgReadRaw.getOrElse(0.U), mcfgRaw)
   io.out.bits.ctrl.exceptionVec.get := 0.U.asTypeOf(io.out.bits.ctrl.exceptionVec.get)

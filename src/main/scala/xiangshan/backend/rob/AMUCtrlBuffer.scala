@@ -296,6 +296,8 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
       difftestAmuCtrl.pc     := Mux(pcTransType.shouldBeSext, SignExt(difftestPC, XLEN), difftestPC)
       difftestAmuCtrl.coreid := io.hartId.get
       difftestAmuCtrl.index  := i.U
+      difftestAmuCtrl.packedMode := 0.U
+      difftestAmuCtrl.kslice := 0.U
       when (amuCtrl.bits.isMma()) {
         difftestAmuCtrl.rm       := mmaio.rm
         difftestAmuCtrl.md       := mmaio.md
@@ -309,6 +311,8 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
         difftestAmuCtrl.types2   := mmaio.types2
         difftestAmuCtrl.typed    := mmaio.typed
         difftestAmuCtrl.isfp     := mmaio.isfp
+        difftestAmuCtrl.packedMode := mmaio.packedMode
+        difftestAmuCtrl.kslice   := mmaio.kslice
       }
       when (amuCtrl.bits.isMls()) {
         difftestAmuCtrl.ms        := mlsio.ms

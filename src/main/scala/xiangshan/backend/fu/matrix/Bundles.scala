@@ -64,6 +64,8 @@ object Bundles {
   }
 
   class AmuMmaIO(implicit p: Parameters) extends XSBundle {
+    val packedMode = UInt(2.W) // 57:56; preserve the existing payload at 52:0
+    val kslice = UInt(3.W) // 55:53
     // rounding mode (mfrm/mxrm)
     val rm       = UInt(3.W) // 52 : 50
     // dest matrix register index

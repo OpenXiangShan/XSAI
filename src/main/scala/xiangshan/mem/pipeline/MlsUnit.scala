@@ -232,6 +232,11 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   val s0_mcfgEntry = s0_uop.mcfgReadView.get.entry
   val s0_mcfgTypeCode = s0_mcfgEntry.typeCode
   val s0_mcfgWidth = McfgHelpers.msew(s0_mcfgTypeCode)
+  val s0_packed = MatrixExtension.enableBitMTE.B && McfgHelpers.isPackedType(s0_mcfgTypeCode)
+  val illegal_packed_type = s0_packed &&
+    (!s0_mcfgEntry.supported(MatrixExtension.enableBitMTE) || !s0_ld_flow ||
+      !MldstOpType.isMatrixB(s0_uop.fuOpType) || MldstOpType.isTransposed(s0_uop.fuOpType))
+  val illegal_packed_shape = s0_packed && s0_mtile1 =/= 128.U
   val s0_arlenElems = Mux1H(Seq(
     (s0_mcfgWidth === MSew.e4)  -> (ARLEN / 4).U,
     (s0_mcfgWidth === MSew.e8)  -> (ARLEN / 8).U,
@@ -253,7 +258,7 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   ))
   val illegal_mtilek = Mux1H(Seq(
     MldstOpType.isMatrixA(s0_uop.fuOpType) -> (s0_mtile1 > s0_trlenElems),
-    MldstOpType.isMatrixB(s0_uop.fuOpType) -> (s0_mtile0 > s0_trlenElems),
+    MldstOpType.isMatrixB(s0_uop.fuOpType) -> (!s0_packed && s0_mtile0 > s0_trlenElems),
     MldstOpType.isMatrixC(s0_uop.fuOpType) -> false.B,
     MldstOpType.isWholeReg(s0_uop.fuOpType) -> false.B,
   ))
@@ -268,7 +273,7 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   s0_out.mtile0        := s0_mtile0
   s0_out.mtile1        := s0_mtile1
   s0_out.uop.exceptionVec(illegalInstr)        := illegal_regidx ||
-    (s0_nonWholeMls && (illegal_mtilem || illegal_mtilen || illegal_mtilek))
+    (s0_nonWholeMls && (illegal_mtilem || illegal_mtilen || illegal_mtilek || illegal_packed_type || illegal_packed_shape))
   s0_out.uop.exceptionVec(loadAddrMisaligned)  := !s0_addr_aligned && s0_ld_flow
   s0_out.uop.exceptionVec(storeAddrMisaligned) := !s0_addr_aligned && !s0_ld_flow
   s0_out.forward_tlDchannel := false.B
@@ -559,7 +564,8 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   val s3_wholeReg = MldstOpType.isWholeReg(s3_in.uop.fuOpType)
   val s3_wholeAcc = s3_wholeReg && MldstOpType.isMatrixC(s3_in.uop.fuOpType)
   val s3_wholeB = s3_wholeReg && MldstOpType.isMatrixB(s3_in.uop.fuOpType)
-  amuCtrl.widths    := Mux(s3_wholeReg, Mux(s3_wholeAcc, MSew.e32, MSew.e8), s3_mcfgWidth)
+  val s3_packed = !s3_wholeReg && MatrixExtension.enableBitMTE.B && McfgHelpers.isPackedType(s3_mcfgTypeCode)
+  amuCtrl.widths    := Mux(s3_wholeReg, Mux(s3_wholeAcc, MSew.e32, MSew.e8), Mux(s3_packed, MSew.e8, s3_mcfgWidth))
   amuCtrl.baseAddr  := s3_in.paddr
   amuCtrl.stride    := s3_in.stride
   amuCtrl.transpose := MldstOpType.isTransposed(s3_in.uop.fuOpType)
@@ -573,6 +579,10 @@ class MlsUnit(implicit p: Parameters) extends XSModule
     } .otherwise { // for tile registers
       amuCtrl.column := Mux(s3_wholeB, ROWNUM.U, (TRLEN / 8).U)
     }
+  } .elsewhen (s3_packed) {
+    // Preserve the existing B role swap and load a full native 64-byte row.
+    amuCtrl.row     := 64.U
+    amuCtrl.column  := 128.U
   } .otherwise {
     amuCtrl.row     := s3_in.mtile0
     amuCtrl.column  := s3_in.mtile1

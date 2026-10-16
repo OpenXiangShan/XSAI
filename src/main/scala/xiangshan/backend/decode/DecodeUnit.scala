@@ -765,11 +765,11 @@ case class Imm_CSRCONST() extends Imm(20){
   }
 }
 
-case class Imm_MATRIXREG() extends Imm(9){
+case class Imm_MATRIXREG() extends Imm(12){
   override def do_toImm32(minBits: UInt): UInt = ZeroExt(minBits, 32)
 
   override def minBitsFromInstr(instr: UInt): UInt = {
-    Cat(instr(22, 20), instr(17, 15), instr(9, 7))
+    Cat(instr(25, 23), instr(22, 20), instr(17, 15), instr(9, 7))
   }
 }
 

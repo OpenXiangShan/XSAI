@@ -42,17 +42,29 @@ class Mma(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUnit(cfg) {
       32.U -> (totalBits / 32).U,
     ))
 
-  private val legalMcfgEntries = aMcfgEntry.supported && bMcfgEntry.supported && cMcfgEntry.supported
+  private val legalMcfgEntries = aMcfgEntry.supported(MatrixExtension.enableBitMTE) &&
+    bMcfgEntry.supported(MatrixExtension.enableBitMTE) && cMcfgEntry.supported(MatrixExtension.enableBitMTE)
   private val legalMmaTypes = McfgHelpers.isMmaTripleSupported(aTypeCode, bTypeCode, cTypeCode, MatrixExtension)
   private val illegal_mcfg = !legalMcfgEntries || !legalMmaTypes
 
   val illegal_regidx = !in.data.imm(2) || in.data.imm(5) || in.data.imm(8)
+  private val nativeMma = MatrixExtension.enableBitMTE.B && McfgHelpers.isPackedType(bTypeCode)
+  private val kslice = in.data.imm(11, 9)
+  private val ternary = bTypeCode === McfgHelpers.Fp2Pack4.typeCode.U
+  private val aInt8 = aTypeCode === McfgHelpers.Int8.typeCode.U
+  private val sliceCount = Mux(aInt8, Mux(ternary, 4.U, 8.U), Mux(ternary, 2.U, 4.U))
+  val illegal_kslice = Mux(nativeMma, kslice >= sliceCount, kslice =/= 0.U)
+  val illegal_native_shape = nativeMma &&
+    (mtilem =/= 128.U || mtilen =/= 128.U || mtilek =/= Mux(aInt8, 64.U, 128.U))
+  val illegal_native_regalias = nativeMma && in.data.imm(5, 3) === in.data.imm(8, 6)
   val illegal_mtilem = mtilem > ROWNUM.U
   val illegal_mtilen = mtilen > ROWNUM.U || mtilen > elementLimit(ARLEN, cTypeCode)
   val illegal_mtilek = mtilek > elementLimit(TRLEN, aTypeCode)
 
   val output = Wire(new AmuMmaIO)
   dontTouch(output)
+  output.packedMode := Mux(nativeMma, McfgHelpers.packedMode(bTypeCode), 0.U)
+  output.kslice := Mux(nativeMma, kslice, 0.U)
   output.ms1    := in.data.imm(5, 3)
   output.ms2    := in.data.imm(8, 6)
   output.md     := in.data.imm(2, 0)
@@ -72,7 +84,8 @@ class Mma(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUnit(cfg) {
   out.ctrl.amuCtrl.get.data := output.asUInt
   out.ctrl.exceptionVec.get := 0.U.asTypeOf(out.ctrl.exceptionVec.get)
   out.ctrl.exceptionVec.get(ExceptionNO.illegalInstr) :=
-    illegal_regidx || illegal_mcfg || illegal_mtilem || illegal_mtilen || illegal_mtilek
+    illegal_regidx || illegal_mcfg || illegal_mtilem || illegal_mtilen || illegal_mtilek ||
+      illegal_kslice || illegal_native_shape || illegal_native_regalias
   if (env.EnableDifftest) {
     // It will be filled in ROB.
     out.ctrl.amuCtrl.get.pc.get := DontCare

@@ -539,6 +539,7 @@ class DefaultMatrixConfig(n: Int = 1) extends Config(
         TRLEN = 64 * 8,
         MELEN = 32,
         MatrixExtension = MatrixIsaParams(
+          enableBitMTE = true,
           enableInt8Int32 = true,
           enableFp8Fp32 = true,
           enableBf16Fp32 = true,

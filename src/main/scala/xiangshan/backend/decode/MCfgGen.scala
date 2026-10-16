@@ -52,6 +52,11 @@ object McfgHelpers {
 
   case object Fp32 extends McfgSemanticType(12, "fp32", 32, McfgFloat, fpPayload(isAlt = false, WidthE32))
 
+  // Packed weights retain an e8 carrier in the legacy MMA fields.
+  case object Fp2Pack4 extends McfgSemanticType(13, "fp2pack4", 2, McfgInt, intPayload(signed = true, WidthE8))
+
+  case object I1Pack8 extends McfgSemanticType(15, "i1pack8", 1, McfgInt, intPayload(signed = false, WidthE8))
+
   case class McfgDecoded(typeCode: Int, tableSel: Int, semanticType: Option[McfgSemanticType]) {
     def legal: Boolean = semanticType.isDefined
     def typeName: Option[String] = semanticType.map(_.typeName)
@@ -79,7 +84,9 @@ object McfgHelpers {
     Fp16,
     Bf16,
     Tf32,
-    Fp32
+    Fp32,
+    Fp2Pack4,
+    I1Pack8
   )
 
   private val semanticTypesByCode: Map[Int, McfgSemanticType] = semanticTypes.map(t => t.typeCode -> t).toMap
@@ -88,11 +95,13 @@ object McfgHelpers {
 
   private def fpPayload(isAlt: Boolean, widthCode: Int): Int = (if (isAlt) 4 else 0) | widthCode
 
-  def decode(typeCode: Int, tableSel: Int): McfgDecoded = {
-    McfgDecoded(typeCode, tableSel, Option.when(tableSel == 0)(semanticTypesByCode.get(typeCode)).flatten)
+  def decode(typeCode: Int, tableSel: Int, enableBitMTE: Boolean = false): McfgDecoded = {
+    val enabled = enableBitMTE || (typeCode != Fp2Pack4.typeCode && typeCode != I1Pack8.typeCode)
+    McfgDecoded(typeCode, tableSel, Option.when(tableSel == 0 && enabled)(semanticTypesByCode.get(typeCode)).flatten)
   }
 
-  def decodeRaw(raw: BigInt): McfgDecoded = decode((raw & 0xf).toInt, ((raw >> 4) & 0xf).toInt)
+  def decodeRaw(raw: BigInt, enableBitMTE: Boolean = false): McfgDecoded =
+    decode((raw & 0xf).toInt, ((raw >> 4) & 0xf).toInt, enableBitMTE)
 
   def selectorToIndex(sel: UInt): UInt = sel(2, 0)
 
@@ -100,9 +109,16 @@ object McfgHelpers {
     MuxLookup(typeCode, false.B)(semanticTypes.map(t => t.typeCode.U -> true.B))
   }
 
-  def isPdfDefined(typeCode: UInt, tableSel: UInt): Bool = tableSel === 0.U && isDefinedTypeCode(typeCode)
+  def isPackedType(typeCode: UInt): Bool = typeCode === Fp2Pack4.typeCode.U || typeCode === I1Pack8.typeCode.U
 
-  def isSupported(typeCode: UInt, tableSel: UInt): Bool = tableSel === 0.U && isDefinedTypeCode(typeCode)
+  def packedMode(typeCode: UInt): UInt =
+    Mux(typeCode === Fp2Pack4.typeCode.U, 1.U(2.W), Mux(typeCode === I1Pack8.typeCode.U, 2.U(2.W), 0.U(2.W)))
+
+  def isPdfDefined(typeCode: UInt, tableSel: UInt): Bool =
+    tableSel === 0.U && isDefinedTypeCode(typeCode) && !isPackedType(typeCode)
+
+  def isSupported(typeCode: UInt, tableSel: UInt, enableBitMTE: Boolean = false): Bool =
+    tableSel === 0.U && isDefinedTypeCode(typeCode) && (enableBitMTE.B || !isPackedType(typeCode))
 
   def isFloatType(typeCode: UInt): Bool = {
     MuxLookup(typeCode, false.B)(semanticTypes.map(t => t.typeCode.U -> (t.family == McfgFloat).B))
@@ -145,13 +161,16 @@ object McfgHelpers {
     val supportsBf16Fp32 = matrixExtension.enableBf16Fp32 && aType == Bf16 && bType == Bf16 && cType == Fp32
     val supportsTf32Fp32 = matrixExtension.enableTf32Fp32 && aType == Tf32 && bType == Tf32 && cType == Fp32
     val supportsFp32Fp32 = matrixExtension.enableFp32Fp32 && aType == Fp32 && bType == Fp32 && cType == Fp32
+    val supportsBitMTE = matrixExtension.enableBitMTE && (aType == Int8 || aType == Int4) &&
+      (bType == Fp2Pack4 || bType == I1Pack8) && cType == Int32
 
-    supportsInt8 || supportsInt4 || supportsFp8Fp16 || supportsFp8Bf16 || supportsFp8Fp32 ||
+    supportsBitMTE || supportsInt8 || supportsInt4 || supportsFp8Fp16 || supportsFp8Bf16 || supportsFp8Fp32 ||
       supportsFp16Fp16 || supportsFp16Fp32 || supportsBf16Fp32 || supportsTf32Fp32 || supportsFp32Fp32
   }
 
   def isMmaTripleSupportedRaw(aRaw: BigInt, bRaw: BigInt, cRaw: BigInt, matrixExtension: MatrixIsaParams): Boolean = {
-    val decoded = Seq(decodeRaw(aRaw), decodeRaw(bRaw), decodeRaw(cRaw)).map(_.semanticType)
+    val decoded = Seq(decodeRaw(aRaw, matrixExtension.enableBitMTE), decodeRaw(bRaw, matrixExtension.enableBitMTE),
+      decodeRaw(cRaw, matrixExtension.enableBitMTE)).map(_.semanticType)
     decoded match {
       case Seq(Some(aType), Some(bType), Some(cType)) => isMmaTripleSupported(aType, bType, cType, matrixExtension)
       case _ => false
@@ -165,6 +184,8 @@ object McfgHelpers {
     matrixExtension: MatrixIsaParams
   ): Bool = {
     val supported = Seq(
+      Option.when(matrixExtension.enableBitMTE)((aTypeCode === Int8.typeCode.U || aTypeCode === Int4.typeCode.U) &&
+        isPackedType(bTypeCode) && cTypeCode === Int32.typeCode.U),
       Option.when(matrixExtension.enableInt8Int32)(isInt8Type(aTypeCode) && isInt8Type(bTypeCode) && cTypeCode === Int32.typeCode.U),
       Option.when(matrixExtension.enableInt4Int32)(isInt4Type(aTypeCode) && isInt4Type(bTypeCode) && cTypeCode === Int32.typeCode.U),
       Option.when(matrixExtension.enableFp8Fp16)(sameFp8Type(aTypeCode, bTypeCode) && cTypeCode === Fp16.typeCode.U),
@@ -205,6 +226,7 @@ class McfgEntry(implicit p: Parameters) extends Bundle {
   def tableSel: UInt = raw(7, 4)
   def payload: UInt = raw(p(XLen) - 1, 8)
   def supported: Bool = McfgHelpers.isSupported(typeCode, tableSel)
+  def supported(enableBitMTE: Boolean): Bool = McfgHelpers.isSupported(typeCode, tableSel, enableBitMTE)
   def definedByPdf: Bool = McfgHelpers.isPdfDefined(typeCode, tableSel)
 }
 
