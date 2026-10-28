@@ -2,6 +2,8 @@ core:
   - "!.github/ISSUE_TEMPLATE/**"
   - "!.github/CODEOWNERS"
   - "!.github/filters.yaml"
+  - "!.github/labeler.yml"
+  - "!.github/workflows/pr-labeler.yml"
   - "!.github/workflows/nightly.yml"
   - "!.github/workflows/perf-template.yml"
   - "!.github/workflows/perf-v2.yml"
