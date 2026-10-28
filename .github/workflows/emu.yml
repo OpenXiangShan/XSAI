@@ -154,14 +154,49 @@ jobs:
             echo "cluster=open" >> "$GITHUB_OUTPUT"
           fi
 
-  emu-xsai-isa-ame:
+  emu-xsai-tests:
     runs-on:
       - bosc
       - ${{ needs.build-xsai-emu.outputs.cluster }}
     needs: build-xsai-emu
     continue-on-error: false
     timeout-minutes: 900
-    name: EMU - XSAI ISA and AME
+    name: EMU - XSAI - ${{ matrix.name }}
+    strategy:
+      matrix:
+        include:
+          - name: cputest
+          - name: riscv-tests
+            extra: --rvtest /nfs/home/share/ci-workloads/riscv-tests
+          - name: misc-tests
+            extra: --numa
+          - name: ame-tests
+            extra: --numa
+          - name: rvh-tests
+            extra: --numa
+          - name: microbench
+            report-perf: true
+          - name: coremark
+            extra: --numa
+            report-perf: true
+          - name: linux-hello-opensbi
+            extra: --numa
+            report-perf: true
+          - name: povray
+            extra: --numa --max-instr 5000000 --gcpt-restore-bin $GCPT_RESTORE_BIN
+            report-perf: true
+          - name: copy_and_run
+            report-perf: true
+          - name: vfexp2test
+            extra: --numa
+          - name: rvv-bench
+            extra: --numa
+          - name: f16_test
+            extra: --numa
+          - name: zcb-test
+            extra: --numa
+      fail-fast: false
+      max-parallel: 6
     steps:
       - name: Cleanup orphan EMU
         run: |
@@ -172,7 +207,7 @@ jobs:
           submodules: true
       - name: set env
         run: |
-          JOB_HOME="${CI_HOME}/basics/isa-ame"
+          JOB_HOME="${CI_HOME}/basics/${{ matrix.name }}"
           echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
           echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
           echo "AM_HOME=/nfs/home/share/ci-workloads/nexus-am" >> $GITHUB_ENV
@@ -180,6 +215,9 @@ jobs:
           echo "WAVE_HOME=${JOB_HOME}" >> $GITHUB_ENV
           echo "GCPT_RESTORE_BIN=/nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin" >> $GITHUB_ENV
           mkdir -p "${JOB_HOME}"
+          if [[ "${{ matrix.report-perf }}" == "true" ]]; then
+            : > "${JOB_HOME}/${{ matrix.name }}.ipc"
+          fi
       - name: Initialize submodules
         run: make init-force
       - name: clean up
@@ -189,18 +227,40 @@ jobs:
         run: |
           mkdir -p build
           cp -L "${EMU_HOME}/emu" "${GITHUB_WORKSPACE}/build/emu"
-      - name: Basic Test - cputest
+      - name: Run Basic Test - ${{ matrix.name }}
+        id: run
+        shell: bash
         run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --ci cputest 2> /dev/zero
-      - name: Basic Test - riscv-tests
+          if [[ "${{ matrix.name }}" == "copy_and_run" ]]; then
+            $GITHUB_WORKSPACE/build/emu \
+              -F $GITHUB_WORKSPACE/ready-to-run/copy_and_run.bin \
+              -i $GITHUB_WORKSPACE/ready-to-run/microbench.bin \
+              --diff $GITHUB_WORKSPACE/ready-to-run/riscv64-nemu-interpreter-so --enable-fork
+          else
+            python3 $GITHUB_WORKSPACE/scripts/xiangshan.py \
+              --wave-dump $WAVE_HOME --threads 16 \
+              --ci ${{ matrix.name }} ${{ matrix.extra }}
+          fi 2> ${{ matrix.report-perf && 'perf.log' || '/dev/null' }} | tee stdout.log
+
+          if [[ "${{ matrix.report-perf }}" == "true" ]]; then
+            IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log || true)
+            printf '%s\n' "${IPC:-N/A}" | tee "$PERF_HOME/${{ matrix.name }}.ipc"
+          fi
+      - name: Archive log
+        if: ${{ always() && steps.run.outcome != 'skipped' }}
         run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --rvtest /nfs/home/share/ci-workloads/riscv-tests --ci riscv-tests 2> /dev/zero
-      - name: Basic Test - misc-tests
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci misc-tests 2> /dev/zero
-      - name: Basic AME Test
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci ame-tests 2> /dev/zero
+          if [[ "${{ matrix.report-perf }}" == "true" ]]; then
+            # if run step failed, do not sort
+            if [[ "${{ steps.run.outcome }}" == "failure" ]]; then
+              cat perf.log
+            else
+              mv perf.log perf.log.raw
+              cat perf.log.raw | sort | tee perf.log
+            fi
+            tar -czvf "$PERF_HOME/${{ matrix.name }}.tar.gz" stdout.log perf.log
+          else
+            tar -czvf "$PERF_HOME/${{ matrix.name }}.tar.gz" stdout.log
+          fi
 
   emu-xsai-matrix-FullBandWidth:
     runs-on: bosc
@@ -258,234 +318,14 @@ jobs:
           fi
           tar -czvf "$WAVE_HOME/ame-tests.tar.gz" stdout.log perf.log
 
-  emu-xsai-hypervisor:
-    runs-on:
-      - bosc
-      - ${{ needs.build-xsai-emu.outputs.cluster }}
-    needs: build-xsai-emu
-    continue-on-error: false
-    timeout-minutes: 900
-    name: EMU - XSAI Hypervisor
-    steps:
-      - name: Cleanup orphan EMU
-        run: |
-          pkill -9 -e -f "${GITHUB_WORKSPACE}/build/emu" || true
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          submodules: true
-      - name: set env
-        run: |
-          JOB_HOME="${CI_HOME}/basics/hypervisor"
-          echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
-          echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
-          echo "AM_HOME=/nfs/home/share/ci-workloads/nexus-am" >> $GITHUB_ENV
-          echo "PERF_HOME=${JOB_HOME}" >> $GITHUB_ENV
-          echo "WAVE_HOME=${JOB_HOME}" >> $GITHUB_ENV
-          echo "GCPT_RESTORE_BIN=/nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin" >> $GITHUB_ENV
-          mkdir -p "${JOB_HOME}"
-      - name: Initialize submodules
-        run: make init-force
-      - name: clean up
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
-      - name: Get artifact
-        run: |
-          mkdir -p build
-          cp -L "${EMU_HOME}/emu" "${GITHUB_WORKSPACE}/build/emu"
-      - name: Extension Test - hypervisor
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci rvh-tests 2> /dev/zero
-
-  emu-xsai-system:
-    runs-on:
-      - bosc
-      - ${{ needs.build-xsai-emu.outputs.cluster }}
-    needs: build-xsai-emu
-    continue-on-error: false
-    timeout-minutes: 900
-    name: EMU - XSAI Microbench, CoreMark, and Linux
-    steps:
-      - name: Cleanup orphan EMU
-        run: |
-          pkill -9 -e -f "${GITHUB_WORKSPACE}/build/emu" || true
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          submodules: true
-      - name: set env
-        run: |
-          JOB_HOME="${CI_HOME}/basics/system"
-          echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
-          echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
-          echo "AM_HOME=/nfs/home/share/ci-workloads/nexus-am" >> $GITHUB_ENV
-          echo "PERF_HOME=${JOB_HOME}" >> $GITHUB_ENV
-          echo "WAVE_HOME=${JOB_HOME}" >> $GITHUB_ENV
-          echo "GCPT_RESTORE_BIN=/nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin" >> $GITHUB_ENV
-          mkdir -p "${JOB_HOME}"
-          : > "${JOB_HOME}/microbench.ipc"
-          : > "${JOB_HOME}/coremark.ipc"
-          : > "${JOB_HOME}/linux.ipc"
-      - name: Initialize submodules
-        run: make init-force
-      - name: clean up
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
-      - name: Get artifact
-        run: |
-          mkdir -p build
-          cp -L "${EMU_HOME}/emu" "${GITHUB_WORKSPACE}/build/emu"
-      - name: Simple Test - microbench
-        id: microbench
-        shell: bash
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --ci microbench 2> perf.log | tee stdout.log
-          IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log || true)
-          printf '%s\n' "${IPC:-N/A}" | tee "$PERF_HOME/microbench.ipc"
-      - name: Archive log - microbench
-        if: ${{ always() && steps.microbench.outcome != 'skipped' }}
-        run: |
-          if [[ "${{ steps.microbench.outcome }}" == "failure" ]]; then
-            cat perf.log
-          else
-            mv perf.log perf.log.raw
-            cat perf.log.raw | sort | tee perf.log
-          fi
-          tar -czvf "$WAVE_HOME/microbench.tar.gz" stdout.log perf.log
-
-      - name: Simple Test - CoreMark
-        id: coremark
-        shell: bash
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci coremark 2> perf.log | tee stdout.log
-          IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log || true)
-          printf '%s\n' "${IPC:-N/A}" | tee "$PERF_HOME/coremark.ipc"
-      - name: Archive log - coremark
-        if: ${{ always() && steps.coremark.outcome != 'skipped' }}
-        run: |
-          if [[ "${{ steps.coremark.outcome }}" == "failure" ]]; then
-            cat perf.log
-          else
-            mv perf.log perf.log.raw
-            cat perf.log.raw | sort | tee perf.log
-          fi
-          tar -czvf "$WAVE_HOME/coremark.tar.gz" stdout.log perf.log
-
-      - name: System Test - Linux
-        id: linux
-        shell: bash
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci linux-hello-opensbi 2> perf.log | tee stdout.log
-          IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log || true)
-          printf '%s\n' "${IPC:-N/A}" | tee "$PERF_HOME/linux.ipc"
-      - name: Archive log - linux
-        if: ${{ always() && steps.linux.outcome != 'skipped' }}
-        run: |
-          if [[ "${{ steps.linux.outcome }}" == "failure" ]]; then
-            cat perf.log
-          else
-            mv perf.log perf.log.raw
-            cat perf.log.raw | sort | tee perf.log
-          fi
-          tar -czvf "$WAVE_HOME/linux.tar.gz" stdout.log perf.log
-
-  emu-xsai-extensions:
-    runs-on:
-      - bosc
-      - ${{ needs.build-xsai-emu.outputs.cluster }}
-    needs: build-xsai-emu
-    continue-on-error: false
-    timeout-minutes: 900
-    name: EMU - XSAI Other Extensions
-    steps:
-      - name: Cleanup orphan EMU
-        run: |
-          pkill -9 -e -f "${GITHUB_WORKSPACE}/build/emu" || true
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          submodules: true
-      - name: set env
-        run: |
-          JOB_HOME="${CI_HOME}/basics/extensions"
-          echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
-          echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
-          echo "AM_HOME=/nfs/home/share/ci-workloads/nexus-am" >> $GITHUB_ENV
-          echo "PERF_HOME=${JOB_HOME}" >> $GITHUB_ENV
-          echo "WAVE_HOME=${JOB_HOME}" >> $GITHUB_ENV
-          echo "GCPT_RESTORE_BIN=/nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin" >> $GITHUB_ENV
-          mkdir -p "${JOB_HOME}"
-          : > "${JOB_HOME}/povray.ipc"
-          : > "${JOB_HOME}/copy_and_run.ipc"
-      - name: Initialize submodules
-        run: make init-force
-      - name: clean up
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
-      - name: Get artifact
-        run: |
-          mkdir -p build
-          cp -L "${EMU_HOME}/emu" "${GITHUB_WORKSPACE}/build/emu"
-      - name: Floating-point Test - povray
-        id: povray
-        shell: bash
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --max-instr 5000000 --ci povray --gcpt-restore-bin $GCPT_RESTORE_BIN 2> perf.log | tee stdout.log
-          IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log || true)
-          printf '%s\n' "${IPC:-N/A}" | tee "$PERF_HOME/povray.ipc"
-      - name: Archive log - povray
-        if: ${{ always() && steps.povray.outcome != 'skipped' }}
-        run: |
-          if [[ "${{ steps.povray.outcome }}" == "failure" ]]; then
-            cat perf.log
-          else
-            mv perf.log perf.log.raw
-            cat perf.log.raw | sort | tee perf.log
-          fi
-          tar -czvf "$WAVE_HOME/povray.tar.gz" stdout.log perf.log
-
-      - name: Uncache Fetch Test - copy and run
-        id: copy_and_run
-        shell: bash
-        run: |
-          $GITHUB_WORKSPACE/build/emu  -F $GITHUB_WORKSPACE/ready-to-run/copy_and_run.bin -i $GITHUB_WORKSPACE/ready-to-run/microbench.bin --diff $GITHUB_WORKSPACE/ready-to-run/riscv64-nemu-interpreter-so --enable-fork 2> perf.log | tee stdout.log
-          IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log || true)
-          printf '%s\n' "${IPC:-N/A}" | tee "$PERF_HOME/copy_and_run.ipc"
-      - name: Archive log - copy_and_run
-        if: ${{ always() && steps.copy_and_run.outcome != 'skipped' }}
-        run: |
-          if [[ "${{ steps.copy_and_run.outcome }}" == "failure" ]]; then
-            cat perf.log
-          else
-            mv perf.log perf.log.raw
-            cat perf.log.raw | sort | tee perf.log
-          fi
-          tar -czvf "$WAVE_HOME/copy_and_run.tar.gz" stdout.log perf.log
-
-      - name: VFEXP2 Extension Test - vfexp2test
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci vfexp2test 2> /dev/zero
-      - name: V Extension Test - rvv-bench
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci rvv-bench 2> /dev/zero
-      - name: F16 Test - f16_test
-        run: |
-          python3 ./scripts/xiangshan.py --wave-dump ./build --thread 16 --numa --ci f16_test 2> /dev/zero
-      - name: Zcb Extension Test - zcb-test
-        run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci zcb-test 2> /dev/zero
-
   emu-xsai-basics:
     runs-on:
       - bosc
       - ${{ needs.build-xsai-emu.outputs.cluster }}
     needs:
       - build-xsai-emu
-      - emu-xsai-isa-ame
+      - emu-xsai-tests
       - emu-xsai-matrix-FullBandWidth
-      - emu-xsai-hypervisor
-      - emu-xsai-system
-      - emu-xsai-extensions
     if: ${{ always() && needs.build-xsai-emu.result == 'success' }}
     continue-on-error: false
     timeout-minutes: 30
@@ -508,25 +348,19 @@ jobs:
             echo "## Emu - Basics summary"
             echo "| Testcase | IPC |"
             echo "| -------- | --- |"
-            write_ipc_row microbench "${CI_HOME}/basics/system/microbench.ipc"
-            write_ipc_row coremark "${CI_HOME}/basics/system/coremark.ipc"
-            write_ipc_row linux "${CI_HOME}/basics/system/linux.ipc"
-            write_ipc_row povray "${CI_HOME}/basics/extensions/povray.ipc"
-            write_ipc_row copy_and_run "${CI_HOME}/basics/extensions/copy_and_run.ipc"
+            write_ipc_row microbench "${CI_HOME}/basics/microbench/microbench.ipc"
+            write_ipc_row coremark "${CI_HOME}/basics/coremark/coremark.ipc"
+            write_ipc_row linux "${CI_HOME}/basics/linux-hello-opensbi/linux-hello-opensbi.ipc"
+            write_ipc_row povray "${CI_HOME}/basics/povray/povray.ipc"
+            write_ipc_row copy_and_run "${CI_HOME}/basics/copy_and_run/copy_and_run.ipc"
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Check test jobs
         env:
-          ISA_AME_RESULT: ${{ needs.emu-xsai-isa-ame.result }}
+          TEST_RESULT: ${{ needs.emu-xsai-tests.result }}
           MATRIX_FullBandWidth_RESULT: ${{ needs.emu-xsai-matrix-FullBandWidth.result }}
-          HYPERVISOR_RESULT: ${{ needs.emu-xsai-hypervisor.result }}
-          SYSTEM_RESULT: ${{ needs.emu-xsai-system.result }}
-          EXTENSIONS_RESULT: ${{ needs.emu-xsai-extensions.result }}
         run: |
-          if [[ "$ISA_AME_RESULT" != "success" || \
-                "$MATRIX_FullBandWidth_RESULT" != "success" || \
-                "$HYPERVISOR_RESULT" != "success" || \
-                "$SYSTEM_RESULT" != "success" || \
-                "$EXTENSIONS_RESULT" != "success" ]]; then
+          if [[ "$TEST_RESULT" != "success" || \
+                "$MATRIX_FullBandWidth_RESULT" != "success" ]]; then
             echo "One or more XSAI test jobs failed or were cancelled."
             exit 1
           fi
