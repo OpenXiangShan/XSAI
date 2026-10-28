@@ -1,0 +1,105 @@
+"module: matrix":
+  - changed-files:
+      - any-glob-to-any-file:
+          - CUTE
+          - CUTE/**
+          - src/main/scala/cutewrapper/**
+          - src/main/scala/xiangshan/backend/fu/matrix/**
+          - src/main/scala/xiangshan/backend/decode/MatrixDecoder.scala
+          - src/main/scala/xiangshan/backend/decode/MCfgGen.scala
+          - src/main/scala/xiangshan/backend/rob/AMUCtrlBuffer.scala
+          - src/main/scala/xiangshan/backend/rob/MCfgBuffer.scala
+          - src/test/scala/cute/**
+
+"module: cache":
+  - changed-files:
+      - any-glob-to-any-file:
+          - XSAICache
+          - XSAICache/**
+          - coupledL2
+          - huancun
+          - openLLC
+          - src/main/scala/xiangshan/cache/**
+          - src/main/scala/xiangshan/L2Top.scala
+
+"module: core":
+  - changed-files:
+      - any-glob-to-any-file:
+          - src/main/scala/xiangshan/**
+          - src/test/scala/xiangshan/**
+          - rocket-chip
+          - fudian
+          - utility
+          - yunsuan
+          - ChiselAIA
+          - ChiselIOPMP
+
+"module: difftest":
+  - changed-files:
+      - any-glob-to-any-file:
+          - difftest
+          - difftest/**
+          - src/**/*Difftest*.scala
+          - src/**/*DiffTest*.scala
+          - scripts/**/*difftest*
+
+"module: tool":
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/**
+          - scripts/**
+          - debug/**
+          - project/**
+          - Makefile*
+          - '*.sc'
+          - mill
+          - .mill-version
+          - .jvmopts
+          - .scalafmt.conf
+          - scalastyle*.xml
+          - .gitmodules
+          - .gitignore
+          - ready-to-run
+
+"module: documentation":
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/*.md'
+          - '**/*.rst'
+          - docs/**
+
+"note: submodule bump":
+  - changed-files:
+      - any-glob-to-any-file:
+          - .gitmodules
+          - CUTE
+          - XSAICache
+          - difftest
+          - ready-to-run
+          - rocket-chip
+          - fudian
+          - utility
+          - yunsuan
+          - ChiselAIA
+          - ChiselIOPMP
+
+"topic: functionality":
+  - head-branch: ['^feat', '^fix']
+
+"topic: performance":
+  - head-branch: ['^perf']
+
+"topic: code quality":
+  - head-branch: ['^refactor']
+
+"topic: power":
+  - head-branch: ['^power']
+
+"topic: area":
+  - head-branch: ['^area']
+
+"topic: timing":
+  - head-branch: ['^timing']
+
+"topic: ci":
+  - head-branch: ['^ci']
