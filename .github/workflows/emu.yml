@@ -487,6 +487,42 @@ jobs:
         run: |
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --diff ./ready-to-run/riscv64-nemu-interpreter-dual-so --ci linux-hello-smp-new 2> /dev/null
 
+  # Check submodules must be merged to their integration branches
+  check-submodules:
+    name: Check Submodules
+    needs: changes
+    if: ${{ needs.changes.outputs.core == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 30
+    continue-on-error: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+          fetch-depth: 0
+      - name: Check rocket-chip
+        run: cd rocket-chip && git fetch origin refs/heads/master && git merge-base --is-ancestor HEAD FETCH_HEAD
+      - name: Check difftest
+        run: cd difftest && git fetch origin refs/heads/master && git merge-base --is-ancestor HEAD FETCH_HEAD
+      - name: Check ready-to-run
+        run: cd ready-to-run && git fetch origin refs/heads/dev-ame && git merge-base --is-ancestor HEAD FETCH_HEAD
+      - name: Check fudian
+        run: cd fudian && git fetch origin refs/heads/pipeline && git merge-base --is-ancestor HEAD FETCH_HEAD
+      - name: Check utility
+        run: cd utility && git fetch origin refs/heads/master && git merge-base --is-ancestor HEAD FETCH_HEAD
+      - name: Check yunsuan
+        run: cd yunsuan && git fetch origin refs/heads/v2r2a && git merge-base --is-ancestor HEAD FETCH_HEAD
+      - name: Check ChiselAIA
+        run: cd ChiselAIA && git fetch origin refs/heads/main && git merge-base --is-ancestor HEAD FETCH_HEAD
+      - name: Check ChiselIOPMP
+        run: cd ChiselIOPMP && git fetch origin refs/heads/master && git merge-base --is-ancestor HEAD FETCH_HEAD
+      - name: Check CUTE
+        run: cd CUTE && git fetch origin refs/heads/master && git merge-base --is-ancestor HEAD FETCH_HEAD
+      - name: Check XSAICache
+        run: cd XSAICache && git fetch origin refs/heads/master && git merge-base --is-ancestor HEAD FETCH_HEAD
+
   scalafmt:
     runs-on: ubuntu-latest
     needs: changes
