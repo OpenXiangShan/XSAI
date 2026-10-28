@@ -15,6 +15,9 @@ jobs:
     timeout-minutes: 360
     name: Build DefaultMatrixConfig EMU
     steps:
+      - name: Cleanup orphan EMU
+        run: |
+          pkill -9 -e -f "${GITHUB_WORKSPACE}/build/emu" || true
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -57,6 +60,9 @@ jobs:
         checkpoint: [0, 1, 2, 3, 4, 5, 6, 7]
     name: Nightly Regression(master) - Checkpoint ${{ matrix.checkpoint }}
     steps:
+      - name: Cleanup orphan EMU
+        run: |
+          pkill -9 -e -f "${GITHUB_WORKSPACE}/build/emu" || true
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -80,14 +86,24 @@ jobs:
           mkdir -p build
           cp -L ${EMU_HOME}/emu ${GITHUB_WORKSPACE}/build/emu
       - name: Random Checkpoint ${{ matrix.checkpoint }}
+        id: random_checkpoint
+        shell: bash
         run: |
-          PERF_LOG="$PERF_HOME/random_${{ matrix.checkpoint }}.txt"
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
             --wave-dump $WAVE_HOME --threads 16 --numa             \
             --ci random --timeout 3600 --ram-size=16GB             \
             --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-            2> >(tee "$PERF_LOG" >&2)
-          sort -o "$PERF_LOG" "$PERF_LOG"
+            2> perf.log | tee stdout.log
+      - name: Archive log - random_${{ matrix.checkpoint }}
+        if: ${{ always() && steps.random_checkpoint.outcome != 'skipped' }}
+        run: |
+          if [[ "${{ steps.random_checkpoint.outcome }}" == "failure" ]]; then
+            cat perf.log
+          else
+            mv perf.log perf.log.raw
+            cat perf.log.raw | sort | tee perf.log
+          fi
+          tar -czvf "$WAVE_HOME/random_${{ matrix.checkpoint }}.tar.gz" stdout.log perf.log
 
   emu-xsai-performance:
     runs-on: [bosc, node]
@@ -121,6 +137,9 @@ jobs:
             use_gcpt_restore_patch: true
     name: EMU - XSAI Performance - ${{ matrix.benchmark }}
     steps:
+      - name: Cleanup orphan EMU
+        run: |
+          pkill -9 -e -f "${GITHUB_WORKSPACE}/build/emu" || true
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -159,9 +178,18 @@ jobs:
             --numa --ci "${{ matrix.benchmark }}"                      \
             "${RESTORE_ARGS[@]}"                                      \
             2> perf.log | tee stdout.log
-          cat perf.log | sort | tee "$PERF_HOME/${{ matrix.benchmark }}.log"
           IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log || true)
           printf '%s\n' "${IPC:-N/A}" | tee "$PERF_HOME/ipc.txt"
+      - name: Archive log - ${{ matrix.benchmark }}
+        if: ${{ always() && steps.run.outcome != 'skipped' }}
+        run: |
+          if [[ "${{ steps.run.outcome }}" == "failure" ]]; then
+            cat perf.log
+          else
+            mv perf.log perf.log.raw
+            cat perf.log.raw | sort | tee perf.log
+          fi
+          tar -czvf "$WAVE_HOME/${{ matrix.benchmark }}.tar.gz" stdout.log perf.log
 
   emu-xsai-performance-summary:
     runs-on: [bosc, node]
@@ -197,6 +225,9 @@ jobs:
     timeout-minutes: 600
     name: EMU - XS without Matrix
     steps:
+      - name: Cleanup orphan EMU
+        run: |
+          pkill -9 -e -f "${GITHUB_WORKSPACE}/build/emu" || true
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -228,13 +259,34 @@ jobs:
             --pgo $GITHUB_WORKSPACE/ready-to-run/coremark-2-iteration.bin --llvm-profdata llvm-profdata --trace-fst
       - name: Simple Test - CoreMark
         id: coremark
+        shell: bash
         run: |
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci coremark 2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/coremark.log
           echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
+      - name: Archive log - coremark
+        if: ${{ always() && steps.coremark.outcome != 'skipped' }}
+        run: |
+          if [[ "${{ steps.coremark.outcome }}" == "failure" ]]; then
+            cat perf.log
+          else
+            mv perf.log perf.log.raw
+            cat perf.log.raw | sort | tee perf.log
+          fi
+          tar -czvf "$WAVE_HOME/coremark.tar.gz" stdout.log perf.log
+
       - name: System Test - Linux
         id: linux
+        shell: bash
         run: |
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci linux-hello-opensbi 2> perf.log | tee stdout.log
-          cat perf.log | sort | tee $PERF_HOME/linux.log
           echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
+      - name: Archive log - linux
+        if: ${{ always() && steps.linux.outcome != 'skipped' }}
+        run: |
+          if [[ "${{ steps.linux.outcome }}" == "failure" ]]; then
+            cat perf.log
+          else
+            mv perf.log perf.log.raw
+            cat perf.log.raw | sort | tee perf.log
+          fi
+          tar -czvf "$WAVE_HOME/linux.tar.gz" stdout.log perf.log

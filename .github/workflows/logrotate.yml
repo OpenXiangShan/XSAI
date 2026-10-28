@@ -1,0 +1,97 @@
+# Ported from XiangShan b716aade5: .github/workflows/logrotate.yml.
+# XSAI policy: archive after 7 days; expire after 14 days.
+name: Logrotate
+
+on:
+  schedule:
+    - cron: '17 18 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Print actions only, do not archive or delete
+        type: boolean
+        required: false
+        default: true
+
+permissions: {}
+
+concurrency:
+  group: xsai-logrotate
+  cancel-in-progress: false
+
+jobs:
+  logrotate:
+    name: Logrotate on ${{ matrix.cluster }} - ${{ matrix.target }}
+    runs-on: ${{ matrix.cluster }}
+    strategy:
+      matrix:
+        cluster: [open, node]
+        target:
+          - /nfs/home/ci-runner/xsai-emu
+          - /nfs/home/ci-runner/xsai-nightly
+          - /nfs/home/ci-runner/xsai-perf/master
+          - /nfs/home/ci-runner/xsai-perf/kunminghu-v3
+      max-parallel: 1
+      fail-fast: false
+    steps:
+      - name: Archive results between 7 and 14 days old
+        run: |
+          set -euo pipefail
+          target="${{ matrix.target }}"
+          dry_run="${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}"
+          if [[ ! -d "$target" ]]; then
+            echo "Skip missing result root: $target"
+            exit 0
+          fi
+          if [[ -L "$target" ]]; then
+            echo "Error: refusing symlink result root: $target" >&2
+            exit 1
+          fi
+
+          find "$target" -mindepth 1 -maxdepth 1 -type d -mmin +10080 ! -mmin +20160 -print0 | while IFS= read -r -d '' dir; do
+            if [[ -z "$(ls -A "$dir")" ]]; then
+              if [[ "$dry_run" == "true" ]]; then
+                echo "[DRY_RUN] Would remove empty directory: $dir"
+              else
+                rm -rf -- "$dir"
+              fi
+              continue
+            fi
+
+            base="$(basename "$dir")"
+            archive="$target/$base.tar.zst"
+            tmp_archive="$archive.tmp"
+            if [[ "$dry_run" == "true" ]]; then
+              echo "[DRY_RUN] Would archive $dir -> $archive"
+              echo "[DRY_RUN] Would remove directory $dir"
+            else
+              tar -I "zstd -19 -T0" -cf "$tmp_archive" -C "$target" -- "$base"
+              # Compression must not restart the 14-day retention window.
+              touch -r "$dir" "$tmp_archive"
+              mv -f -- "$tmp_archive" "$archive"
+              rm -rf -- "$dir"
+            fi
+          done
+
+      - name: Remove results older than 14 days
+        run: |
+          set -euo pipefail
+          target="${{ matrix.target }}"
+          dry_run="${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}"
+          if [[ ! -d "$target" ]]; then
+            echo "Skip missing result root: $target"
+            exit 0
+          fi
+          if [[ -L "$target" ]]; then
+            echo "Error: refusing symlink result root: $target" >&2
+            exit 1
+          fi
+
+          find "$target" -mindepth 1 -maxdepth 1 \( -type d -o -type f -name '*.tar.zst' \) -mmin +20160 -print0 | while IFS= read -r -d '' entry; do
+            if [[ "$dry_run" == "true" ]]; then
+              echo "[DRY_RUN] Would remove $entry"
+            else
+              echo "Removing $entry"
+              rm -rf -- "$entry"
+            fi
+          done
