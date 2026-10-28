@@ -1827,12 +1827,12 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
   generateCriticalErrors()
 
   // Keep a Palladium watchdog independent of difftest and Chisel assertions.
-  // `commitStuck` excludes MMIO and WFI cases that are allowed to make no
-  // forward progress, so only a genuine commit stall reaches the watchdog.
+  // With wfiResume enabled, commitStuck includes WFI until its 2^20-cycle
+  // timeout. The shorter Palladium watchdog must not terminate that legal wait.
   val commitStuckFinish = Module(new CommitStuckFinish(log2Up(maxCommitStuckDebug), maxCommitStuckDebug))
   commitStuckFinish.io.clock := clock
   commitStuckFinish.io.reset := reset.asBool
-  commitStuckFinish.io.stuck := commitStuck
+  commitStuckFinish.io.stuck := commitStuck && !hasWFI
   dontTouch(commitStuckFinish.io.fired)
 
 
