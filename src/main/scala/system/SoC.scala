@@ -87,8 +87,7 @@ case class SoCParameters
   L3NBanks: Int = 4,
   LLC: LLCType.Value = LLCType.OpenLLC,
   OpenLLCParamsOpt: Option[OpenLLCParam] = None,
-  // Keep the pre-upgrade snoop-filter sizing instead of inheriting ZhuJiang defaults.
-  ZhuJiangParams: ZJParameters = ZJParameters(clusterCacheSizeInB = 512 * 1024),
+  ZhuJiangParams: ZJParameters = ZJParameters(),
   XSTopPrefix: Option[String] = None,
   NodeIDWidthList: Map[String, Int] = Map(
     "B" -> 7,

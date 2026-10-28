@@ -446,9 +446,11 @@ case class LLCConfig(llc: String) extends Config((site, here, up) => {
 case class ZhuJiangConfig(size: String, ways: Int = 16) extends Config((site, here, up) => {
   case SoCParamsKey =>
     val soc = up(SoCParamsKey)
+    val core = site(XSTileKey).head
     soc.copy(ZhuJiangParams = soc.ZhuJiangParams.copy(
       cacheSizeInB = CacheSizeParser.toBytes(size),
-      cacheWays = ways
+      cacheWays = ways,
+      clusterCacheSizeInB = core.L2NBanks * core.L2CacheParamsOpt.get.toCacheParams.capacity
     ))
 })
 
