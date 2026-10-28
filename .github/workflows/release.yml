@@ -86,3 +86,4 @@ jobs:
         with:
           name: ${{ env.FILE_NAME }}
           path: build/xspdb/${{ env.FILE_NAME }}
+          retention-days: 14
