@@ -168,10 +168,8 @@ object zhujiangCompat extends SbtModule with HasChisel {
     sourceRoots
       .flatMap(os.walk(_))
       .filter(path => os.isFile(path) && path.ext == "scala")
-      .filterNot(path => Set("XsStage.scala", "DoubleCounterClockGate.scala").contains(path.last))
-      .map(PathRef(_)) ++ Seq(
-        PathRef(pwd / "XSAICache" / "src" / "compat" / "scala" / "zhujiang" / "utils" / "DoubleCounterClockGate.scala")
-      )
+      .filterNot(_.last == "XsStage.scala")
+      .map(PathRef(_))
   }
 
 }
