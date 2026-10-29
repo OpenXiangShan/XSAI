@@ -7,6 +7,12 @@ on:
 env:
   NIGHTLY_HOME: /nfs/home/ci-runner/xsai-nightly/${{ github.run_number }}
   EMU_HOME: /nfs/home/ci-runner/xsai-nightly/${{ github.run_number }}/default-matrix
+  FUZZ_NUM: 4 # per json file
+  CKPT_BASE: /nfs/home/share/checkpoints_profiles
+  PROFILE_PATH: /nfs/home/share/ci-workloads/env-scripts/perf_trigger/profile/data
+  ETA_THRESHOLD: 30000
+  SCRIPTS_HOME: /nfs/home/share/ci-workloads/env-scripts
+  SERVER_LIST: all
 
 jobs:
   build-default-matrix:
@@ -47,63 +53,63 @@ jobs:
         run: |
           mkdir -p ${EMU_HOME}
           cp -L ${GITHUB_WORKSPACE}/build/emu ${EMU_HOME}/emu
+          cp -L ${GITHUB_WORKSPACE}/ready-to-run/riscv64-nemu-interpreter-so ${EMU_HOME}/riscv64-nemu-interpreter-so
 
   nightly-checkpoints:
     runs-on: [bosc, node]
     needs: build-default-matrix
     continue-on-error: false
     timeout-minutes: 720
-    strategy:
-      fail-fast: false
-      max-parallel: 8
-      matrix:
-        checkpoint: [0, 1, 2, 3, 4, 5, 6, 7]
-    name: Nightly Regression(master) - Checkpoint ${{ matrix.checkpoint }}
+    name: Nightly Regression(master) - Checkpoints
     steps:
-      - name: Cleanup orphan EMU
-        run: |
-          pkill -9 -e -f "${GITHUB_WORKSPACE}/build/emu" || true
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          submodules: true
-      - name: set env
+      - name: Select random checkpoints
+        id: select
         run: |
-          JOB_HOME="${NIGHTLY_HOME}/checkpoints/random-${{ matrix.checkpoint }}"
-          echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
-          echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
-          echo "PERF_HOME=${JOB_HOME}" >> $GITHUB_ENV
-          echo "WAVE_HOME=${JOB_HOME}" >> $GITHUB_ENV
-          echo "GCPT_RESTORE_BIN=/nfs/home/share/checkpoints_profiles/spec06_gcc16_rv64gcb_260819/gcpt/gcpt.bin" >> $GITHUB_ENV
-          mkdir -p "${JOB_HOME}"
-      - name: Initialize submodules
-        run: make init-force
-      - name: clean up
+          RESULT_LIST=$(python3 $GITHUB_WORKSPACE/.github/workflows/ckpt_select.py \
+            --output list \
+            --seed ${{ github.run_number }} \
+            --profile "${PROFILE_PATH}" \
+            --eta-threshold "${ETA_THRESHOLD}" \
+            --random ":${FUZZ_NUM}:${CKPT_BASE}/spec06_gcc16_rva23_novec_260820/json/checkpoints_all.json" \
+            --random ":${FUZZ_NUM}:${CKPT_BASE}/spec17_rate_gcc16_rva23_novec_260904/json/checkpoints_all.json" \
+          )
+          SPEC_DIR="${NIGHTLY_HOME}/checkpoints"
+          RESULT_PATH="${SPEC_DIR}/fuzz-$(date '+%y%m%d').f"
+          mkdir -p "${SPEC_DIR}"
+          echo "${RESULT_LIST}" > "${RESULT_PATH}"
+          echo "RESULT_PATH=${RESULT_PATH}" >> "$GITHUB_OUTPUT"
+          echo "SPEC_DIR=${SPEC_DIR}" >> "$GITHUB_ENV"
+          echo "SCORE_FILE=${SPEC_DIR}/score.txt" >> "$GITHUB_ENV"
+          echo "Selected checkpoints:"
+          cat "${RESULT_PATH}"
+      - name: Run SPEC CPU checkpoints
         run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
-      - name: Get artifact
+          cd $SCRIPTS_HOME/perf_trigger
+          python3 main.py \
+            --json-path "${{ steps.select.outputs.RESULT_PATH }}" \
+            --result-path "$SPEC_DIR" \
+            --emu-path "$EMU_HOME/emu" \
+            --threads 8 \
+            --server-list "$SERVER_LIST" \
+            --nemu-so-path "$EMU_HOME/riscv64-nemu-interpreter-so" \
+            --run
+      - name: Generate report
         run: |
-          mkdir -p build
-          cp -L ${EMU_HOME}/emu ${GITHUB_WORKSPACE}/build/emu
-      - name: Random Checkpoint ${{ matrix.checkpoint }}
-        id: random_checkpoint
-        shell: bash
+          cd $SCRIPTS_HOME/perf_trigger
+          python3 main.py \
+            --json-path "${{ steps.select.outputs.RESULT_PATH }}" \
+            --result-path "$SPEC_DIR" \
+            --report \
+            > "$SCORE_FILE"
+      - name: Generate GitHub summary
         run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py           \
-            --wave-dump $WAVE_HOME --threads 16 --numa             \
-            --ci random --timeout 3600 --ram-size=16GB             \
-            --gcpt-restore-bin $GCPT_RESTORE_BIN                   \
-            2> perf.log | tee stdout.log
-      - name: Archive log - random_${{ matrix.checkpoint }}
-        if: ${{ always() && steps.random_checkpoint.outcome != 'skipped' }}
-        run: |
-          if [[ "${{ steps.random_checkpoint.outcome }}" == "failure" ]]; then
-            cat perf.log
-          else
-            mv perf.log perf.log.raw
-            cat perf.log.raw | sort | tee perf.log
-          fi
-          tar -czvf "$WAVE_HOME/random_${{ matrix.checkpoint }}.tar.gz" stdout.log perf.log
+          echo "### :rocket: Performance Test Result" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "$SCORE_FILE" >> $GITHUB_STEP_SUMMARY
+          cat "$SCORE_FILE" >> $GITHUB_STEP_SUMMARY
+          echo '' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
   emu-xsai-performance:
     runs-on: [bosc, node]
@@ -112,84 +118,72 @@ jobs:
     timeout-minutes: 720
     strategy:
       fail-fast: false
-      max-parallel: 10
       matrix:
         include:
           - benchmark: hmmer-Vector
             use_gcpt_restore_patch: false
-          - benchmark: mcf
+            workloads: |
+              /nfs/home/share/ci-workloads/hmmer-Vector/_6598_0.250135_.zstd
+          - benchmark: gcpt-restore
             use_gcpt_restore_patch: true
-          - benchmark: xalancbmk
-            use_gcpt_restore_patch: true
-          - benchmark: gcc
-            use_gcpt_restore_patch: true
-          - benchmark: namd
-            use_gcpt_restore_patch: true
-          - benchmark: milc
-            use_gcpt_restore_patch: true
-          - benchmark: lbm
-            use_gcpt_restore_patch: true
-          - benchmark: gromacs
-            use_gcpt_restore_patch: true
-          - benchmark: wrf
-            use_gcpt_restore_patch: true
-          - benchmark: astar
-            use_gcpt_restore_patch: true
+            workloads: |
+              /nfs/home/share/ci-workloads/mcf/_17520000000_.gz
+              /nfs/home/share/ci-workloads/xalancbmk/_266100000000_.gz
+              /nfs/home/share/ci-workloads/gcc/_39720000000_.gz
+              /nfs/home/share/ci-workloads/namd/_434640000000_.gz
+              /nfs/home/share/ci-workloads/milc/_103620000000_.gz
+              /nfs/home/share/ci-workloads/lbm/_140840000000_.gz
+              /nfs/home/share/ci-workloads/gromacs/_275480000000_.gz
+              /nfs/home/share/ci-workloads/wrf/_1916220000000_.gz
+              /nfs/home/share/ci-workloads/astar/_122060000000_.gz
     name: EMU - XSAI Performance - ${{ matrix.benchmark }}
+    env:
+      GCPT_RESTORE_BIN: /nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin
     steps:
-      - name: Cleanup orphan EMU
-        run: |
-          pkill -9 -e -f "${GITHUB_WORKSPACE}/build/emu" || true
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          submodules: true
-      - name: set env
+      - name: Prepare workload list
+        id: prepare
+        env:
+          WORKLOADS: ${{ matrix.workloads }}
         run: |
-          JOB_HOME="${NIGHTLY_HOME}/performance/${{ matrix.benchmark }}"
-          echo "NOOP_HOME=$GITHUB_WORKSPACE" >> $GITHUB_ENV
-          echo "NEMU_HOME=/nfs/home/share/ci-workloads/NEMU" >> $GITHUB_ENV
-          echo "AM_HOME=/nfs/home/share/ci-workloads/nexus-am" >> $GITHUB_ENV
-          echo "PERF_HOME=${JOB_HOME}" >> $GITHUB_ENV
-          echo "WAVE_HOME=${JOB_HOME}" >> $GITHUB_ENV
-          echo "GCPT_RESTORE_BIN=/nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin" >> $GITHUB_ENV
-          mkdir -p "${JOB_HOME}"
-          : > "${JOB_HOME}/ipc.txt"
-      - name: Initialize submodules
-        run: make init-force
-      - name: clean up
+          SPEC_DIR="${NIGHTLY_HOME}/performance/${{ matrix.benchmark }}"
+          RESULT_PATH="${SPEC_DIR}/workloads.f"
+          mkdir -p "${SPEC_DIR}"
+          printf '%s\n' "$WORKLOADS" > "${RESULT_PATH}"
+          echo "RESULT_PATH=${RESULT_PATH}" >> "$GITHUB_OUTPUT"
+          echo "SPEC_DIR=${SPEC_DIR}" >> "$GITHUB_ENV"
+          echo "SCORE_FILE=${SPEC_DIR}/score.txt" >> "$GITHUB_ENV"
+          echo "EMU_PATH=$EMU_HOME/emu" >> "$GITHUB_ENV"
+          cat "${RESULT_PATH}"
+      - name: Preserve checkpoint restore override
+        if: ${{ matrix.use_gcpt_restore_patch }}
         run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --clean
-      - name: Get artifact
+          cat > "$SPEC_DIR/emu-gcpt-restore" <<EOF
+          #!/bin/bash
+          exec -a "\$0" "$EMU_HOME/emu" -r "$GCPT_RESTORE_BIN" "\$@"
+          EOF
+          chmod +x "$SPEC_DIR/emu-gcpt-restore"
+          echo "EMU_PATH=$SPEC_DIR/emu-gcpt-restore" >> "$GITHUB_ENV"
+      - name: Run SPEC CPU checkpoints
         run: |
-          mkdir -p build
-          cp -L ${EMU_HOME}/emu ${GITHUB_WORKSPACE}/build/emu
-      - name: SPEC06 Test - ${{ matrix.benchmark }}
-        id: run
-        shell: bash
+          cd $SCRIPTS_HOME/perf_trigger
+          python3 main.py \
+            --json-path "${{ steps.prepare.outputs.RESULT_PATH }}" \
+            --result-path "$SPEC_DIR" \
+            --emu-path "$EMU_PATH" \
+            --threads 8 --warmup 0 --max-instr 5000000 \
+            --server-list "$SERVER_LIST" \
+            --nemu-so-path "$EMU_HOME/riscv64-nemu-interpreter-so" \
+            --dump-db \
+            --run
+      - name: Generate report
         run: |
-          RESTORE_ARGS=()
-          if [[ "${{ matrix.use_gcpt_restore_patch }}" == "true" ]]; then
-            RESTORE_ARGS=(--gcpt-restore-bin "$GCPT_RESTORE_BIN")
-          fi
-
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py               \
-            --wave-dump $WAVE_HOME --threads 16 --max-instr 5000000   \
-            --numa --ci "${{ matrix.benchmark }}"                      \
-            "${RESTORE_ARGS[@]}"                                      \
-            2> perf.log | tee stdout.log
-          IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log || true)
-          printf '%s\n' "${IPC:-N/A}" | tee "$PERF_HOME/ipc.txt"
-      - name: Archive log - ${{ matrix.benchmark }}
-        if: ${{ always() && steps.run.outcome != 'skipped' }}
-        run: |
-          if [[ "${{ steps.run.outcome }}" == "failure" ]]; then
-            cat perf.log
-          else
-            mv perf.log perf.log.raw
-            cat perf.log.raw | sort | tee perf.log
-          fi
-          tar -czvf "$WAVE_HOME/${{ matrix.benchmark }}.tar.gz" stdout.log perf.log
+          cd $SCRIPTS_HOME/perf_trigger
+          python3 main.py \
+            --json-path "${{ steps.prepare.outputs.RESULT_PATH }}" \
+            --result-path "$SPEC_DIR" \
+            --report \
+            > "$SCORE_FILE"
 
   emu-xsai-performance-summary:
     runs-on: [bosc, node]
@@ -202,22 +196,11 @@ jobs:
     steps:
       - name: Generate summary
         run: |
-          RESULTS_HOME="${NIGHTLY_HOME}/performance"
-          BENCHMARKS=(hmmer-Vector mcf xalancbmk gcc namd milc lbm gromacs wrf astar)
-
-          {
-            echo "## Emu - Performance summary"
-            echo "| Testcase | IPC |"
-            echo "| -------- | --- |"
-            for benchmark in "${BENCHMARKS[@]}"; do
-              IPC_FILE="${RESULTS_HOME}/${benchmark}/ipc.txt"
-              IPC="N/A"
-              if [[ -s "${IPC_FILE}" ]]; then
-                IPC=$(head -n 1 "${IPC_FILE}")
-              fi
-              echo "| ${benchmark} | ${IPC} |"
-            done
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo "### :rocket: Performance Test Result" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat "$NIGHTLY_HOME/performance/hmmer-Vector/score.txt" \
+            "$NIGHTLY_HOME/performance/gcpt-restore/score.txt" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
   emu-no-matrix:
     runs-on: bosc
