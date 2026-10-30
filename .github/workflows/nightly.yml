@@ -60,7 +60,7 @@ jobs:
     needs: build-default-matrix
     continue-on-error: false
     timeout-minutes: 720
-    name: Nightly Regression(master) - Checkpoints
+    name: Nightly Regression(master) - Random Checkpoints
     steps:
       - uses: actions/checkout@v7
       - name: Select random checkpoints
@@ -120,11 +120,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - benchmark: hmmer-Vector
+          - benchmark: Vector
             use_gcpt_restore_patch: false
             workloads: |
               /nfs/home/share/ci-workloads/hmmer-Vector/_6598_0.250135_.zstd
-          - benchmark: gcpt-restore
+          - benchmark: Scalar
             use_gcpt_restore_patch: true
             workloads: |
               /nfs/home/share/ci-workloads/mcf/_17520000000_.gz
@@ -136,7 +136,7 @@ jobs:
               /nfs/home/share/ci-workloads/gromacs/_275480000000_.gz
               /nfs/home/share/ci-workloads/wrf/_1916220000000_.gz
               /nfs/home/share/ci-workloads/astar/_122060000000_.gz
-    name: EMU - XSAI Performance - ${{ matrix.benchmark }}
+    name: Nightly Regression(master) - ${{ matrix.benchmark }}
     env:
       GCPT_RESTORE_BIN: /nfs/home/share/ci-workloads/fix-gcpt/gcpt.bin
     steps:
@@ -192,7 +192,7 @@ jobs:
       - emu-xsai-performance
     if: ${{ always() && needs.build-default-matrix.result == 'success' }}
     timeout-minutes: 30
-    name: EMU - XSAI Performance Summary
+    name: XSAI Performance Summary
     steps:
       - name: Generate summary
         run: |
@@ -206,7 +206,7 @@ jobs:
     runs-on: bosc
     continue-on-error: false
     timeout-minutes: 600
-    name: EMU - XS without Matrix
+    name: XSAI without Matrix
     steps:
       - name: Cleanup orphan EMU
         run: |
