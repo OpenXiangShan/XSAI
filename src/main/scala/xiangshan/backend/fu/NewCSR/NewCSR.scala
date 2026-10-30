@@ -1702,21 +1702,23 @@ class NewCSR(implicit val p: Parameters) extends Module
     diffHCSRState.vsatp       := vsatp.rdata.asUInt
     diffHCSRState.vsscratch   := vsscratch.rdata.asUInt
 
-    val diffMatrixCSRState = DifftestModule(new DiffMatrixCSRState)
-    diffMatrixCSRState.coreid  := hartId
-    diffMatrixCSRState.mcsr    := mcsr.rdata.asUInt
-    diffMatrixCSRState.mxrm    := mcsr.mxrm.asUInt
-    diffMatrixCSRState.msat    := mcsr.msat.asUInt
-    diffMatrixCSRState.mfflags := mcsr.mfflags.asUInt
-    diffMatrixCSRState.mfrm    := mcsr.mfrm.asUInt
-    diffMatrixCSRState.msaten  := mcsr.msaten.asUInt
-    diffMatrixCSRState.tlenb   := tlenb.rdata.asUInt
-    diffMatrixCSRState.trlenb  := trlenb.rdata.asUInt
-    diffMatrixCSRState.alenb   := alenb.rdata.asUInt
-    diffMatrixCSRState.mtilem  := RegNext(io.fromRob.commit.mtilem)
-    diffMatrixCSRState.mtilen  := RegNext(io.fromRob.commit.mtilen)
-    diffMatrixCSRState.mtilek  := RegNext(io.fromRob.commit.mtilek)
-    diffMatrixCSRState.msync   := msync.rdata.asUInt
+    if (HasMatrixExtension) {
+      val diffMatrixCSRState = DifftestModule(new DiffMatrixCSRState)
+      diffMatrixCSRState.coreid  := hartId
+      diffMatrixCSRState.mcsr    := mcsr.rdata.asUInt
+      diffMatrixCSRState.mxrm    := mcsr.mxrm.asUInt
+      diffMatrixCSRState.msat    := mcsr.msat.asUInt
+      diffMatrixCSRState.mfflags := mcsr.mfflags.asUInt
+      diffMatrixCSRState.mfrm    := mcsr.mfrm.asUInt
+      diffMatrixCSRState.msaten  := mcsr.msaten.asUInt
+      diffMatrixCSRState.tlenb   := tlenb.rdata.asUInt
+      diffMatrixCSRState.trlenb  := trlenb.rdata.asUInt
+      diffMatrixCSRState.alenb   := alenb.rdata.asUInt
+      diffMatrixCSRState.mtilem  := RegNext(io.fromRob.commit.mtilem)
+      diffMatrixCSRState.mtilen  := RegNext(io.fromRob.commit.mtilen)
+      diffMatrixCSRState.mtilek  := RegNext(io.fromRob.commit.mtilek)
+      diffMatrixCSRState.msync   := msync.rdata.asUInt
+    }
 
     val platformIRPMeipChange = !platformIRP.MEIP &&  RegNext(platformIRP.MEIP) || platformIRP.MEIP && !RegNext(platformIRP.MEIP)
     val platformIRPMtipChange = !platformIRP.MTIP &&  RegNext(platformIRP.MTIP) || platformIRP.MTIP && !RegNext(platformIRP.MTIP)

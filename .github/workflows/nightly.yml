@@ -240,11 +240,24 @@ jobs:
             --config DefaultConfig \
             --dramsim3 /nfs/home/share/ci-workloads/DRAMsim3 --with-dramsim3 --threads 8 \
             --pgo $GITHUB_WORKSPACE/ready-to-run/coremark-2-iteration.bin --llvm-profdata llvm-profdata --trace-fst
+      - name: Checkout non-Matrix NEMU reference
+        uses: actions/checkout@v7
+        with:
+          repository: OpenXiangShan/ready-to-run
+          # Follow the upstream non-Matrix reference on master.
+          ref: master
+          path: ready-to-run-no-matrix
+          sparse-checkout: /riscv64-nemu-interpreter-so
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
       - name: Simple Test - CoreMark
         id: coremark
         shell: bash
         run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci coremark 2> perf.log | tee stdout.log
+          python3 "$GITHUB_WORKSPACE/scripts/xiangshan.py" \
+            --wave-dump "$WAVE_HOME" --threads 16 --numa \
+            --diff "$GITHUB_WORKSPACE/ready-to-run-no-matrix/riscv64-nemu-interpreter-so" \
+            --ci coremark 2> perf.log | tee stdout.log
           echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
       - name: Archive log - coremark
         if: ${{ always() && steps.coremark.outcome != 'skipped' }}
@@ -261,7 +274,10 @@ jobs:
         id: linux
         shell: bash
         run: |
-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci linux-hello-opensbi 2> perf.log | tee stdout.log
+          python3 "$GITHUB_WORKSPACE/scripts/xiangshan.py" \
+            --wave-dump "$WAVE_HOME" --threads 16 --numa \
+            --diff "$GITHUB_WORKSPACE/ready-to-run-no-matrix/riscv64-nemu-interpreter-so" \
+            --ci linux-hello-opensbi 2> perf.log | tee stdout.log
           echo "IPC=$(grep -oP 'IPC = \K\d+\.\d+' stdout.log)" >> $GITHUB_OUTPUT
       - name: Archive log - linux
         if: ${{ always() && steps.linux.outcome != 'skipped' }}
