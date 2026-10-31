@@ -198,8 +198,8 @@ jobs:
         run: |
           echo "### :rocket: Performance Test Result" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          cat "$NIGHTLY_HOME/performance/hmmer-Vector/score.txt" \
-            "$NIGHTLY_HOME/performance/gcpt-restore/score.txt" >> "$GITHUB_STEP_SUMMARY"
+          cat "$NIGHTLY_HOME/performance/Vector/score.txt" \
+            "$NIGHTLY_HOME/performance/Scalar/score.txt" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
   emu-no-matrix:
