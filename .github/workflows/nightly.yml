@@ -244,8 +244,8 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: OpenXiangShan/ready-to-run
-          # Follow the upstream non-Matrix reference on master.
-          ref: master
+          # Follow the upstream non-Matrix reference for Kunminghu V2.
+          ref: kunminghu-v2
           path: ready-to-run-no-matrix
           sparse-checkout: /riscv64-nemu-interpreter-so
           sparse-checkout-cone-mode: false
