@@ -280,10 +280,11 @@ class MinimalMatrixConfig(n: Int) extends Config(
           dfilterSize = 48
         ),
         L2CacheParamsOpt = p.L2CacheParamsOpt.map(_.copy(
-          sets = 512,
+          sets = 512, // 512 KiB total: 2 banks * 512 sets * 8 ways * 64 B
           enableMCP2 = false,
           respField = Seq(AmeIndexField())
         )),
+        L2NBanks = 2,
       )
     }
     case MatAccKey => MatAcc.CUTE
