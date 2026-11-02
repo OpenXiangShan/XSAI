@@ -20,6 +20,7 @@ import org.chipsalliance.cde.config
 import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
+import difftest.{DiffAmuCtrlEvent, DifftestModule}
 import xscache.coupledL2.PrefetchCtrlFromCore
 import freechips.rocketchip.diplomacy.{BundleBridgeSource, LazyModule, LazyModuleImp}
 import freechips.rocketchip.tile.HasFPUParameters
@@ -226,6 +227,54 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
     val amuCtrlArbiter = Module(new Arbiter(new AmuCtrlIO, CommitWidth))
     amuCtrlArbiter.io.in <> backend.io.toAmu.get
     io.amuCtrl.get <> amuCtrlArbiter.io.out
+
+    // Emit one DiffTest control event per serialized AMU command.
+    if (env.EnableDifftest) {
+      val amuCtrl = amuCtrlArbiter.io.out
+      val mmaio = amuCtrl.bits.data.asTypeOf(new AmuMmaIO)
+      val mlsio = amuCtrl.bits.data.asTypeOf(new AmuLsuIO)
+      val mreleaseio = amuCtrl.bits.data.asTypeOf(new AmuReleaseIO2CUTE)
+      val arithio = amuCtrl.bits.data.asTypeOf(new AmuArithIO)
+      val difftestAmuCtrl = DifftestModule(new DiffAmuCtrlEvent, delay = 3, dontCare = true)
+      difftestAmuCtrl.valid  := amuCtrl.fire
+      difftestAmuCtrl.op     := amuCtrl.bits.op
+      difftestAmuCtrl.pc     := amuCtrl.bits.pc.get
+      difftestAmuCtrl.coreid := amuCtrl.bits.coreid.get
+      difftestAmuCtrl.index  := 0.U
+      when (amuCtrl.bits.isMma()) {
+        difftestAmuCtrl.rm       := mmaio.rm
+        difftestAmuCtrl.md       := mmaio.md
+        difftestAmuCtrl.sat      := mmaio.sat
+        difftestAmuCtrl.ms1      := mmaio.ms1
+        difftestAmuCtrl.ms2      := mmaio.ms2
+        difftestAmuCtrl.mtilem   := mmaio.mtilem
+        difftestAmuCtrl.mtilen   := mmaio.mtilen
+        difftestAmuCtrl.mtilek   := mmaio.mtilek
+        difftestAmuCtrl.types1   := mmaio.types1
+        difftestAmuCtrl.types2   := mmaio.types2
+        difftestAmuCtrl.typed    := mmaio.typed
+        difftestAmuCtrl.isfp     := mmaio.isfp
+      }
+      when (amuCtrl.bits.isMls()) {
+        difftestAmuCtrl.ms        := mlsio.ms
+        difftestAmuCtrl.ls        := mlsio.ls
+        difftestAmuCtrl.transpose := mlsio.transpose
+        difftestAmuCtrl.types1    := mlsio.isacc
+        difftestAmuCtrl.types2    := mlsio.isA
+        difftestAmuCtrl.base      := mlsio.baseAddr
+        difftestAmuCtrl.stride    := mlsio.stride
+        difftestAmuCtrl.row       := mlsio.row
+        difftestAmuCtrl.column    := mlsio.column
+        difftestAmuCtrl.widths    := mlsio.widths
+      }
+      when (amuCtrl.bits.isRelease()) {
+        difftestAmuCtrl.msyncRd := mreleaseio.msyncRd
+      }
+      when (amuCtrl.bits.isArith()) {
+        difftestAmuCtrl.ms     := arithio.md
+        difftestAmuCtrl.opType := arithio.opType
+      }
+    }
   }
 
   // top -> memBlock

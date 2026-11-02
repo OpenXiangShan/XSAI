@@ -3,7 +3,6 @@ package xiangshan.backend.rob
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.BundleLiterals._
-import difftest._
 import org.chipsalliance.cde.config.Parameters
 import utility._
 import utils.DebugMem
@@ -193,9 +192,9 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
     when (amu_data.orR) {
       entry.writebacked := true.B
       entry.amuCtrl := amu_data.asTypeOf(new AmuCtrlIO)
-      // Set the pc field in amuCtrl when difftest is enabled
+      // Normalize the PC before forwarding it to the post-arbitration DiffTest probe.
       if (env.EnableDifftest && HasMatrixExtension) {
-        entry.amuCtrl.pc.get := dt_pc.get(i)
+        entry.amuCtrl.pc.get := Mux(dt_pcTransType.get(i).shouldBeSext, SignExt(dt_pc.get(i), XLEN), dt_pc.get(i))
         entry.amuCtrl.coreid.get := io.hartId.get
       }
     }
@@ -285,51 +284,6 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
       clock = clock,
       reset = reset
     )
-
-    // Difftest
-    if (env.EnableDifftest && HasMatrixExtension) {
-      val difftestPC = dt_pc.get((deqPtr + i.U).value)
-      val difftestAmuCtrl = DifftestModule(new DiffAmuCtrlEvent, delay = 3, dontCare = true)
-      difftestAmuCtrl.valid  := amuCtrl.fire
-      difftestAmuCtrl.op     := amuCtrl.bits.op
-      val pcTransType = dt_pcTransType.get((deqPtr + i.U).value)
-      difftestAmuCtrl.pc     := Mux(pcTransType.shouldBeSext, SignExt(difftestPC, XLEN), difftestPC)
-      difftestAmuCtrl.coreid := io.hartId.get
-      difftestAmuCtrl.index  := i.U
-      when (amuCtrl.bits.isMma()) {
-        difftestAmuCtrl.rm       := mmaio.rm
-        difftestAmuCtrl.md       := mmaio.md
-        difftestAmuCtrl.sat      := mmaio.sat
-        difftestAmuCtrl.ms1      := mmaio.ms1
-        difftestAmuCtrl.ms2      := mmaio.ms2
-        difftestAmuCtrl.mtilem   := mmaio.mtilem
-        difftestAmuCtrl.mtilen   := mmaio.mtilen
-        difftestAmuCtrl.mtilek   := mmaio.mtilek
-        difftestAmuCtrl.types1   := mmaio.types1
-        difftestAmuCtrl.types2   := mmaio.types2
-        difftestAmuCtrl.typed    := mmaio.typed
-        difftestAmuCtrl.isfp     := mmaio.isfp
-      }
-      when (amuCtrl.bits.isMls()) {
-        difftestAmuCtrl.ms        := mlsio.ms
-        difftestAmuCtrl.ls        := mlsio.ls
-        difftestAmuCtrl.transpose := mlsio.transpose
-        difftestAmuCtrl.types1    := mlsio.isacc
-        difftestAmuCtrl.types2    := mlsio.isA
-        difftestAmuCtrl.base      := mlsio.baseAddr
-        difftestAmuCtrl.stride    := mlsio.stride
-        difftestAmuCtrl.row       := mlsio.row
-        difftestAmuCtrl.column    := mlsio.column
-        difftestAmuCtrl.widths    := mlsio.widths
-      }
-      when (amuCtrl.bits.isRelease()) {
-        difftestAmuCtrl.msyncRd := mreleaseio.msyncRd
-      }
-      when (amuCtrl.bits.isArith()) {
-        difftestAmuCtrl.ms     := arithio.md
-        difftestAmuCtrl.opType := arithio.opType
-      }
-    }
   }
 
   val deqCondSeq = deqEntries.map(x => ~x.canDeq)
