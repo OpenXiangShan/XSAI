@@ -637,7 +637,7 @@ class FpgaDiffDefaultMatrixConfig(n: Int = 1) extends Config(
   new DefaultMatrixConfig(n).alter((site, here, up) => {
     case DebugOptionsKey =>
       up(DebugOptionsKey).copy(
-        AlwaysBasicDiff = true,
+        EnableDifftest = true,
         AlwaysBasicDB = false,
       )
     case SoCParamsKey =>
@@ -651,7 +651,7 @@ class FpgaDiffMinimalMatrixConfig(n: Int = 1) extends Config(
   new MinimalMatrixConfig(n).alter((site, here, up) => {
     case DebugOptionsKey =>
       up(DebugOptionsKey).copy(
-        AlwaysBasicDiff = true,
+        EnableDifftest = true,
         AlwaysBasicDB = false,
       )
     case SoCParamsKey =>
@@ -665,7 +665,7 @@ class FpgaDiffTinyMatrixConfig(n: Int = 1) extends Config(
   new TinyMatrixConfig(n).alter((site, here, up) => {
     case DebugOptionsKey =>
       up(DebugOptionsKey).copy(
-        AlwaysBasicDiff = true,
+        EnableDifftest = true,
         AlwaysBasicDB = false,
       )
     case SoCParamsKey =>
