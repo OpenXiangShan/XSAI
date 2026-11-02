@@ -310,6 +310,14 @@ class MinimalMatrixConfig(n: Int) extends Config(
   })
 )
 
+class TinyMatrixConfig(n: Int = 1) extends Config(
+  new MinimalMatrixConfig(n).alter((site, here, up) => {
+    case XSTileKey => up(XSTileKey).map { p =>
+      p.copy(MatrixExtension = p.MatrixExtension.copy(enableInt8Int32 = false))
+    }
+  })
+)
+
 // Non-synthesizable MinimalConfig, for fast simulation only
 class MinimalSimConfig(n: Int = 1) extends Config(
   new MinimalConfig(n).alter((site, here, up) => {
@@ -641,6 +649,20 @@ class FpgaDiffDefaultMatrixConfig(n: Int = 1) extends Config(
 
 class FpgaDiffMinimalMatrixConfig(n: Int = 1) extends Config(
   new MinimalMatrixConfig(n).alter((site, here, up) => {
+    case DebugOptionsKey =>
+      up(DebugOptionsKey).copy(
+        AlwaysBasicDiff = true,
+        AlwaysBasicDB = false,
+      )
+    case SoCParamsKey =>
+      up(SoCParamsKey).copy(
+        UseXSTileDiffTop = true
+      )
+  })
+)
+
+class FpgaDiffTinyMatrixConfig(n: Int = 1) extends Config(
+  new TinyMatrixConfig(n).alter((site, here, up) => {
     case DebugOptionsKey =>
       up(DebugOptionsKey).copy(
         AlwaysBasicDiff = true,
