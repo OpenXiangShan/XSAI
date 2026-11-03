@@ -1720,26 +1720,34 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
         difftestLoadEvent.isLoad   := FuType.isLoad(uop.fuType)
         difftestLoadEvent.isVLoad  := isVLoad
       }
-      if (env.EnableDifftest && HasMatrixExtension) {
-        // Check msync events.
-        val difftestMsyncEvent = DifftestModule(new DiffMsyncEvent, delay = 3)
+    }
+    if (env.EnableDifftest && HasMatrixExtension) {
+      // Msync instructions wait for an empty ROB before dispatch.
+      val msyncValid = VecInit((0 until CommitWidth).map { i =>
+        val uop = commitDebugUop(i)
+        val instr = uop.instr.asTypeOf(new XSInstBitFields)
         val isMsyncEvent = instr.isMsync && FuType.isFence(uop.fuType) // We don't check mrelease here.
-        difftestMsyncEvent.valid := io.commits.commitValid(i) && io.commits.isCommit && isMsyncEvent
-        difftestMsyncEvent.coreid := io.hartId
-        difftestMsyncEvent.index := i.U
-        when (uop.fuOpType === FenceOpType.msyncregreset) {
-          difftestMsyncEvent.op := 0.U
-        } .elsewhen (uop.fuOpType === FenceOpType.macquire) {
-          difftestMsyncEvent.op := 1.U
-        } .otherwise { // uop.fuOpType === FenceOpType.mfence
-          difftestMsyncEvent.op := 2.U
-        }
-        difftestMsyncEvent.msyncRd := Mux(
-          uop.fuOpType === FenceOpType.mfence,
-          0.U, uop.imm(10, 6)
-        )
-        difftestMsyncEvent.pc := uop.pc
+        io.commits.commitValid(i) && io.commits.isCommit && isMsyncEvent
+      })
+      assert(PopCount(msyncValid) <= 1.U, "At most one msync instruction may commit per cycle")
+
+      val uop = Mux1H(msyncValid, commitDebugUop)
+      val difftestMsyncEvent = DifftestModule(new DiffMsyncEvent, delay = 3)
+      difftestMsyncEvent.valid := msyncValid.asUInt.orR
+      difftestMsyncEvent.coreid := io.hartId
+      difftestMsyncEvent.index := 0.U
+      when (uop.fuOpType === FenceOpType.msyncregreset) {
+        difftestMsyncEvent.op := 0.U
+      } .elsewhen (uop.fuOpType === FenceOpType.macquire) {
+        difftestMsyncEvent.op := 1.U
+      } .otherwise { // uop.fuOpType === FenceOpType.mfence
+        difftestMsyncEvent.op := 2.U
       }
+      difftestMsyncEvent.msyncRd := Mux(
+        uop.fuOpType === FenceOpType.mfence,
+        0.U, uop.imm(10, 6)
+      )
+      difftestMsyncEvent.pc := uop.pc
     }
   }
 
