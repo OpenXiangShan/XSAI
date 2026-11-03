@@ -418,7 +418,7 @@ jobs:
             -e 's/--output-split-cfuncs 30000/--output-split-cfuncs 5000/' \
             $GITHUB_WORKSPACE/difftest/verilator.mk
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --build \
-            --num-cores 2 --emu-optimize "" --config DefaultMatrixConfig \
+            --num-cores 2 --emu-optimize "" --config MinimalMatrixConfig \
             --dramsim3 /nfs/home/share/ci-workloads/DRAMsim3 --with-dramsim3 --threads 8 \
             --pgo /nfs/home/share/ci-workloads/linux-hello-smp-new/bbl.bin --llvm-profdata llvm-profdata --trace-fst
       - name: MC Test
