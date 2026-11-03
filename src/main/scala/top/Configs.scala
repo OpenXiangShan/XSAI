@@ -81,7 +81,8 @@ class BaseConfig(n: Int) extends Config((site, here, up) => {
 // * L2 cache NOT included
 // * L3 cache included
 class MinimalConfig(n: Int = 1) extends Config(
-  new BaseConfig(n).alter((site, here, up) => {
+  ZhuJiangConfig("4MB", ways = 16)
+    ++ new BaseConfig(n).alter((site, here, up) => {
     case XSTileKey => up(XSTileKey).map(
       p => p.copy(
         DecodeWidth = 6,
@@ -311,11 +312,13 @@ class MinimalMatrixConfig(n: Int) extends Config(
 )
 
 class TinyMatrixConfig(n: Int = 1) extends Config(
-  new MinimalMatrixConfig(n).alter((site, here, up) => {
-    case XSTileKey => up(XSTileKey).map { p =>
-      p.copy(MatrixExtension = p.MatrixExtension.copy(enableInt8Int32 = false))
-    }
-  })
+  OpenLLCConfig("1MB", banks = 4)
+    ++ ZhuJiangConfig("1MB", ways = 8)
+    ++ new MinimalMatrixConfig(n).alter((site, here, up) => {
+      case XSTileKey => up(XSTileKey).map { p =>
+        p.copy(MatrixExtension = p.MatrixExtension.copy(enableInt8Int32 = false))
+      }
+    })
 )
 
 // Non-synthesizable MinimalConfig, for fast simulation only
