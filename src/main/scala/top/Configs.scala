@@ -40,7 +40,7 @@ import cute.{CuteParamsKey, CuteParams, CuteDebugParams, Cutev3extParams, Matrix
 import zhujiang.ZJParameters
 
 object LLCType extends Enumeration {
-  val OpenLLC, ZhuJiang = Value
+  val OpenLLC, ZhuJiang, NoLLC = Value
 }
 
 private[top] object CacheSizeParser {

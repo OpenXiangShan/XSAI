@@ -152,6 +152,8 @@ trait HasSoCParameter {
   val issue = p(CHIIssue)
   val isOpenLLC = soc.LLC == LLCType.OpenLLC
   val isZhuJiang = soc.LLC == LLCType.ZhuJiang
+  val isNoLLC = soc.LLC == LLCType.NoLLC
+  val usesLcreditCHI = isOpenLLC || isNoLLC
 
   if (isZhuJiang) {
     require(issue == xscache.chi.Issue.Eb, "LLC=ZhuJiang only supports CHI issue E.b or newer")
@@ -172,6 +174,8 @@ trait HasSoCParameter {
   }
 
   val NumCores = tiles.size
+  require(!isNoLLC || NumCores == 1, "LLC=NoLLC currently supports exactly one core")
+  require(!isNoLLC || !soc.UseXSNoCTop, "LLC=NoLLC does not support XSNoCTop")
   val EnableILA = soc.EnableILA
 
   // Parameters for trace extension

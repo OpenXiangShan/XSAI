@@ -87,7 +87,7 @@ class XSTileWrap()(implicit p: Parameters) extends LazyModule
         val l3MissMatch = Input(Bool())
       }
       val l3Miss = Input(Bool())
-      val chi = Option.when(isOpenLLC)(EnableCHIAsyncBridge match {
+      val chi = Option.when(usesLcreditCHI)(EnableCHIAsyncBridge match {
         case Some(param) => new AsyncPortIO(param)
         case None => new PortIO
       })
@@ -192,7 +192,7 @@ class XSTileWrap()(implicit p: Parameters) extends LazyModule
     }
 
     // CHI Async Queue Source
-    if (isOpenLLC) {
+    if (usesLcreditCHI) {
       EnableCHIAsyncBridge match {
         case Some(param) =>
           val source = withClockAndReset(clock, reset_sync)(Module(new CHIAsyncBridgeSource(param)))
