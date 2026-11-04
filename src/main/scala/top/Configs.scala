@@ -44,7 +44,7 @@ object LLCType extends Enumeration {
 }
 
 // Maximum outstanding transactions in the direct L2-to-memory bridge.
-case object NoLLCEntries extends Field[Int](128)
+case object NoLLCEntries extends Field[Int](64)
 
 private[top] object CacheSizeParser {
   def toBytes(size: String): Int = size.toUpperCase.replace(" ", "") match {
@@ -270,7 +270,7 @@ private[top] object MatrixCuteTensorDims {
 
 class MinimalMatrixConfig(n: Int) extends Config(
   new MinimalConfig(n).alter((site, here, up) => {
-    case NoLLCEntries => 128 // Must be a power of two and at least 2.
+    case NoLLCEntries => 64 // Must be a power of two and at least 2.
     case XSTileKey => up(XSTileKey).map { p =>
       p.copy(
         TLEN = 64 * 64 * 8,
