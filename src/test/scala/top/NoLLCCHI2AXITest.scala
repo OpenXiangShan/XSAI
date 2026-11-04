@@ -13,7 +13,8 @@ import xscache.chi._
 import xscache.openLLC.TransmitterLinkMonitor
 
 class NoLLCCHI2AXITestHarness(implicit p: Parameters) extends LazyModule {
-  val bridge = LazyModule(new NoLLCCHI2AXI())
+  val entries: Int = p(NoLLCEntries)
+  val bridge = LazyModule(new NoLLCCHI2AXI(entries = entries))
   val memory = AXI4SlaveNode(Seq(AXI4SlavePortParameters(
     slaves = Seq(AXI4SlaveParameters(
       address = Seq(AddressSet(0x80000000L, 0x7fffffffL)),
@@ -42,7 +43,7 @@ class NoLLCCHI2AXITestHarnessImp(wrapper: NoLLCCHI2AXITestHarness)(implicit p: P
         val ar = Decoupled(new AXI4BundleAR(edge.bundle))
         val r = Flipped(Decoupled(new AXI4BundleR(edge.bundle)))
       }
-      val occupancy = Output(UInt(log2Ceil(129).W))
+      val occupancy = Output(UInt(log2Ceil(wrapper.entries + 1).W))
       val accepted = Output(UInt(32.W))
     })
 
@@ -91,6 +92,7 @@ class NoLLCCHI2AXITest extends AnyFlatSpec with ChiselScalatestTester with Match
   behavior of "NoLLCCHI2AXI"
 
   override implicit lazy val p: Parameters = (new DefaultConfig(1)).alterPartial {
+    case NoLLCEntries => 64
     case CHIIssue => Issue.Eb
     case PerfCounterOptionsKey => PerfCounterOptions(false, false, XSPerfLevel.VERBOSE, 0)
   }
@@ -295,21 +297,24 @@ class NoLLCCHI2AXITest extends AnyFlatSpec with ChiselScalatestTester with Match
     dut.io.axi.b.valid.poke(false.B)
   }
 
-  it should "backpressure after all 128 transaction slots are occupied" in {
-    test(LazyModule(new NoLLCCHI2AXITestHarness()(p)).module)
-      .withAnnotations(Seq(VerilatorBackendAnnotation)) { dut =>
-      init(dut)
-      dut.io.axi.ar.ready.poke(false.B)
-      for (i <- 0 until 128) {
-        sendReq(dut, ReadUnique, i, 0x80000000L + i * 64L, 6)
+  for (entries <- Seq(2, 64, 128, 256)) {
+    it should s"backpressure after all $entries configured transaction slots are occupied" in {
+      val config = p.alterPartial { case NoLLCEntries => entries }
+      test(LazyModule(new NoLLCCHI2AXITestHarness()(config)).module)
+        .withAnnotations(Seq(VerilatorBackendAnnotation)) { dut =>
+        init(dut)
+        dut.io.axi.ar.ready.poke(false.B)
+        for (i <- 0 until entries) {
+          sendReq(dut, ReadUnique, i, 0x80000000L + i * 64L, 6)
+        }
+        dut.clock.step(5)
+        dut.io.occupancy.expect(entries.U)
+        dut.io.accepted.expect(entries.U)
+        pokeReq(dut, MakeUnique, entries + 4, 0x80000000L + entries * 64L, 6)
+        dut.io.chi.tx.req.valid.poke(true.B)
+        dut.clock.step(10)
+        dut.io.chi.tx.req.ready.expect(false.B)
       }
-      dut.clock.step(5)
-      dut.io.occupancy.expect(128.U)
-      dut.io.accepted.expect(128.U)
-      pokeReq(dut, MakeUnique, 132, 0x80002100L, 6)
-      dut.io.chi.tx.req.valid.poke(true.B)
-      dut.clock.step(10)
-      dut.io.chi.tx.req.ready.expect(false.B)
     }
   }
 

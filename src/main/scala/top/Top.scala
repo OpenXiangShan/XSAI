@@ -125,7 +125,7 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
   )
 
   val noLLCBridge_opt = Option.when(isNoLLC)(
-    LazyModule(new NoLLCCHI2AXI(entries = 128))
+    LazyModule(new NoLLCCHI2AXI(entries = p(NoLLCEntries)))
   )
 
   val chi_mmioBridge_opt = Seq.fill(NumCores)(Option.when(usesLcreditCHI)(
