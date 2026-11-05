@@ -43,6 +43,10 @@ object LLCType extends Enumeration {
   val OpenLLC, ZhuJiang, NoLLC = Value
 }
 
+// Maximum outstanding transactions in the direct L2-to-memory bridge.
+// default 64, may add "case NoLLCEntries => 128" to override
+case object NoLLCEntries extends Field[Int](64)
+
 private[top] object CacheSizeParser {
   def toBytes(size: String): Int = size.toUpperCase.replace(" ", "") match {
     case s"${k}KB" => k.trim.toInt * 1024
