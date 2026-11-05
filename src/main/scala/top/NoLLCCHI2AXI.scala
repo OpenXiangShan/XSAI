@@ -33,7 +33,7 @@ import xscache.openLLC.ReceiverLinkMonitor
 class NoLLCCHI2AXI(entries: Int = 64)(implicit p: Parameters) extends LazyModule {
   require(entries >= 2 && isPow2(entries), "NoLLCCHI2AXI entries must be a power of two and at least 2")
 
-  val axi4node = AXI4MasterNode(Seq(AXI4MasterPortParameters(
+  private[top] val slotAXI4Node = AXI4MasterNode(Seq(AXI4MasterPortParameters(
     masters = Seq(AXI4MasterParameters(
       name = "nollc-chi2axi",
       id = IdRange(0, entries),
@@ -41,6 +41,14 @@ class NoLLCCHI2AXI(entries: Int = 64)(implicit p: Parameters) extends LazyModule
       maxFlight = Some(1)
     ))
   )))
+
+  // log2Ceil(entries) is the internal slot ID width. Removing two high bits
+  // merges 2^2 = 4 slot IDs into each external AXI ID when entries >= 4.
+  // Clamp the width to zero for entries = 2, merging both slots into AXI ID 0.
+  // Keep the stripped bits in per-ID response queues to restore the original slot ID.
+  private val externalIdBits = math.max(0, log2Ceil(entries) - 2)
+  val axi4node = AXI4IdentityNode()
+  axi4node := AXI4UserYanker() := AXI4IdIndexer(externalIdBits) := slotAXI4Node
 
   lazy val module = new NoLLCCHI2AXIImp(this, entries)
 }
@@ -130,7 +138,7 @@ class NoLLCCHI2AXIImp(wrapper: NoLLCCHI2AXI, entries: Int)(implicit p: Parameter
   rn.rx.snp.valid := false.B
   rn.rx.snp.bits := 0.U.asTypeOf(new CHISNP)
 
-  val (axi, edge) = wrapper.axi4node.out.head
+  val (axi, edge) = wrapper.slotAXI4Node.out.head
   require(edge.bundle.dataBits == DATA_WIDTH)
   require(edge.bundle.idBits >= slotBits)
   require(

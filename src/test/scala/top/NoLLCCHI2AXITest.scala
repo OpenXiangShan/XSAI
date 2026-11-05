@@ -318,6 +318,88 @@ class NoLLCCHI2AXITest extends AnyFlatSpec with ChiselScalatestTester with Match
     }
   }
 
+  it should "restore colliding read slot IDs while different AXI IDs complete out of order" in {
+    val entries = 8
+    val config = p.alterPartial { case NoLLCEntries => entries }
+    test(LazyModule(new NoLLCCHI2AXITestHarness()(config)).module)
+      .withAnnotations(Seq(VerilatorBackendAnnotation)) { dut =>
+      init(dut)
+      dut.io.axi.ar.bits.id.getWidth shouldBe 1
+      dut.io.axi.ar.ready.poke(false.B)
+      for (i <- 0 until entries) {
+        sendReq(dut, ReadUnique, 32 + i, 0x80000000L + i * 64L, 6)
+      }
+
+      var issued = Seq.empty[(BigInt, Int)]
+      for (_ <- 0 until entries) {
+        var cycles = 0
+        while (!dut.io.axi.ar.valid.peek().litToBoolean && cycles < 100) {
+          dut.clock.step()
+          cycles += 1
+        }
+        assert(cycles < 100)
+        val id = dut.io.axi.ar.bits.id.peek().litValue
+        val slot = ((dut.io.axi.ar.bits.addr.peek().litValue - 0x80000000L) / 64).toInt
+        id shouldBe BigInt(slot % 2)
+        issued :+= ((id, slot))
+        dut.io.axi.ar.ready.poke(true.B)
+        dut.clock.step()
+        dut.io.axi.ar.ready.poke(false.B)
+      }
+      dut.io.occupancy.expect(entries.U)
+
+      // Preserve FIFO order within each compressed ID, but complete ID 1 first.
+      for (id <- Seq(BigInt(1), BigInt(0)); (_, slot) <- issued.filter(_._1 == id)) {
+        for (beat <- 0 until 2) {
+          dut.io.chi.rx.dat.ready.poke(false.B)
+          sendReadBeat(dut, id, slot * 2 + beat, last = beat == 1)
+          val (txnID, dbID, dataID) = takeDat(dut)
+          txnID shouldBe BigInt(32 + slot)
+          dbID shouldBe BigInt(slot)
+          dataID shouldBe BigInt(beat * 2)
+        }
+      }
+      dut.clock.step(5)
+      dut.io.occupancy.expect(0.U)
+    }
+  }
+
+  it should "restore colliding write slot IDs until every AXI B response completes" in {
+    val entries = 4
+    val config = p.alterPartial { case NoLLCEntries => entries }
+    test(LazyModule(new NoLLCCHI2AXITestHarness()(config)).module)
+      .withAnnotations(Seq(VerilatorBackendAnnotation)) { dut =>
+      init(dut)
+      for (i <- 0 until entries) {
+        dut.io.axi.aw.ready.poke(false.B)
+        dut.io.axi.w.ready.poke(false.B)
+        sendReq(dut, WriteNoSnpPtl, 32 + i, 0x80000000L + i * 64L, 3)
+        val (opcode, txnID, dbID) = takeRsp(dut)
+        opcode shouldBe CompDBIDResp.litValue
+        txnID shouldBe BigInt(32 + i)
+        dbID shouldBe BigInt(i)
+        sendData(dut, NonCopyBackWrData, dbID, 0, i + 1, 0xff)
+        var cycles = 0
+        while ((!dut.io.axi.aw.valid.peek().litToBoolean || !dut.io.axi.w.valid.peek().litToBoolean) &&
+          cycles < 100) {
+          dut.clock.step()
+          cycles += 1
+        }
+        assert(cycles < 100)
+        dut.io.axi.aw.bits.id.expect(0.U)
+        dut.io.axi.aw.ready.poke(true.B)
+        dut.io.axi.w.ready.poke(true.B)
+        dut.clock.step(2)
+      }
+      dut.io.occupancy.expect(entries.U)
+      for (i <- 0 until entries) {
+        sendB(dut, 0)
+        dut.clock.step(5)
+        dut.io.occupancy.expect((entries - i - 1).U)
+      }
+    }
+  }
+
   it should "restore read IDs, allow early CompAck, and block a same-line request" in {
     test(LazyModule(new NoLLCCHI2AXITestHarness()(p)).module)
       .withAnnotations(Seq(VerilatorBackendAnnotation)) { dut =>
