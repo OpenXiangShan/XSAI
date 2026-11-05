@@ -1,9 +1,11 @@
 [submodule "rocket-chip"]
 	path = rocket-chip
 	url = https://github.com/OpenXiangShan/rocket-chip
+	branch = feat-bitmte
 [submodule "difftest"]
 	path = difftest
 	url = https://github.com/OpenXiangShan/difftest
+	branch = feat-bitmte
 [submodule "ready-to-run"]
 	path = ready-to-run
 	url = https://github.com/OpenXiangShan/ready-to-run.git
@@ -25,6 +27,7 @@
 [submodule "CUTE"]
 	path = CUTE
 	url = https://github.com/OpenXiangShan/CUTE.git
+	branch = feat-bitmte
 [submodule "XSAICache"]
 	path = XSAICache
 	url = https://github.com/OpenXiangShan/XSAICache
