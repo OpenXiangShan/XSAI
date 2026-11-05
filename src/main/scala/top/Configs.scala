@@ -44,6 +44,7 @@ object LLCType extends Enumeration {
 }
 
 // Maximum outstanding transactions in the direct L2-to-memory bridge.
+// default 64, may add "case NoLLCEntries => 128" to override
 case object NoLLCEntries extends Field[Int](64)
 
 private[top] object CacheSizeParser {
@@ -270,7 +271,6 @@ private[top] object MatrixCuteTensorDims {
 
 class MinimalMatrixConfig(n: Int) extends Config(
   new MinimalConfig(n).alter((site, here, up) => {
-    case NoLLCEntries => 64 // Must be a power of two and at least 2.
     case XSTileKey => up(XSTileKey).map { p =>
       p.copy(
         TLEN = 64 * 64 * 8,
@@ -312,17 +312,6 @@ class MinimalMatrixConfig(n: Int) extends Config(
         MatrixExtension = xp.MatrixExtension,
         L2NBanks = xp.L2NBanks,
       )
-  })
-)
-
-// Preserve the 512 KiB L2 capacity while providing 8 * 16 MSHRs for bridge throughput tests.
-class MinimalMatrix8BankConfig(n: Int = 1) extends Config(
-  new MinimalMatrixConfig(n).alter((site, here, up) => {
-    case NoLLCEntries => 128
-    case XSTileKey => up(XSTileKey).map(p => p.copy(
-      L2CacheParamsOpt = p.L2CacheParamsOpt.map(_.copy(sets = 128)),
-      L2NBanks = 8
-    ))
   })
 )
 

@@ -343,10 +343,16 @@ class NoLLCCHI2AXITest extends AnyFlatSpec with ChiselScalatestTester with Match
     dut.io.chi.tx.rsp.valid.poke(false.B)
   }
 
-  private lazy val writePerfConfig: Parameters = (new MinimalMatrix8BankConfig(1)).alterPartial {
+  // Keep the eight-bank, 128-outstanding setup local to the bridge throughput tests.
+  private lazy val writePerfConfig: Parameters = (new MinimalMatrixConfig(1)).alter((site, here, up) => {
+    case NoLLCEntries => 128
+    case XSTileKey => up(XSTileKey).map(p => p.copy(
+      L2CacheParamsOpt = p.L2CacheParamsOpt.map(_.copy(sets = 128)),
+      L2NBanks = 8
+    ))
     case CHIIssue => Issue.Eb
     case PerfCounterOptionsKey => PerfCounterOptions(false, false, XSPerfLevel.VERBOSE, 0)
-  }
+  })
 
   it should "buffer multiple granted writes with reversed data and independently stalled AXI channels" in {
     test(LazyModule(new NoLLCCHI2AXITestHarness()(writePerfConfig)).module)
