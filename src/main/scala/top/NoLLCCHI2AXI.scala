@@ -23,7 +23,6 @@ import freechips.rocketchip.diplomacy._
 import org.chipsalliance.cde.config.Parameters
 import xscache.chi._
 import xscache.chi.CHICohStates._
-import xscache.openLLC.ReceiverLinkMonitor
 
 /** Minimal single-RN CHI to AXI bridge for an L2 connected directly to memory.
   *
@@ -132,7 +131,8 @@ class NoLLCCHI2AXIImp(wrapper: NoLLCCHI2AXI, entries: Int)(implicit p: Parameter
     highWatermark := occupancy
   }
 
-  val linkMonitor = Module(new ReceiverLinkMonitor)
+  // Eight DAT credits cover the pipelined credit/data round trip for continuous writes.
+  val linkMonitor = Module(new NoLLCReceiverLinkMonitor(rxDatLCreditNum = 8))
   linkMonitor.io.in <> io.rn
   val rn = linkMonitor.io.out
   rn.rx.snp.valid := false.B
@@ -354,11 +354,20 @@ class NoLLCCHI2AXIImp(wrapper: NoLLCCHI2AXI, entries: Int)(implicit p: Parameter
 
   // CHI completion responses are queued so they remain stable across link backpressure.
   val rspQueue = Module(new Queue(new RspEntry, entries = 4, pipe = true, flow = false))
-  val writeOwnerValid = RegInit(false.B)
-  val writeOwner = RegInit(0.U(slotBits.W))
-  val writeData = Reg(Vec(beatsPerLine, UInt(DATA_WIDTH.W)))
-  val writeBE = Reg(Vec(beatsPerLine, UInt(BE_WIDTH.W)))
-  val writeBeatValid = RegInit(VecInit(Seq.fill(beatsPerLine)(false.B)))
+  // Reserve a small ring of line buffers before sending DBIDs. Multiple CHI writes
+  // can fill their buffers while the oldest write drains to AXI. Eight buffers hide
+  // the DBID/data link round trip without allocating data storage for every slot.
+  private val writeBuffers = math.min(entries, 8)
+  private val writeBufferBits = log2Ceil(writeBuffers)
+  val writeBufferValid = RegInit(VecInit(Seq.fill(writeBuffers)(false.B)))
+  val writeBufferSlot = Reg(Vec(writeBuffers, UInt(slotBits.W)))
+  val writeAlloc = RegInit(0.U(writeBufferBits.W))
+  val writeHead = RegInit(0.U(writeBufferBits.W))
+  val writeOwnerValid = writeBufferValid(writeHead)
+  val writeOwner = writeBufferSlot(writeHead)
+  val writeData = Reg(Vec(writeBuffers, Vec(beatsPerLine, UInt(DATA_WIDTH.W))))
+  val writeBE = Reg(Vec(writeBuffers, Vec(beatsPerLine, UInt(BE_WIDTH.W))))
+  val writeBeatValid = RegInit(VecInit(Seq.fill(writeBuffers)(VecInit(Seq.fill(beatsPerLine)(false.B)))))
   val writeSendBeat = RegInit(0.U(1.W))
 
   val rspSelectValid = RegInit(false.B)
@@ -367,7 +376,7 @@ class NoLLCCHI2AXIImp(wrapper: NoLLCCHI2AXI, entries: Int)(implicit p: Parameter
   rspArb.io.in.zipWithIndex.foreach { case (in, i) =>
     val slot = slots(i)
     val initialWriteRsp = (slot.kind === kindCohWrite || slot.kind === kindNoSnpWrite) &&
-      !slot.rspSent && !writeOwnerValid
+      !slot.rspSent && !writeBufferValid(writeAlloc)
     val readReceipt = slot.kind === kindNoSnpRead && slot.readReceiptNeeded && slot.arIssued && !slot.rspSent
     val finalWriteComp = slot.kind === kindNoSnpWrite && !slot.earlyWriteComp && slot.bDone &&
       !slot.writeCompSent
@@ -411,11 +420,11 @@ class NoLLCCHI2AXIImp(wrapper: NoLLCCHI2AXI, entries: Int)(implicit p: Parameter
     rspSelectValid := false.B
     when (rspIsInitialWrite) {
       rspSlot.rspSent := true.B
-      assert(!writeOwnerValid)
-      writeOwnerValid := true.B
-      writeOwner := rspSelect
-      writeBeatValid.foreach(_ := false.B)
-      writeSendBeat := 0.U
+      assert(!writeBufferValid(writeAlloc))
+      writeBufferValid(writeAlloc) := true.B
+      writeBufferSlot(writeAlloc) := rspSelect
+      writeBeatValid(writeAlloc).foreach(_ := false.B)
+      writeAlloc := writeAlloc + 1.U
     }.elsewhen (rspIsFinalWriteComp) {
       rspSlot.writeCompSent := true.B
     }.otherwise {
@@ -426,34 +435,39 @@ class NoLLCCHI2AXIImp(wrapper: NoLLCCHI2AXI, entries: Int)(implicit p: Parameter
   rn.rx.rsp.bits := rspQueue.io.deq.bits.rsp
   rspQueue.io.deq.ready := rn.rx.rsp.ready
 
-  // Only one write owns the CHI data channel and AXI W channel at a time.
+  // DBID identifies the reserved buffer, so CHI data can arrive in any granted
+  // transaction/beat order. AXI AW/W retain the buffer allocation order.
   val upstreamData = rn.tx.dat
-  val ownerSlot = slots(writeOwner)
-  val ownerIsCoh = ownerSlot.kind === kindCohWrite
-  val ownerIsNoSnp = ownerSlot.kind === kindNoSnpWrite
-  val ownerIsNoSnpFull = ownerIsNoSnp && ownerSlot.size === log2Ceil(lineBytes).U
-  val expectedDataOpcode = Mux(ownerIsCoh, CopyBackWrData, NonCopyBackWrData)
+  val writeDataMatches = VecInit((0 until writeBuffers).map(i =>
+    writeBufferValid(i) && upstreamData.bits.txnID === writeBufferSlot(i)
+  ))
+  val writeDataBuffer = OHToUInt(writeDataMatches)
+  val dataSlot = slots(slotID(upstreamData.bits.txnID))
+  val dataIsCoh = dataSlot.kind === kindCohWrite
+  val dataIsNoSnp = dataSlot.kind === kindNoSnpWrite
+  val dataIsNoSnpFull = dataIsNoSnp && dataSlot.size === log2Ceil(lineBytes).U
+  val expectedDataOpcode = Mux(dataIsCoh, CopyBackWrData, NonCopyBackWrData)
   val dataIDSupported = upstreamData.bits.dataID === 0.U || upstreamData.bits.dataID === 2.U
-  val noSnpPtlDataID = ownerSlot.addr(5) << 1
+  val noSnpPtlDataID = dataSlot.addr(5) << 1
   val dataIDMatches = dataIDSupported && Mux(
-    ownerIsCoh || ownerIsNoSnpFull,
+    dataIsCoh || dataIsNoSnpFull,
     true.B,
     upstreamData.bits.dataID === noSnpPtlDataID
   )
-  val dataBeat = Mux(ownerIsCoh || ownerIsNoSnpFull, upstreamData.bits.dataID(1), 0.U)
-  val canAcceptWriteData = writeOwnerValid && (ownerIsCoh || ownerIsNoSnp) &&
-    upstreamData.bits.txnID === writeOwner && upstreamData.bits.opcode === expectedDataOpcode &&
-    dataIDMatches && !writeBeatValid(dataBeat)
+  val dataBeat = Mux(dataIsCoh || dataIsNoSnpFull, upstreamData.bits.dataID(1), 0.U)
+  val canAcceptWriteData = writeDataMatches.asUInt.orR && (dataIsCoh || dataIsNoSnp) &&
+    upstreamData.bits.opcode === expectedDataOpcode && dataIDMatches && !writeBeatValid(writeDataBuffer)(dataBeat)
   upstreamData.ready := canAcceptWriteData
   when (upstreamData.valid) {
-    assert(writeOwnerValid, "NoLLCCHI2AXI received write data without a write owner")
+    assert(writeDataMatches.asUInt.orR, "NoLLCCHI2AXI received write data without a reserved buffer")
+    assert(PopCount(writeDataMatches) <= 1.U)
     assert(upstreamData.bits.opcode === expectedDataOpcode,
       "NoLLCCHI2AXI received the wrong CHI write-data opcode")
     assert(canAcceptWriteData, "NoLLCCHI2AXI received write data for an invalid DBID or DataID")
   }
   when (upstreamData.fire) {
-    assert(ownerSlot.valid && (ownerIsCoh || ownerIsNoSnp))
-    when (ownerIsCoh || ownerIsNoSnpFull) {
+    assert(dataSlot.valid && (dataIsCoh || dataIsNoSnp))
+    when (dataIsCoh || dataIsNoSnpFull) {
       assert(upstreamData.bits.be.andR, "NoLLCCHI2AXI full-line writes require full byte enables")
     }.otherwise {
       assert(upstreamData.bits.be.orR, "NoLLCCHI2AXI partial writes require a nonzero byte enable")
@@ -465,13 +479,17 @@ class NoLLCCHI2AXIImp(wrapper: NoLLCCHI2AXI, entries: Int)(implicit p: Parameter
     if (enablePoison) {
       assert(upstreamData.bits.poison.get === 0.U, "NoLLCCHI2AXI does not support poisoned write data")
     }
-    writeData(dataBeat) := upstreamData.bits.data
-    writeBE(dataBeat) := upstreamData.bits.be
-    writeBeatValid(dataBeat) := true.B
+    writeData(writeDataBuffer)(dataBeat) := upstreamData.bits.data
+    writeBE(writeDataBuffer)(dataBeat) := upstreamData.bits.be
+    writeBeatValid(writeDataBuffer)(dataBeat) := true.B
   }
 
+  val ownerSlot = slots(writeOwner)
+  val ownerIsCoh = ownerSlot.kind === kindCohWrite
+  val ownerIsNoSnp = ownerSlot.kind === kindNoSnpWrite
+  val ownerIsNoSnpFull = ownerIsNoSnp && ownerSlot.size === log2Ceil(lineBytes).U
   val ownerNeedsTwoBeats = ownerIsCoh || ownerIsNoSnpFull
-  val haveAllWriteData = Mux(ownerNeedsTwoBeats, writeBeatValid.asUInt.andR, writeBeatValid(0))
+  val haveAllWriteData = Mux(ownerNeedsTwoBeats, writeBeatValid(writeHead).asUInt.andR, writeBeatValid(writeHead)(0))
   axi.aw.valid := writeOwnerValid && (haveAllWriteData || ownerSlot.writeDataSent) && !ownerSlot.awIssued
   axi.aw.bits := 0.U.asTypeOf(axi.aw.bits)
   axi.aw.bits.id := paddedSlotID(writeOwner)
@@ -492,15 +510,15 @@ class NoLLCCHI2AXIImp(wrapper: NoLLCCHI2AXI, entries: Int)(implicit p: Parameter
 
   axi.w.valid := writeOwnerValid && haveAllWriteData && !ownerSlot.writeDataSent
   axi.w.bits := 0.U.asTypeOf(axi.w.bits)
-  axi.w.bits.data := writeData(writeSendBeat)
-  axi.w.bits.strb := writeBE(writeSendBeat)
+  axi.w.bits.data := writeData(writeHead)(writeSendBeat)
+  axi.w.bits.strb := writeBE(writeHead)(writeSendBeat)
   axi.w.bits.last := !ownerNeedsTwoBeats || writeSendBeat === (beatsPerLine - 1).U
   val writeLastFire = axi.w.fire && axi.w.bits.last
   val writeAddressDone = ownerSlot.awIssued || axi.aw.fire
   when (axi.w.fire) {
     when (axi.w.bits.last) {
       ownerSlot.writeDataSent := true.B
-      writeBeatValid.foreach(_ := false.B)
+      writeBeatValid(writeHead).foreach(_ := false.B)
       writeSendBeat := 0.U
     }.otherwise {
       writeSendBeat := writeSendBeat + 1.U
@@ -508,7 +526,8 @@ class NoLLCCHI2AXIImp(wrapper: NoLLCCHI2AXI, entries: Int)(implicit p: Parameter
   }
   when (writeOwnerValid && ((axi.aw.fire && ownerSlot.writeDataSent) ||
     (writeLastFire && writeAddressDone))) {
-    writeOwnerValid := false.B
+    writeBufferValid(writeHead) := false.B
+    writeHead := writeHead + 1.U
   }
 
   val bIDInRange = axi.b.bits.id < entries.U

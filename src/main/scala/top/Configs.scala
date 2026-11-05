@@ -315,6 +315,17 @@ class MinimalMatrixConfig(n: Int) extends Config(
   })
 )
 
+// Preserve the 512 KiB L2 capacity while providing 8 * 16 MSHRs for bridge throughput tests.
+class MinimalMatrix8BankConfig(n: Int = 1) extends Config(
+  new MinimalMatrixConfig(n).alter((site, here, up) => {
+    case NoLLCEntries => 128
+    case XSTileKey => up(XSTileKey).map(p => p.copy(
+      L2CacheParamsOpt = p.L2CacheParamsOpt.map(_.copy(sets = 128)),
+      L2NBanks = 8
+    ))
+  })
+)
+
 class TinyMatrixConfig(n: Int = 1) extends Config(
   OpenLLCConfig("1MB", banks = 4)
     ++ ZhuJiangConfig("1MB", ways = 8)

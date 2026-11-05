@@ -11,6 +11,9 @@ import org.scalatest.matchers.should.Matchers
 import utility.{PerfCounterOptions, PerfCounterOptionsKey, XSPerfLevel}
 import xscache.chi._
 import xscache.openLLC.TransmitterLinkMonitor
+import xiangshan.XSTileKey
+
+import scala.collection.mutable
 
 class NoLLCCHI2AXITestHarness(implicit p: Parameters) extends LazyModule {
   val entries: Int = p(NoLLCEntries)
@@ -178,7 +181,7 @@ class NoLLCCHI2AXITest extends AnyFlatSpec with ChiselScalatestTester with Match
     dut.io.chi.tx.req.valid.poke(false.B)
   }
 
-  private def sendData(
+  private def pokeData(
     dut: NoLLCCHI2AXITestHarnessImp,
     opcode: UInt,
     dbID: BigInt,
@@ -216,6 +219,17 @@ class NoLLCCHI2AXITest extends AnyFlatSpec with ChiselScalatestTester with Match
       check.poke(parity.U)
     }
     dat.poison.foreach(_.poke(0.U))
+  }
+
+  private def sendData(
+    dut: NoLLCCHI2AXITestHarnessImp,
+    opcode: UInt,
+    dbID: BigInt,
+    dataID: Int,
+    data: BigInt,
+    be: BigInt
+  ): Unit = {
+    pokeData(dut, opcode, dbID, dataID, data, be)
     dut.io.chi.tx.dat.valid.poke(true.B)
     var cycles = 0
     while (!dut.io.chi.tx.dat.ready.peek().litToBoolean && cycles < 100) {
@@ -295,6 +309,311 @@ class NoLLCCHI2AXITest extends AnyFlatSpec with ChiselScalatestTester with Match
     assert(cycles < 100)
     dut.clock.step()
     dut.io.axi.b.valid.poke(false.B)
+  }
+
+  private def waitUntil(dut: NoLLCCHI2AXITestHarnessImp)(condition: => Boolean): Unit = {
+    var cycles = 0
+    while (!condition && cycles < 200) {
+      dut.clock.step()
+      cycles += 1
+    }
+    assert(condition, "timed out waiting for bridge progress")
+  }
+
+  private def externalAXIID(slot: BigInt, entries: Int): BigInt = slot % math.max(1, entries / 4)
+
+  private def sendCompAck(dut: NoLLCCHI2AXITestHarnessImp, dbID: BigInt): Unit = {
+    val ack = dut.io.chi.tx.rsp.bits
+    ack.qos.poke(0.U)
+    ack.tgtID.poke(2.U)
+    ack.srcID.poke(1.U)
+    ack.txnID.poke(dbID.U)
+    ack.opcode.poke(CompAck)
+    ack.respErr.poke(0.U)
+    ack.resp.poke(0.U)
+    ack.fwdState.poke(0.U)
+    ack.cBusy.foreach(_.poke(0.U))
+    ack.dbID.poke(0.U)
+    ack.pCrdType.poke(0.U)
+    ack.tagOp.foreach(_.poke(0.U))
+    ack.traceTag.poke(false.B)
+    dut.io.chi.tx.rsp.valid.poke(true.B)
+    waitUntil(dut)(dut.io.chi.tx.rsp.ready.peek().litToBoolean)
+    dut.clock.step()
+    dut.io.chi.tx.rsp.valid.poke(false.B)
+  }
+
+  private lazy val writePerfConfig: Parameters = (new MinimalMatrix8BankConfig(1)).alterPartial {
+    case CHIIssue => Issue.Eb
+    case PerfCounterOptionsKey => PerfCounterOptions(false, false, XSPerfLevel.VERBOSE, 0)
+  }
+
+  it should "buffer multiple granted writes with reversed data and independently stalled AXI channels" in {
+    test(LazyModule(new NoLLCCHI2AXITestHarness()(writePerfConfig)).module)
+      .withAnnotations(Seq(VerilatorBackendAnnotation)) { dut =>
+      init(dut)
+      dut.io.chi.rx.rsp.ready.poke(false.B)
+      dut.io.axi.aw.ready.poke(false.B)
+      dut.io.axi.w.ready.poke(false.B)
+      val address = BigInt("80020000", 16)
+      val byteEnables = BigInt("ffffffff", 16)
+      for (i <- 0 until 8) sendReq(dut, WriteBackFull, i, address + i * 64, 6)
+      val grants = Seq.fill(8)(takeRsp(dut))
+      grants.map(_._2).distinct.size shouldBe 8
+      grants.foreach(_._1 shouldBe CompDBIDResp.litValue)
+      for ((_, txnID, dbID) <- grants.reverse) {
+        sendData(dut, CopyBackWrData, dbID, 2, txnID * 2 + 2, byteEnables)
+        sendData(dut, CopyBackWrData, dbID, 0, txnID * 2 + 1, byteEnables)
+      }
+      for ((_, txnID, dbID) <- grants) {
+        val axiID = externalAXIID(dbID, writePerfConfig(NoLLCEntries))
+        waitUntil(dut)(dut.io.axi.aw.valid.peek().litToBoolean && dut.io.axi.w.valid.peek().litToBoolean)
+        // Other buffers filling and stalled channels must not change the head packet.
+        for (_ <- 0 until 5) {
+          dut.io.axi.aw.bits.id.expect(axiID.U)
+          dut.io.axi.aw.bits.addr.expect((address + txnID * 64).U)
+          dut.io.axi.aw.bits.len.expect(1.U)
+          dut.io.axi.w.bits.data.expect((txnID * 2 + 1).U)
+          dut.io.axi.w.bits.strb.expect(byteEnables.U)
+          dut.io.axi.w.bits.last.expect(false.B)
+          dut.clock.step()
+        }
+        dut.io.axi.w.ready.poke(true.B)
+        dut.clock.step()
+        dut.io.axi.w.valid.expect(true.B)
+        dut.io.axi.w.bits.data.expect((txnID * 2 + 2).U)
+        dut.io.axi.w.bits.last.expect(true.B)
+        dut.clock.step()
+        dut.io.axi.w.ready.poke(false.B)
+        // W may finish before AW; keep ownership until the delayed address handshake.
+        for (_ <- 0 until 3) {
+          dut.io.axi.aw.valid.expect(true.B)
+          dut.io.axi.aw.bits.id.expect(axiID.U)
+          dut.io.axi.aw.bits.addr.expect((address + txnID * 64).U)
+          dut.io.axi.w.valid.expect(false.B)
+          dut.clock.step()
+        }
+        dut.io.axi.aw.ready.poke(true.B)
+        dut.clock.step()
+        dut.io.axi.aw.ready.poke(false.B)
+      }
+      dut.io.occupancy.expect(8.U)
+      grants.reverse.foreach { case (_, _, dbID) => sendB(dut, externalAXIID(dbID, writePerfConfig(NoLLCEntries))) }
+      waitUntil(dut)(dut.io.occupancy.peek().litValue == 0)
+    }
+  }
+
+  it should "retire mixed writes with simultaneous last-beat B and delayed CompAck in a two-slot bridge" in {
+    val config = writePerfConfig.alterPartial { case NoLLCEntries => 2 }
+    test(LazyModule(new NoLLCCHI2AXITestHarness()(config)).module)
+      .withAnnotations(Seq(VerilatorBackendAnnotation)) { dut =>
+      init(dut)
+      val byteEnables = BigInt("ffffffff", 16)
+      for (full <- Seq(false, true)) {
+        val address = BigInt("80030000", 16)
+        val noSnpAddress = address + 64 + (if (full) 0 else 40)
+        dut.io.chi.rx.rsp.ready.poke(false.B)
+        dut.io.axi.aw.ready.poke(false.B)
+        dut.io.axi.w.ready.poke(false.B)
+        sendReq(dut, WriteBackFull, 10, address, 6, expCompAck = true)
+        sendReq(dut, if (full) WriteNoSnpFull else WriteNoSnpPtl, 11, noSnpAddress,
+          if (full) 6 else 3, ewa = false)
+        val grants = Seq.fill(2)(takeRsp(dut))
+        dut.io.chi.rx.rsp.ready.poke(false.B)
+        val coherentID = grants.find(_._2 == 10).get._3
+        val noSnpID = grants.find(_._2 == 11).get._3
+        grants.find(_._2 == 10).get._1 shouldBe CompDBIDResp.litValue
+        grants.find(_._2 == 11).get._1 shouldBe DBIDResp.litValue
+        if (full) {
+          sendData(dut, NonCopyBackWrData, noSnpID, 2, 23, byteEnables)
+          sendData(dut, NonCopyBackWrData, noSnpID, 0, 22, byteEnables)
+        } else {
+          sendData(dut, NonCopyBackWrData, noSnpID, 2, BigInt(22) << 64, 0xff00)
+        }
+        sendData(dut, CopyBackWrData, coherentID, 2, 21, byteEnables)
+        sendData(dut, CopyBackWrData, coherentID, 0, 20, byteEnables)
+        for ((_, txnID, dbID) <- grants) {
+          val twoBeats = txnID == 10 || full
+          val axiID = externalAXIID(dbID, config(NoLLCEntries))
+          waitUntil(dut)(dut.io.axi.aw.valid.peek().litToBoolean && dut.io.axi.w.valid.peek().litToBoolean)
+          dut.io.axi.aw.bits.id.expect(axiID.U)
+          dut.io.axi.aw.bits.addr.expect((if (txnID == 10) address else noSnpAddress).U)
+          dut.io.axi.aw.bits.size.expect((if (twoBeats) 5 else 3).U)
+          dut.io.axi.aw.bits.len.expect((if (twoBeats) 1 else 0).U)
+          dut.io.axi.aw.ready.poke(true.B)
+          // The response-ID queue needs the address at least one cycle before B.
+          dut.clock.step()
+          dut.io.axi.aw.ready.poke(false.B)
+          dut.io.axi.w.ready.poke(true.B)
+          if (twoBeats) {
+            dut.io.axi.w.bits.data.expect((txnID * 2).U)
+            dut.io.axi.w.bits.strb.expect(byteEnables.U)
+            dut.io.axi.w.bits.last.expect(false.B)
+            dut.clock.step()
+          }
+          dut.io.axi.w.valid.expect(true.B)
+          dut.io.axi.w.bits.data.expect((if (twoBeats) txnID * 2 + 1 else BigInt(22) << 64).U)
+          dut.io.axi.w.bits.strb.expect((if (twoBeats) byteEnables else BigInt(0xff00)).U)
+          dut.io.axi.w.bits.last.expect(true.B)
+          dut.io.axi.b.bits.id.poke(axiID.U)
+          dut.io.axi.b.bits.resp.poke(AXI4Parameters.RESP_OKAY)
+          dut.io.axi.b.valid.poke(true.B)
+          dut.io.axi.b.ready.expect(true.B)
+          dut.clock.step()
+          dut.io.axi.b.valid.poke(false.B)
+          dut.io.axi.aw.ready.poke(false.B)
+          dut.io.axi.w.ready.poke(false.B)
+        }
+        val (opcode, txnID, _) = takeRsp(dut)
+        opcode shouldBe Comp.litValue
+        txnID shouldBe 11
+        dut.clock.step(5)
+        dut.io.occupancy.expect(1.U)
+        sendCompAck(dut, coherentID)
+        waitUntil(dut)(dut.io.occupancy.peek().litValue == 0)
+      }
+    }
+  }
+
+  private def runWriteThroughput(backpressure: Boolean): Unit = {
+    writePerfConfig(XSTileKey).head.L2NBanks shouldBe 8
+    writePerfConfig(XSTileKey).head.L2CacheParamsOpt.get.mshrs * 8 shouldBe 128
+    writePerfConfig(NoLLCEntries) shouldBe 128
+    val harness = LazyModule(new NoLLCCHI2AXITestHarness()(writePerfConfig))
+    test(harness.module)
+      .withAnnotations(Seq(VerilatorBackendAnnotation)) { dut =>
+      init(dut)
+      val transactions = 128
+      val address = BigInt("80010000", 16)
+      val byteEnables = BigInt("ffffffff", 16)
+      val dataPending = mutable.Queue.empty[(BigInt, BigInt, Int)]
+      val writesPending = mutable.Queue.empty[BigInt]
+      val random = new scala.util.Random(0x4c4c43L)
+      var dataActive = false
+      var stalledAW = Option.empty[(BigInt, BigInt)]
+      var stalledW = Option.empty[(BigInt, BigInt, Boolean)]
+      val issuedIDs = mutable.ArrayBuffer.empty[BigInt]
+      val beatCycles = mutable.ArrayBuffer.empty[Int]
+      val dataCycles = mutable.ArrayBuffer.empty[Int]
+      var dataStalls = 0
+      var dataStarvation = 0
+      var requests = 0
+      var responses = 0
+      var cycle = 0
+      var outputBeat = 0
+      while (beatCycles.size < transactions * 2 && cycle < 10000) {
+        if (requests < transactions) {
+          pokeReq(dut, WriteBackFull, requests, address + requests * 64, 6)
+        }
+        dut.io.chi.tx.req.valid.poke((requests < transactions).B)
+        val awReady = !backpressure || random.nextInt(4) != 0
+        val rspReady = !backpressure || random.nextInt(4) != 0
+        val wReady = (!backpressure || random.nextInt(4) != 0) &&
+          (writesPending.nonEmpty || dut.io.axi.aw.valid.peek().litToBoolean && awReady)
+        dut.io.axi.aw.ready.poke(awReady.B)
+        dut.io.axi.w.ready.poke(wReady.B)
+        dut.io.chi.rx.rsp.ready.poke(rspReady.B)
+        if (!dataActive && dataPending.nonEmpty && (!backpressure || random.nextInt(4) != 0)) {
+          dataActive = true
+        }
+        val sending = if (dataActive) dataPending.headOption else None
+        if (sending.isEmpty && responses < transactions) {
+          dataStarvation += 1
+        }
+        sending.foreach { case (dbID, txnID, beat) =>
+          pokeData(dut, CopyBackWrData, dbID, beat * 2, txnID * 2 + beat + 1, byteEnables)
+        }
+        dut.io.chi.tx.dat.valid.poke(sending.nonEmpty.B)
+        if (dut.io.chi.tx.req.valid.peek().litToBoolean && dut.io.chi.tx.req.ready.peek().litToBoolean) {
+          requests += 1
+        }
+        if (dut.io.chi.rx.rsp.valid.peek().litToBoolean && rspReady) {
+          dut.io.chi.rx.rsp.bits.opcode.expect(CompDBIDResp)
+          val txnID = dut.io.chi.rx.rsp.bits.txnID.peek().litValue
+          val dbID = dut.io.chi.rx.rsp.bits.dbID.peek().litValue
+          dataPending.enqueue((dbID, txnID, 0), (dbID, txnID, 1))
+          responses += 1
+        }
+        if (sending.nonEmpty && dut.io.chi.tx.dat.ready.peek().litToBoolean) {
+          dataPending.dequeue()
+          dataCycles += cycle
+          dataActive = false
+        } else if (sending.nonEmpty) {
+          dataStalls += 1
+        }
+        val awValid = dut.io.axi.aw.valid.peek().litToBoolean
+        val wValid = dut.io.axi.w.valid.peek().litToBoolean
+        val awPacket = (dut.io.axi.aw.bits.id.peek().litValue, dut.io.axi.aw.bits.addr.peek().litValue)
+        val wPacket = (dut.io.axi.w.bits.data.peek().litValue, dut.io.axi.w.bits.strb.peek().litValue,
+          dut.io.axi.w.bits.last.peek().litToBoolean)
+        stalledAW.foreach { packet =>
+          awValid shouldBe true
+          awPacket shouldBe packet
+        }
+        stalledW.foreach { packet =>
+          wValid shouldBe true
+          wPacket shouldBe packet
+        }
+        stalledAW = Option.when(awValid && !awReady)(awPacket)
+        stalledW = Option.when(wValid && !wReady)(wPacket)
+        if (awValid && awReady) {
+          val txnID = (dut.io.axi.aw.bits.addr.peek().litValue - address) / 64
+          dut.io.axi.aw.bits.len.expect(1.U)
+          awPacket._1 shouldBe externalAXIID(txnID, writePerfConfig(NoLLCEntries))
+          writesPending.enqueue(txnID)
+          issuedIDs += dut.io.axi.aw.bits.id.peek().litValue
+        }
+        if (wValid && wReady) {
+          assert(writesPending.nonEmpty)
+          val txnID = writesPending.front
+          dut.io.axi.w.bits.data.expect((txnID * 2 + outputBeat + 1).U)
+          dut.io.axi.w.bits.strb.expect(byteEnables.U)
+          dut.io.axi.w.bits.last.expect((outputBeat == 1).B)
+          beatCycles += cycle
+          if (outputBeat == 1) {
+            writesPending.dequeue()
+          }
+          outputBeat = 1 - outputBeat
+        }
+        dut.clock.step()
+        cycle += 1
+      }
+      dut.io.chi.tx.req.valid.poke(false.B)
+      dut.io.chi.tx.dat.valid.poke(false.B)
+      dut.io.chi.rx.rsp.ready.poke(true.B)
+      beatCycles.size shouldBe transactions * 2
+      requests shouldBe transactions
+      responses shouldBe transactions
+      issuedIDs.size shouldBe transactions
+      issuedIDs.distinct.size shouldBe transactions / 4
+      all(issuedIDs.groupBy(identity).values.map(_.size).toSeq) shouldBe 4
+      dut.io.occupancy.expect(transactions.U)
+      val utilization = beatCycles.size.toDouble / (beatCycles.last - beatCycles.head + 1)
+      val steadyCycles = beatCycles.slice(32, beatCycles.size - 32)
+      val steadyUtilization = steadyCycles.size.toDouble / (steadyCycles.last - steadyCycles.head + 1)
+      println(f"NoLLC write throughput: $utilization%.4f beats/cycle, steady=$steadyUtilization%.4f, cycles=$cycle")
+      val dataGaps = dataCycles.sliding(2).map(p => p(1) - p(0)).toSeq.groupBy(identity).map {
+        case (gap, occurrences) => gap -> occurrences.size
+      }
+      println(s"CHI data: stalls=$dataStalls, starvation=$dataStarvation, handshake gaps=$dataGaps")
+      // Complete compressed IDs out of order, preserving FIFO responses within each ID.
+      issuedIDs.groupBy(identity).toSeq.sortBy(_._1).reverse.foreach { case (_, ids) =>
+        ids.foreach(id => sendB(dut, id))
+      }
+      dut.clock.step(20)
+      dut.io.occupancy.expect(0.U)
+      if (!backpressure) {
+        steadyUtilization should be >= 0.99
+      }
+    }
+  }
+
+  it should "sustain full-rate AXI writes with 128 outstanding transactions and eight L2 banks" in {
+    runWriteThroughput(backpressure = false)
+  }
+
+  it should "preserve 128 writes under randomized CHI and AXI backpressure" in {
+    runWriteThroughput(backpressure = true)
   }
 
   for (entries <- Seq(2, 64, 128, 256)) {
