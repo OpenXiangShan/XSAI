@@ -228,6 +228,8 @@ class VectorCvtTop(vlen: Int, xlen: Int) extends Module{
   vectorCvt0.isFpToVecInst := isFpToVecInst
   vectorCvt0.isFround := 0.U
   vectorCvt0.isFcvtmod := false.B
+  vectorCvt0.io.isMXFP := false.B
+  vectorCvt0.io.factor := 0.U(8.W)
 
   val vectorCvt1 = Module(new VectorCvt(xlen))
   vectorCvt1.fire := fire
@@ -238,6 +240,8 @@ class VectorCvtTop(vlen: Int, xlen: Int) extends Module{
   vectorCvt1.isFpToVecInst := isFpToVecInst
   vectorCvt1.isFround := 0.U
   vectorCvt1.isFcvtmod := false.B
+  vectorCvt1.io.isMXFP := false.B
+  vectorCvt1.io.factor := 0.U(8.W)
 
   val isNarrowCycle2 = RegEnable(RegEnable(isNarrow, fire), fireReg)
   val outputWidth1HCycle2 = RegEnable(RegEnable(outputWidth1H, fire), fireReg)
