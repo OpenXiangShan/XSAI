@@ -210,7 +210,7 @@ class XSCuteImp(wrapper: XSCute)(implicit p: Parameters) extends LazyModuleImp(w
 
     val mmu = wrapper.cute_tl.module.io.mmu
     val difftests = CuteDifftest.applyVec(
-      Seq.fill(matrixStoreDiffLaneCount)(new DiffMatrixStoreEvent),
+      Seq.fill(matrixStoreDiffLaneCount)(new DiffMatrixStoreEvent(storeBytes = MMUMaskWidth)),
       delay = 1
     )
 
@@ -232,7 +232,9 @@ class XSCuteImp(wrapper: XSCute)(implicit p: Parameters) extends LazyModuleImp(w
       difftests(channel).reqEncodedSourceId := Mux(reqValid, writeReq.bits.RequestSourceID, 0.U)
       difftests(channel).addr := Mux(reqValid, writeReq.bits.RequestAddr, 0.U)
       difftests(channel).data := Mux(reqValid, writeReq.bits.RequestData, 0.U).asTypeOf(Vec(64, UInt(8.W)))
-      difftests(channel).mask := Mux(reqValid, writeReq.bits.RequestMask, 0.U)
+      when(reqValid) {
+        assert(writeReq.bits.RequestMask.andR, "MatrixStore DiffTest requires a full write mask")
+      }
       difftests(channel).respValid := respValid
       difftests(channel).respEncodedSourceId := Mux(respValid, respEncodedSourceId, 0.U)
     }
