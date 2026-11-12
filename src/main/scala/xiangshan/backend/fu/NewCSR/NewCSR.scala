@@ -442,6 +442,7 @@ class NewCSR(implicit val p: Parameters) extends Module
   trapHandleMod.io.in.trapInfo.bits.isInterrupt := trapIsInterrupt
   trapHandleMod.io.in.trapInfo.bits.irToHS := irToHS
   trapHandleMod.io.in.trapInfo.bits.irToVS := irToVS
+  trapHandleMod.io.in.trapInfo.bits.virtualIRIsHvictlInject := virtualInterruptIsHvictlInject
   trapHandleMod.io.in.privState := privState
   trapHandleMod.io.in.mstatus  := mstatus.regOut
   trapHandleMod.io.in.sstatus   := mstatus.sstatus
@@ -1020,6 +1021,7 @@ class NewCSR(implicit val p: Parameters) extends Module
   )
 
   val triggerFrontendChange = Wire(Bool())
+  val triggerBpGateChange = Wire(Bool())
 
   val vstartChange = vstart.w.wen && (
     vstart.w.wdata === 0.U && vstart.regOut.vstart.asUInt =/= 0.U ||
@@ -1034,7 +1036,7 @@ class NewCSR(implicit val p: Parameters) extends Module
     fcsr.w.wen && (!frmIsReserved && fcsrWdataReserved || frmIsReserved && !fcsrWdataReserved)
 
   val flushPipe = resetSatp ||
-    triggerFrontendChange || floatStatusOnOff || vectorStatusOnOff || matrixStatusOnOff ||
+    triggerFrontendChange || triggerBpGateChange || floatStatusOnOff || vectorStatusOnOff || matrixStatusOnOff ||
     vstartChange || frmChange
 
   /**
@@ -1298,6 +1300,20 @@ class NewCSR(implicit val p: Parameters) extends Module
   }}
 
   triggerFrontendChange := debugMod.io.out.triggerFrontendChange
+  // Fetch trigger eligibility depends on the interrupt-enable gate of the current mode.
+  // Refetch when a CSR write changes that gate so an already-fetched instruction is re-evaluated.
+  val mstatusWriteMIE = mstatus.w.wdataFields.MIE && !mstatus.w.wdataFields.MDT
+  val sstatusWriteSDT = Mux(menvcfg.regOut.DTE.asBool, mstatus.wAliasSstatus.wdataFields.SDT.asBool, mstatus.regOut.SDT.asBool)
+  val sstatusWriteSIE = mstatus.wAliasSstatus.wdataFields.SIE && !sstatusWriteSDT
+  val vsstatusWriteSDT = menvcfg.regOut.DTE && henvcfg.regOut.DTE && vsstatus.w.wdataFields.SDT
+  val vsstatusWriteSIE = vsstatus.w.wdataFields.SIE && !vsstatusWriteSDT
+  triggerBpGateChange := debugMod.io.out.frontendTrigger.tEnableVec.asUInt.orR && (
+    privState.isModeM && mstatus.w.wen && mstatusWriteMIE =/= mstatus.regOut.MIE.asBool ||
+    privState.isModeHS && medeleg.regOut.EX_BP &&
+      mstatus.wAliasSstatus.wen && sstatusWriteSIE =/= mstatus.regOut.SIE.asBool ||
+    privState.isModeVS && medeleg.regOut.EX_BP && hedeleg.regOut.EX_BP &&
+      vsstatus.w.wen && vsstatusWriteSIE =/= vsstatus.regOut.SIE.asBool
+  )
 
   io.status.frontendTrigger := debugMod.io.out.frontendTrigger
   io.status.memTrigger      := debugMod.io.out.memTrigger

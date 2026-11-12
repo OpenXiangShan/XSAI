@@ -447,6 +447,7 @@ object Pbmt {
 }
 
 class TlbStorageIO(nSets: Int, nWays: Int, ports: Int, nDups: Int = 1)(implicit p: Parameters) extends MMUIOBaseBundle {
+  val multiHit = Output(Bool())
   val r = new Bundle {
     val req = Vec(ports, Flipped(DecoupledIO(new Bundle {
       val vpn = Output(UInt(vpnLen.W))
@@ -488,6 +489,7 @@ class TlbStorageIO(nSets: Int, nWays: Int, ports: Int, nDups: Int = 1)(implicit 
 }
 
 class TlbStorageWrapperIO(ports: Int, q: TLBParameters, nDups: Int = 1)(implicit p: Parameters) extends MMUIOBaseBundle {
+  val multiHit = Output(Bool())
   val r = new Bundle {
     val req = Vec(ports, Flipped(DecoupledIO(new Bundle {
       val vpn = Output(UInt(vpnLen.W))
@@ -825,7 +827,8 @@ class PteBundle(implicit p: Parameters) extends PtwBundle{
     val pm = Wire(new PtePermBundle)
     pm.d := perm.d
     pm.a := perm.a
-    pm.g := perm.g
+    // V = 0 makes G a don't-care; it does not create a global mapping.
+    pm.g := perm.g && perm.v
     pm.u := perm.u
     pm.x := perm.x
     pm.w := perm.w
@@ -946,7 +949,7 @@ class PtwEntry(tagLen: Int, hasPerm: Boolean = false, hasLevel: Boolean = false,
     tag := vpn(vpnLen - 1, vpnLen - tagLen)
     pbmt := pte.asTypeOf(new PteBundle().cloneType).pbmt
     ppn := pte.asTypeOf(new PteBundle().cloneType).getPPN()
-    perm.map(_ := pte.asTypeOf(new PteBundle().cloneType).perm)
+    perm.map(_ := pte.asTypeOf(new PteBundle().cloneType).getPerm())
     when (s2xlate === onlyStage2) {
       // g bit in G-stage PTEs should be ignored by hardware
       perm.map(_.g := false.B)
@@ -1052,7 +1055,7 @@ class PtwEntries(num: Int, tagLen: Int, level: Int, hasPerm: Boolean, ReservedBi
       ps.ppns(i) := pte.getPPN()
       ps.vs(i)   := (isRefillEntry || onlyPf) && !denyNapotInSector
       ps.onlypf(i) := onlyPf && !denyNapotInSector
-      ps.perms.map(_(i) := pte.perm)
+      ps.perms.map(_(i) := pte.getPerm())
       when (s2xlate === onlyStage2) {
         // g bit in G-stage PTEs should be ignored by hardware
         ps.perms.map(_(i).g := false.B)
