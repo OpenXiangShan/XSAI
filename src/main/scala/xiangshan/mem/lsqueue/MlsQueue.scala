@@ -7,6 +7,7 @@ import utils._
 import utility._
 import xiangshan._
 import xiangshan.backend.Bundles.{DynInst, MemExuOutput, MemMicroOpRbExt}
+import xiangshan.backend.rob.RobPtr
 import xiangshan.cache._
 import xiangshan.cache.mmu._
 import xiangshan.mem.Bundles.{MlsqWriteBundle, MlsPipelineBundle}
@@ -55,6 +56,7 @@ class MlsQueue(implicit p: Parameters) extends XSModule
     val mlsqCancelCnt = Output(UInt(log2Up(MlsQueueSize + 1).W))
 
     val tlb_hint = Flipped(new TlbHintIO)
+    val robDeqPtr = Input(new RobPtr)
     val tlbReplayDelayCycleCtrl = Vec(4, Input(UInt(ReSelectLen.W)))
   })
 
@@ -79,5 +81,6 @@ class MlsQueue(implicit p: Parameters) extends XSModule
   mlsQueueReplay.io.mlsqFull                <> io.mlsq_rep_full
   mlsQueueReplay.io.mlsWbPtr                <> virtualMlsQueue.io.mlsWbPtr
   mlsQueueReplay.io.tlb_hint                <> io.tlb_hint
+  mlsQueueReplay.io.robDeqPtr                := io.robDeqPtr
   mlsQueueReplay.io.tlbReplayDelayCycleCtrl <> io.tlbReplayDelayCycleCtrl
 }

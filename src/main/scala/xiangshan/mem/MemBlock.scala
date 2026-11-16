@@ -753,6 +753,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
   val tlbreplay = WireInit(VecInit(Seq.fill(LdExuCnt)(false.B)))
   val tlbreplay_reg = GatedValidRegNext(tlbreplay)
   val dtlb_ld0_tlbreplay_reg = GatedValidRegNext(dtlb_ld(0).tlbreplay)
+  val dtlb_ld0_tlbreplay_wait_rob_reg = GatedValidRegNext(dtlb_ld(0).tlbreplayWaitRob)
 
   if (backendParams.debugEn){ dontTouch(tlbreplay) }
 
@@ -1015,6 +1016,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
     loadUnits(i).io.tlb_hint.id := dtlbRepeater.io.hint.get.req(i).id
     loadUnits(i).io.tlb_hint.full := dtlbRepeater.io.hint.get.req(i).full ||
       tlbreplay_reg(i) || dtlb_ld0_tlbreplay_reg(i)
+    loadUnits(i).io.tlb_hint.tlbWaitRob := dtlb_ld0_tlbreplay_wait_rob_reg(i)
 
     // passdown to lsq (load s2)
     lsq.io.ldu.ldin(i) <> loadUnits(i).io.lsq.ldin
@@ -1097,6 +1099,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
     hybridUnits(i).io.ldu_io.tlb_hint.id := dtlbRepeater.io.hint.get.req(LduCnt + i).id
     hybridUnits(i).io.ldu_io.tlb_hint.full := dtlbRepeater.io.hint.get.req(LduCnt + i).full ||
       tlbreplay_reg(LduCnt + i) || dtlb_ld0_tlbreplay_reg(LduCnt + i)
+    hybridUnits(i).io.ldu_io.tlb_hint.tlbWaitRob := dtlb_ld0_tlbreplay_wait_rob_reg(LduCnt + i)
 
     // dtlb
     hybridUnits(i).io.tlb <> dtlb_ld.head.requestor(LduCnt + i)
@@ -1215,6 +1218,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
     mlsUnits(i).io.tlb_hint.id := dtlbRepeater.io.hint.get.req(LduCnt + HyuCnt + i).id
     mlsUnits(i).io.tlb_hint.full := dtlbRepeater.io.hint.get.req(LduCnt + HyuCnt + i).full ||
       tlbreplay_reg(LduCnt + HyuCnt + i) || dtlb_ld0_tlbreplay_reg(LduCnt + HyuCnt + i)
+    mlsUnits(i).io.tlb_hint.tlbWaitRob := dtlb_ld0_tlbreplay_wait_rob_reg(LduCnt + HyuCnt + i)
 
     mlsUnits(i).io.replay <> lsq.io.mls_replay(i)
     mlsUnits(i).io.mlsq_rep_full <> lsq.io.mlsq_rep_full.get

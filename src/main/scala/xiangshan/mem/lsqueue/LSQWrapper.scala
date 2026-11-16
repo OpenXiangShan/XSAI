@@ -286,6 +286,7 @@ class LsqWrapper(implicit p: Parameters) extends XSModule with HasDCacheParamete
     mlsQueue.get.io.mlsqCancelCnt         <> io.mlsqCancelCnt.get
     mlsQueue.get.io.replay                <> io.mls_replay
     mlsQueue.get.io.tlb_hint              <> io.tlb_hint
+    mlsQueue.get.io.robDeqPtr              := io.rob.pendingPtr
     mlsQueue.get.io.tlbReplayDelayCycleCtrl := tlbReplayDelayCycleCtrl
     mlsQueue.get.io.mlsq_rep_full         <> io.mlsq_rep_full.get
   }
