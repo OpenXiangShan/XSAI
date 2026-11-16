@@ -596,14 +596,14 @@ class DefaultMatrixConfig(n: Int = 1) extends Config(
 // Leverage full 8-channel config to achieve maximum L2 bandwidth.
 class DefaultMatrixFullBandWidthConfig(n: Int = 1) extends Config(
   new DefaultMatrixConfig(n).alter((site, here, up) => {
-    case CuteParamsKey => up(CuteParamsKey).copy(LoaderBridgeChannelConfig = "A8B8CL8CS8")
+    case CuteParamsKey => up(CuteParamsKey).copy(LoaderBridgeChannelConfig = "TL08TL18AL08TS08AS08")
   })
 )
 
 // Legacy A/B loaders, two C-load response channels and eight C-store channels.
 class DefaultMatrixMediumBandWidthConfig(n: Int = 1) extends Config(
   new DefaultMatrixConfig(n).alter((site, here, up) => {
-    case CuteParamsKey => up(CuteParamsKey).copy(LoaderBridgeChannelConfig = "ALBLCL2CS8")
+    case CuteParamsKey => up(CuteParamsKey).copy(LoaderBridgeChannelConfig = "TL0LTL1LAL02TS0LAS08")
   })
 )
 
