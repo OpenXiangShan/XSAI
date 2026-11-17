@@ -25,12 +25,18 @@ object ZhuJiangNoCTopology {
   }
 
   def apply(numCores: Int, base: ZJParameters, cfgAxiDataBits: Int): ZJParameters = {
-    require(numCores == 1 || numCores == 2, "ZhuJiang system config currently supports one or two cores")
+    require(Set(1, 2, 4).contains(numCores), "ZhuJiang system config currently supports one, two or four cores")
+    val nodes = numCores match {
+      case 1 => singleCoreNodeParams
+      case 2 => dualCoreNodeParams
+      // Keep the existing endpoints and their native node IDs unchanged.
+      case 4 => dualCoreNodeParams ++ Seq.fill(2)(NodeParam(nodeType = NodeType.CC, socket = "sync"))
+    }
     base.copy(
       nodeNidBits = 8,
       nodeAidBits = 3,
       cfgAxiDataBits = cfgAxiDataBits,
-      nodeParams = if (numCores == 1) singleCoreNodeParams else dualCoreNodeParams,
+      nodeParams = nodes,
       tfbParams = None
     )
   }
