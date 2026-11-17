@@ -364,3 +364,108 @@ endmodule
 """)
   println(s"ZHUJIANG_AXI_GENERATED beat_bytes=$bytes out=$out")
 }
+
+// Instantiate the production local islands, including their native timestamp
+// queues. No alternate sideband model is used by this scoreboard.
+class ZhuJiangSidebandTest extends RawModule {
+  val core_clock = IO(Input(Clock()))
+  val shared_clock = IO(Input(Clock()))
+  val noc_clock = IO(Input(Clock()))
+  val reset = IO(Input(AsyncReset()))
+  val controls = IO(Input(UInt(3.W)))
+  val status = IO(Input(UInt(2.W)))
+  val time_in = IO(Input(ValidIO(UInt(64.W))))
+  val received_controls = IO(Output(UInt(3.W)))
+  val received_status = IO(Output(UInt(2.W)))
+  val time_out = IO(Output(ValidIO(UInt(64.W))))
+  val core_reset = IO(Output(Bool()))
+  val shared = Module(new ZhuJiangLocalSideband(3, 2, true))
+  val core = Module(new ZhuJiangLocalSideband(2, 3, false))
+  shared.io.fast_clock := shared_clock
+  core.io.fast_clock := core_clock
+  for (side <- Seq(shared, core)) {
+    side.io.noc_clock := noc_clock
+    side.io.cold_reset := reset
+  }
+  shared.io.fast_reset_req := false.B
+  core.io.fast_reset_req := core.io.fast_out(2)
+  shared.io.fast_in := controls
+  core.io.noc_in := shared.io.noc_out
+  core.io.fast_in := status
+  shared.io.noc_in := core.io.noc_out
+  shared.io.time_in := time_in
+  core.io.time_in := shared.io.time_out
+  time_out := core.io.time_out
+  received_controls := core.io.fast_out
+  received_status := shared.io.fast_out
+  core_reset := core.io.core_reset.asBool
+}
+
+object ZhuJiangSidebandTestMain extends App {
+  require(args.length == 1, "usage: ZhuJiangSidebandTestMain <output-dir>")
+  val out = os.Path(args(0), os.pwd)
+  Generator.execute(Array("--target", "systemverilog", "--split-verilog", "--target-dir", out.toString),
+    new ZhuJiangSidebandTest, Array("--disable-annotation-unknown"))
+  os.write.over(out / "tb.sv", """
+`timescale 1ns/1ps
+module ZhuJiangSidebandTestBench;
+  reg core_clock = 0, shared_clock = 0, noc_clock = 0, reset = 1;
+  reg [2:0] controls = 0;
+  reg [1:0] status = 0;
+  reg [31:0] ticks = 0;
+  wire time_in_valid = !reset;
+  wire [63:0] time_in_bits = {ticks ^ 32'h5a96c3e1, ticks};
+  wire [2:0] received_controls;
+  wire [1:0] received_status;
+  wire time_out_valid, core_reset;
+  wire [63:0] time_out_bits;
+  reg [31:0] previous = 0;
+  integer samples = 0, core_half = 10, noc_half = 50;
+  integer step;
+  ZhuJiangSidebandTest dut(.*);
+  initial begin
+    void'($value$plusargs("CORE_HALF=%d", core_half));
+    forever #(core_half) core_clock = ~core_clock;
+  end
+  initial begin
+    #7; forever #(core_half) shared_clock = ~shared_clock;
+  end
+  initial begin
+    void'($value$plusargs("NOC_HALF=%d", noc_half));
+    #3; forever #(noc_half) noc_clock = ~noc_clock;
+  end
+  always @(negedge shared_clock)
+    if (reset) ticks = 0; else ticks = ticks + 1;
+  always @(negedge core_clock) begin
+    if (reset) begin previous = 0; samples = 0; end
+    else if (time_out_valid) begin
+      if (time_out_bits[63:32] !== (time_out_bits[31:0] ^ 32'h5a96c3e1))
+        $fatal(1, "torn timestamp snapshot");
+      if (time_out_bits[31:0] < previous) $fatal(1, "timestamp moved backward");
+      previous = time_out_bits[31:0];
+      samples = samples + 1;
+    end
+  end
+  initial begin
+    #1701 reset = 0;
+    for (step = 0; step < 16; step = step + 1) begin
+      @(negedge shared_clock) controls = step[2:0];
+      @(negedge core_clock) status = ~step[1:0];
+      #20000;
+      if (received_controls !== controls || received_status !== status)
+        $fatal(1, "interrupt/status levels did not settle");
+      if (core_reset !== controls[2]) $fatal(1, "hart reset request/release failed");
+      if (step == 7) begin
+        #13 reset = 1;
+        #1703 reset = 0;
+      end
+    end
+    if (samples < 32) $fatal(1, "timestamp queue made no progress");
+    $display("ZHUJIANG_SIDEBAND_PASS core_half=%0d noc_half=%0d samples=%0d levels=16 cold_resets=2", core_half, noc_half, samples);
+    $finish;
+  end
+  initial begin #1000000; $fatal(1, "sideband scoreboard timeout"); end
+endmodule
+""")
+  println(s"ZHUJIANG_SIDEBAND_GENERATED out=$out")
+}

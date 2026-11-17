@@ -325,6 +325,10 @@ zhujiang-axi-test-rtl:
 	mill -i $(MILL_BUILD_ARGS) xiangshan.test.runMain top.ZhuJiangAxiTestMain 32 "$(abspath $(BUILD_DIR))/zhujiang-axi-test/32"
 	mill -i $(MILL_BUILD_ARGS) xiangshan.test.runMain top.ZhuJiangAxiTestMain 8 "$(abspath $(BUILD_DIR))/zhujiang-axi-test/8"
 
+.PHONY: zhujiang-sideband-test-rtl
+zhujiang-sideband-test-rtl:
+	mill -i $(MILL_BUILD_ARGS) xiangshan.test.runMain top.ZhuJiangSidebandTestMain "$(abspath $(BUILD_DIR))/zhujiang-sideband-test"
+
 $(TOP_V): $(SCALA_FILE)
 	mkdir -p $(@D)
 	$(TIME_CMD) mill -i $(MILL_BUILD_ARGS) xiangshan.runMain $(FPGATOP)   \
