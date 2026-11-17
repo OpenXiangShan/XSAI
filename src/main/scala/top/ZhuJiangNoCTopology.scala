@@ -25,7 +25,12 @@ object ZhuJiangNoCTopology {
   }
 
   def apply(numCores: Int, base: ZJParameters, cfgAxiDataBits: Int): ZJParameters = {
+    apply(numCores, base, cfgAxiDataBits, "sync")
+  }
+
+  def apply(numCores: Int, base: ZJParameters, cfgAxiDataBits: Int, ccSocket: String): ZJParameters = {
     require(Set(1, 2, 4).contains(numCores), "ZhuJiang system config currently supports one, two or four cores")
+    require(Set("sync", "async").contains(ccSocket), s"Unsupported ZhuJiang CC socket: $ccSocket")
     val nodes = numCores match {
       case 1 => singleCoreNodeParams
       case 2 => dualCoreNodeParams
@@ -33,10 +38,11 @@ object ZhuJiangNoCTopology {
       case 4 => dualCoreNodeParams ++ Seq.fill(2)(NodeParam(nodeType = NodeType.CC, socket = "sync"))
     }
     base.copy(
+      ciSuffix = base.ciSuffix + (if (ccSocket == "async") "_cc_async" else ""),
       nodeNidBits = 8,
       nodeAidBits = 3,
       cfgAxiDataBits = cfgAxiDataBits,
-      nodeParams = nodes,
+      nodeParams = nodes.map(node => if (node.nodeType == NodeType.CC) node.copy(socket = ccSocket) else node),
       tfbParams = None
     )
   }

@@ -191,7 +191,9 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
   }
 
   private val zhujiangNocConfig = Option.when(isZhuJiang)(
-    ZhuJiangNoCTopology(NumCores, soc.ZhuJiangParams, L3OuterBusWidth)
+    ZhuJiangNoCTopology(
+      NumCores, soc.ZhuJiangParams, L3OuterBusWidth, if (EnableZhuJiangAsyncBridge) "async" else "sync"
+    )
   )
   private val zhujiangCfgNodes = zhujiangNocConfig
     .map(_.island.filter(_.nodeType == xijiang.NodeType.HI))
@@ -206,9 +208,31 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
     ))
   ))))
 
-  zhujiangMemMaster.foreach { master =>
-    misc.soc_xbar.get := master
+  // Only the NoC changes clock. Keep MemMisc and the cores together so their
+  // timer, interrupt, debug and PMA connections retain their original domain.
+  private def connectZhuJiangMaster(
+    master: AXI4MasterNode, buffered: Boolean, name: String
+  ): Option[(AXI4AsyncCrossingSource, AXI4AsyncCrossingSink)] = {
+    val crossing = Option.when(EnableZhuJiangAsyncBridge) {
+      val source = LazyModule(new AXI4AsyncCrossingSource()).suggestName(s"${name}_source")
+      val sink = LazyModule(new AXI4AsyncCrossingSink(soc.ZhuJiangParams.asyncParams)).suggestName(s"${name}_sink")
+      source.node := master
+      sink.node := source.node
+      (source, sink)
+    }
+    crossing match {
+      case Some((_, sink)) =>
+        if (buffered) misc.soc_xbar.get := AXI4Buffer() := sink.node
+        else misc.soc_xbar.get := sink.node
+      case None =>
+        if (buffered) misc.soc_xbar.get := AXI4Buffer() := master
+        else misc.soc_xbar.get := master
+    }
+    crossing
   }
+  val zhujiangMemCrossing = zhujiangMemMaster.flatMap(
+    connectZhuJiangMaster(_, buffered = false, name = "zhujiang_mem_cdc")
+  )
 
   val zhujiangCfgMasters = zhujiangCfgNodes.zipWithIndex.map { case (node, i) =>
     val outstanding = node.axiDevParams.map(_.outstanding).getOrElse(8)
@@ -222,8 +246,8 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
     )))
   }
 
-  zhujiangCfgMasters.foreach { master =>
-    misc.soc_xbar.get := AXI4Buffer() := master
+  val zhujiangCfgCrossings = zhujiangCfgMasters.zipWithIndex.flatMap { case (master, i) =>
+    connectZhuJiangMaster(master, buffered = true, name = s"zhujiang_cfg_${i}_cdc")
   }
 
   class XSTopImp(wrapper: XSTop) extends LazyRawModuleImp(wrapper)
@@ -246,6 +270,8 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
         p(ExternalAcceleratorCDCKey).enable && p(MatAccKey) == MatAcc.CUTE
       )(Input(Clock()))
       val reset = Input(AsyncReset())
+      val noc_clock = Option.when(EnableZhuJiangAsyncBridge)(Input(Clock()))
+      val noc_reset = Option.when(EnableZhuJiangAsyncBridge)(Input(AsyncReset()))
       val sram_config = Input(UInt(16.W))
       val extIntrs = Input(UInt(NrExtIntr.W))
       val pll0_lock = Input(Bool())
@@ -282,10 +308,17 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
       })
     })
 
-    val reset_sync = withClockAndReset(io.clock, io.reset) { ResetGen() }
+    // A NoC reset invalidates live coherent traffic: reset the whole system,
+    // not one FIFO endpoint. Runtime per-domain reset is not supported.
+    val systemReset = io.noc_reset.map(r => (io.reset.asBool || r.asBool).asAsyncReset).getOrElse(io.reset)
+    val nocClock = io.noc_clock.getOrElse(io.clock)
+    val reset_sync = withClockAndReset(io.clock, systemReset) { ResetGen() }
+    val nocReset = if (EnableZhuJiangAsyncBridge) {
+      withClockAndReset(nocClock, systemReset) { ResetGen() }.asAsyncReset
+    } else systemReset
     val jtag_reset_sync = withClockAndReset(io.systemjtag.jtag.TCK, io.systemjtag.reset) { ResetGen() }
     val chi_openllc_opt = Option.when(isOpenLLC)(
-      withClockAndReset(io.clock, io.reset) {
+      withClockAndReset(io.clock, systemReset) {
         Module(new OpenLLC()(p.alter((site, here, up) => {
           case OpenLLCParamKey => soc.OpenLLCParamsOpt.get.copy(
             hartIds = tiles.map(_.HartId),
@@ -295,7 +328,7 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
       }
     )
     val zhujiangParams = p.alterPartial {
-      case ZJParametersKey => ZhuJiangNoCTopology(NumCores, soc.ZhuJiangParams, L3OuterBusWidth)
+      case ZJParametersKey => zhujiangNocConfig.getOrElse(soc.ZhuJiangParams)
       case ZJPerfBackendKey => XiangShanUtilityPerfBackend
       case HardwareAssertionKey => HwaParams(enable = false)
       case ZJLogUtilsOptionsKey => ZJLogUtilsOptions(
@@ -324,10 +357,16 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
       )
     }
     val zhujiang_opt = Option.when(isZhuJiang)(
-      withClockAndReset(io.clock, io.reset) {
+      withClockAndReset(nocClock, nocReset) {
         Module(new Zhujiang()(zhujiangParams))
       }
     )
+    (zhujiangMemCrossing.toSeq ++ zhujiangCfgCrossings).foreach { case (source, sink) =>
+      source.module.clock := nocClock
+      source.module.reset := nocReset
+      sink.module.clock := io.clock
+      sink.module.reset := reset_sync
+    }
 
     // override LazyRawModuleImp's clock and reset
     childClock := io.clock
@@ -347,19 +386,21 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
 
     val msiInfo = WireInit(0.U.asTypeOf(ValidIO(UInt(soc.IMSICParams.MSI_INFO_WIDTH.W))))
     // syscnt io input descrip
-    val ref_reset_sync = withClockAndReset(io.rtc_clock, io.reset) { ResetGen() }
+    val ref_reset_sync = withClockAndReset(io.rtc_clock, systemReset) { ResetGen() }
     misc.module.scntIO.update_en := false.B
     misc.module.scntIO.update_value := 0.U
     misc.module.scntIO.stop_en := false.B
     misc.module.rtc_clock := io.rtc_clock // syscnt clock
     misc.module.rtc_reset := ref_reset_sync.asAsyncReset
     misc.module.bus_clock := io.clock
-    misc.module.bus_reset := io.reset
+    misc.module.bus_reset := (if (EnableZhuJiangAsyncBridge) reset_sync else systemReset)
 
     val clintTime = WireInit(0.U.asTypeOf(ValidIO(UInt(64.W))))
     EnableClintAsyncBridge match {
       case Some(param) =>
-        val time_sink = withClockAndReset(core_with_l2.head.module.clock, core_with_l2.head.module.reset)(Module(new AsyncQueueSink(UInt(64.W), param)))
+        val timeClock = if (EnableZhuJiangAsyncBridge) io.clock else core_with_l2.head.module.clock
+        val timeReset = if (EnableZhuJiangAsyncBridge) reset_sync else core_with_l2.head.module.reset
+        val time_sink = withClockAndReset(timeClock, timeReset)(Module(new AsyncQueueSink(UInt(64.W), param)))
         time_sink.io.async <> misc.module.clintTime
         time_sink.io.deq.ready := true.B
         clintTime.valid := time_sink.io.deq.valid
@@ -396,7 +437,7 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
       core.module.io.reset_vector := io.riscv_rst_vec(i)
     }
 
-    withClockAndReset(io.clock, io.reset) {
+    withClockAndReset(io.clock, systemReset) {
       Option.when(usesLcreditCHI)(true.B).foreach { _ =>
         for ((core, i) <- core_with_l2.zipWithIndex) {
           val mmioLogger = CHILogger(s"L2[${i}]_MMIO", true)
@@ -442,7 +483,7 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
     }
 
     zhujiang_opt.foreach { zj =>
-      withClockAndReset(io.clock, io.reset) {
+      withClockAndReset(io.clock, if (EnableZhuJiangAsyncBridge) reset_sync else systemReset) {
         val zjp = zhujiangNocConfig.get
         val ccNodes = zjp.island.filter(_.nodeType == xijiang.NodeType.CC)
         require(ccNodes.size >= NumCores, s"ZhuJiang exposes ${ccNodes.size} CC nodes, but $NumCores cores are requested")
@@ -546,6 +587,8 @@ class XSTileDiffTop(implicit p: Parameters) extends XSTop {
   class XSTileDiffTopImp(wrapper: XSTop) extends XSTopImp(wrapper) with HasDiffTestInterfaces {
     override def cpuName: Option[String] = Some("XiangShan-KMHV2")
     override protected def implicitClock: Clock = io.clock
+    // Difftest's wrapper drives this input; the derived systemReset must not
+    // be returned here as a writable reset port. childReset uses systemReset.
     override protected def implicitReset: Reset = io.reset
     override def difftestMemIO: Option[DifftestMemIO] = Some(DifftestMemIO(memory))
   }
