@@ -46,7 +46,7 @@ import freechips.rocketchip.tilelink._
 import freechips.rocketchip.interrupts._
 import freechips.rocketchip.amba.axi4._
 import freechips.rocketchip.jtag.JTAGIO
-import freechips.rocketchip.util.{AsyncQueueParams, AsyncQueueSink}
+import freechips.rocketchip.util.{AsyncQueueParams, AsyncQueueSink, AsyncQueueSource, AsyncResetSynchronizerShiftReg}
 import chisel3.experimental.annotate
 import sifive.enterprise.firrtl.NestedPrefixModulesAnnotation
 
@@ -87,6 +87,65 @@ trait HasDTSImp[+L <: BaseXSSoc] { this: LazyRawModuleImp =>
   FileRegisters.add("graphml", dtsLM.graphML)
   FileRegisters.add("json", dtsLM.json)
   FileRegisters.add("plusArgs", freechips.rocketchip.util.PlusArgArtefacts.serialize_cHeader())
+}
+
+// A local integration island: only registered NoC-clock levels/snapshots leave
+// it. Native synchronizers and both halves of its timestamp FIFO stay local.
+class ZhuJiangLocalSideband(txWidth: Int, rxWidth: Int, timeFromFast: Boolean) extends RawModule {
+  val io = IO(new Bundle {
+    val fast_clock = Input(Clock())
+    val noc_clock = Input(Clock())
+    val cold_reset = Input(AsyncReset())
+    val fast_reset_req = Input(Bool())
+    val fast_reset = Output(AsyncReset())
+    val core_reset = Output(AsyncReset())
+    val fast_in = Input(UInt(txWidth.W))
+    val noc_out = Output(UInt(txWidth.W))
+    val noc_in = Input(UInt(rxWidth.W))
+    val fast_out = Output(UInt(rxWidth.W))
+    val time_in = Input(ValidIO(UInt(64.W)))
+    val time_out = Output(ValidIO(UInt(64.W)))
+  })
+  val fastReset = withClockAndReset(io.fast_clock, io.cold_reset) { ResetGen() }
+  val nocReset = withClockAndReset(io.noc_clock, io.cold_reset) { ResetGen() }
+  io.fast_reset := fastReset.asAsyncReset
+  io.core_reset := withClockAndReset(io.fast_clock,
+    (io.cold_reset.asBool || io.fast_reset_req).asAsyncReset) { ResetGen() }.asAsyncReset
+  io.noc_out := withClockAndReset(io.noc_clock, nocReset) {
+    AsyncResetSynchronizerShiftReg(io.fast_in, 3, 0)
+  }
+  // This register is the receiving end of the synchronous inter-FPGA link.
+  val nocReceived = withClockAndReset(io.noc_clock, nocReset) {
+    val received = RegInit(0.U(rxWidth.W))
+    received := io.noc_in
+    received
+  }
+  io.fast_out := withClockAndReset(io.fast_clock, fastReset) {
+    AsyncResetSynchronizerShiftReg(nocReceived, 3, 0)
+  }
+  val queueParams = AsyncQueueParams(depth = 8, sync = 3, safe = true)
+  val sourceClock = if (timeFromFast) io.fast_clock else io.noc_clock
+  val sourceReset = if (timeFromFast) fastReset else nocReset
+  val sinkClock = if (timeFromFast) io.noc_clock else io.fast_clock
+  val sinkReset = if (timeFromFast) nocReset else fastReset
+  val timeSource = withClockAndReset(sourceClock, sourceReset) {
+    Module(new AsyncQueueSource(UInt(64.W), queueParams))
+  }
+  val timeSink = withClockAndReset(sinkClock, sinkReset) {
+    Module(new AsyncQueueSink(UInt(64.W), queueParams))
+  }
+  timeSink.io.async <> timeSource.io.async
+  // ValidIO carries sampled time, not lossless events; accept snapshots when
+  // ready, exactly as the canonical XSNoCTop timestamp source does.
+  timeSource.io.enq.valid := io.time_in.valid
+  timeSource.io.enq.bits := io.time_in.bits
+  timeSink.io.deq.ready := true.B
+  io.time_out.valid := withClockAndReset(sinkClock, sinkReset) {
+    RegNext(timeSink.io.deq.valid, false.B)
+  }
+  io.time_out.bits := withClockAndReset(sinkClock, sinkReset) {
+    RegEnable(timeSink.io.deq.bits, 0.U(64.W), timeSink.io.deq.valid)
+  }
 }
 
 class XSTop()(implicit p: Parameters) extends BaseXSSoc()
@@ -149,12 +208,24 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
   val nmiIntNode = IntSourceNode(IntSourcePortSimple(1, NumCores, (new NonmaskableInterruptIO).elements.size))
   val nmi = InModuleBody(nmiIntNode.makeIOs())
 
+  val zhujiangSidebandIntNodes = Option.when(EnableZhuJiangAsyncBridge) {
+    tiles.map(_ => (IntAdapterNode(), IntAdapterNode(), IntAdapterNode(), IntAdapterNode()))
+  }
   for (i <- 0 until NumCores) {
-    core_with_l2(i).clint_int_node := misc.timer.intnode
-    core_with_l2(i).plic_int_node :*= misc.plic.intnode
-    core_with_l2(i).debug_int_node := misc.debugModule.debug.dmOuter.dmOuter.intnode
+    zhujiangSidebandIntNodes match {
+      case Some(nodes) =>
+        val (clint, plic, debug, beu) = nodes(i)
+        core_with_l2(i).clint_int_node := clint := misc.timer.intnode
+        core_with_l2(i).plic_int_node :*= plic :*= misc.plic.intnode
+        core_with_l2(i).debug_int_node := debug := misc.debugModule.debug.dmOuter.dmOuter.intnode
+        misc.plic.intnode := beu := core_with_l2(i).beu_int_source
+      case None =>
+        core_with_l2(i).clint_int_node := misc.timer.intnode
+        core_with_l2(i).plic_int_node :*= misc.plic.intnode
+        core_with_l2(i).debug_int_node := misc.debugModule.debug.dmOuter.dmOuter.intnode
+        misc.plic.intnode := IntBuffer() := core_with_l2(i).beu_int_source
+    }
     core_with_l2(i).nmi_int_node := nmiIntNode
-    misc.plic.intnode := IntBuffer() := core_with_l2(i).beu_int_source
     misc.SepTLXbarOpt.foreach { SepTLXbarOpt =>
       // SeperateBus can only be connected to DebugModule now in non-XSNoCTop environment
       println(s"SeparateDM: ${SeperateDM}")
@@ -409,6 +480,47 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
        clintTime := misc.module.clintTime
     }
 
+    val asyncCoreResets = Seq.fill(NumCores)(WireDefault(reset_sync.asAsyncReset))
+    val coreTimes = Seq.fill(NumCores)(Wire(ValidIO(UInt(64.W))))
+    coreTimes.foreach(_ := clintTime)
+    val observedHartReset = Wire(Vec(NumCores, Bool()))
+    observedHartReset := VecInit(core_with_l2.map(_.module.io.hartIsInReset))
+    val dmResetReqVec = misc.module.debug_module_io.resetCtrl.hartResetReq
+      .getOrElse(0.U.asTypeOf(Vec(NumCores, Bool())))
+    zhujiangSidebandIntNodes.foreach { nodes =>
+      nodes.zipWithIndex.foreach { case ((clint, plic, debug, beu), i) =>
+        val incoming = Seq(clint, plic, debug)
+        val toCore = incoming.flatMap(_.in.flatMap(_._1.toSeq))
+        val corePorts = incoming.flatMap(_.out.flatMap(_._1.toSeq))
+        val fromCore = beu.in.flatMap(_._1.toSeq)
+        val sharedPorts = beu.out.flatMap(_._1.toSeq)
+        require(toCore.size == corePorts.size && fromCore.size == sharedPorts.size)
+        val shared = Module(new ZhuJiangLocalSideband(toCore.size + 1, fromCore.size + 1, true))
+          .suggestName(s"zhujiang_shared_sideband_$i")
+        val local = Module(new ZhuJiangLocalSideband(fromCore.size + 1, toCore.size + 1, false))
+          .suggestName(s"zhujiang_core_sideband_$i")
+        for (side <- Seq(shared, local)) {
+          side.io.fast_clock := io.clock
+          side.io.noc_clock := nocClock
+          side.io.cold_reset := systemReset
+        }
+        shared.io.fast_reset_req := false.B
+        local.io.fast_reset_req := local.io.fast_out(toCore.size)
+        shared.io.fast_in := VecInit(toCore :+ dmResetReqVec(i)).asUInt
+        local.io.noc_in := shared.io.noc_out
+        corePorts.zipWithIndex.foreach { case (port, bit) => port := local.io.fast_out(bit) }
+        local.io.fast_in := VecInit(fromCore :+ core_with_l2(i).module.io.hartIsInReset).asUInt
+        shared.io.noc_in := local.io.noc_out
+        sharedPorts.zipWithIndex.foreach { case (port, bit) => port := shared.io.fast_out(bit) }
+        observedHartReset(i) := shared.io.fast_out(fromCore.size)
+        // Start from the existing RTC CDC's fast-domain snapshot.
+        shared.io.time_in := clintTime
+        local.io.time_in := shared.io.time_out
+        coreTimes(i) := local.io.time_out
+        asyncCoreResets(i) := local.io.core_reset
+      }
+    }
+
     for ((core, i) <- core_with_l2.zipWithIndex) {
       core.module.io.acceleratorClock.zip(io.acceleratorClock).foreach { case (tileClock, topClock) =>
         tileClock := topClock
@@ -416,7 +528,7 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
       core.module.io.hartId := i.U
       core.module.io.msiInfo := msiInfo
       core.module.io.teemsiInfo.foreach(_ := msiInfo)
-      core.module.io.clintTime := clintTime
+      core.module.io.clintTime := coreTimes(i)
       io.riscv_halt(i) := core.module.io.cpu_halt
       io.riscv_critical_error(i) := core.module.io.cpu_crtical_error
       // trace Interface
@@ -545,7 +657,7 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
       }
     }
 
-    misc.module.debug_module_io.resetCtrl.hartIsInReset := core_with_l2.map(_.module.io.hartIsInReset)
+    misc.module.debug_module_io.resetCtrl.hartIsInReset := observedHartReset
     misc.module.debug_module_io.clock := io.clock
     misc.module.debug_module_io.reset := reset_sync
 
@@ -568,10 +680,11 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
       val resetChain = Seq(Seq(misc.module))
       ResetGen(resetChain, reset_sync, !debugOpts.ResetGen)
       // Ensure that cores could be reset when DM disable `hartReset`.
-      val dmResetReqVec = misc.module.debug_module_io.resetCtrl.hartResetReq.getOrElse(0.U.asTypeOf(Vec(core_with_l2.map(_.module).length, Bool())))
       val syncResetCores = misc.module.reset.asBool
-      (core_with_l2.map(_.module)).zip(dmResetReqVec).map { case(core, dmResetReq) =>
-        ResetGen(Seq(Seq(core)), (syncResetCores || dmResetReq).asAsyncReset, !debugOpts.ResetGen)
+      core_with_l2.zip(dmResetReqVec).zipWithIndex.foreach { case ((tile, dmResetReq), i) =>
+        // Hart warm reset is a staged request, not a FIFO/socket flush.
+        val selectedReq = if (EnableZhuJiangAsyncBridge) asyncCoreResets(i).asBool else dmResetReq
+        ResetGen(Seq(Seq(tile.module)), (syncResetCores || selectedReq).asAsyncReset, !debugOpts.ResetGen)
       }
     }
 
