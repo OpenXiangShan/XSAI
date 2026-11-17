@@ -494,7 +494,12 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
 
     core_with_l2.zipWithIndex.foreach { case (tile, i) =>
       tile.module.io.nodeID.foreach { case nodeID =>
-        nodeID := i.U
+        val chiNodeID = if (isZhuJiang) {
+          zhujiangNocConfig.get.island.filter(_.nodeType == xijiang.NodeType.CC)(i).nodeId
+        } else {
+          i
+        }
+        nodeID := chiNodeID.U
         dontTouch(nodeID)
       }
     }
