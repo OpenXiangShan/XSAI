@@ -62,4 +62,27 @@ class ZhuJiangTopologySpec extends AnyFlatSpec with Matchers {
       }
     }
   }
+
+  for (cores <- Seq(1, 2, 4)) {
+    it should s"change only the $cores CC sockets and cache suffix in async mode" in {
+      val base = ZJParameters().copy(ciSuffix = s"_async_topology_$cores")
+      val sync = ZhuJiangNoCTopology(cores, base, 256)
+      val async = ZhuJiangNoCTopology(cores, base, 256, "async")
+      async.island.filter(_.nodeType == NodeType.CC).map(_.socket) shouldBe Seq.fill(cores)("async")
+      async.island.map(_.nodeId) shouldBe sync.island.map(_.nodeId)
+      async.nodeParams.filterNot(_.nodeType == NodeType.CC) shouldBe
+        sync.nodeParams.filterNot(_.nodeType == NodeType.CC)
+      async.ciSuffix shouldBe sync.ciSuffix + "_cc_async"
+      async.cfgAxiDataBits shouldBe 256
+      async.cacheSizeInB shouldBe base.cacheSizeInB
+    }
+  }
+
+  it should "reject socket modes outside the native sync and async integration" in {
+    for (socket <- Seq("", "c2c", "invalid")) {
+      an[IllegalArgumentException] should be thrownBy {
+        ZhuJiangNoCTopology(2, ZJParameters(), 256, socket)
+      }
+    }
+  }
 }

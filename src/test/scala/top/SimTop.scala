@@ -71,6 +71,12 @@ class XiangShanSim(implicit p: Parameters) extends Module with HasDiffTestInterf
     socClock := simClock
   }
   soc.io.reset := (reset.asBool || soc.io.debug_reset).asAsyncReset
+  soc.io.noc_clock.foreach { nocClock =>
+    val divider = RegInit(0.U(2.W))
+    divider := divider + 1.U
+    nocClock := divider(1).asClock
+  }
+  soc.io.noc_reset.foreach(_ := (reset.asBool || soc.io.debug_reset).asAsyncReset)
   soc.io.extIntrs := simMMIO.io.interrupt.intrVec
   soc.io.sram_config := 0.U
   soc.io.pll0_lock := true.B

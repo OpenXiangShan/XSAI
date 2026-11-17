@@ -88,6 +88,7 @@ case class SoCParameters
   LLC: LLCType.Value = LLCType.OpenLLC,
   OpenLLCParamsOpt: Option[OpenLLCParam] = None,
   ZhuJiangParams: ZJParameters = ZJParameters(),
+  EnableZhuJiangAsyncBridge: Boolean = false,
   XSTopPrefix: Option[String] = None,
   NodeIDWidthList: Map[String, Int] = Map(
     "B" -> 7,
@@ -154,6 +155,11 @@ trait HasSoCParameter {
   val isZhuJiang = soc.LLC == LLCType.ZhuJiang
   val isNoLLC = soc.LLC == LLCType.NoLLC
   val usesLcreditCHI = isOpenLLC || isNoLLC
+  val EnableZhuJiangAsyncBridge = soc.EnableZhuJiangAsyncBridge
+  require(
+    !EnableZhuJiangAsyncBridge || (isZhuJiang && !soc.UseXSNoCTop && !soc.UseXSNoCDiffTop),
+    "EnableZhuJiangAsyncBridge requires LLC=ZhuJiang with XSTop"
+  )
 
   if (isZhuJiang) {
     require(issue == xscache.chi.Issue.Eb, "LLC=ZhuJiang only supports CHI issue E.b or newer")
