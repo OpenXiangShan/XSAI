@@ -537,6 +537,8 @@ package object xiangshan {
     def msbt  = "b1_0_0010_1_00".U
     def msc   = "b1_0_0100_0_00".U
     def msct  = "b1_0_0100_1_00".U
+    def msaWhole = "b1_0_1001_0_00".U
+    def msbWhole = "b1_0_1010_0_00".U
     def mscWhole = "b1_0_1100_0_00".U
   }
 

@@ -239,7 +239,7 @@ class MMUMonitorStateMachine(
   val timer = RegInit(0.U(32.W))
   timer := timer + 1.U
 
-  // 16-bit LFSRs for pseudo-random number generation, one per AML/MMU port (seeded for different streams)
+  // 16-bit LFSRs for pseudo-random number generation, one per trLoader0/MMU port (seeded for different streams)
   val randLFSRs = Seq.tabulate(8) { i =>
     val seed = ((i + 1) * 17) & 0xFFFF // Just some simple, spread-out seeds
     RegInit(seed.U(16.W))
@@ -265,7 +265,7 @@ class MMUMonitorStateMachine(
     val data = UInt(512.W)
   }
 
-  // T7: 为每个通道创建独立的响应状态
+  // T7: Maintain independent response state for each channel.
   class ChannelResponseState extends Bundle {
     val valid = Bool()
     val message = UInt(3.W)
@@ -280,18 +280,18 @@ class MMUMonitorStateMachine(
   val pendingBits = log2Ceil(pendingSize)
   val state = RegInit(MMUState.sIdle)
 
-  // T7: 为通道 0 保留原有的队列逻辑（B/C 通道）
+  // T7: Retain the original response queue for channel 0.
   val pendingResponses = Reg(Vec(pendingSize, new PendingResponse))
   val pendingHead = RegInit(0.U(pendingBits.W))
   val pendingTail = RegInit(0.U(pendingBits.W))
   val pendingCount = RegInit(0.U((pendingBits + 1).W))
   val beatCount = RegInit(0.U(4.W))
 
-  // T7: 为 AML 通道（1-7）创建简单的延迟响应状态
-  val amlResponseStates = Reg(Vec(8, new ChannelResponseState))
-  val amlReqData = Reg(Vec(8, UInt(512.W)))
-  val amlReqAddr = Reg(Vec(8, UInt(64.W)))
-  val amlReqSourceID = Reg(Vec(8, UInt(32.W)))
+  // T7: Use simple delayed-response state for channels 1 through 7.
+  val trLoader0ResponseStates = Reg(Vec(8, new ChannelResponseState))
+  val trLoader0ReqData = Reg(Vec(8, UInt(512.W)))
+  val trLoader0ReqAddr = Reg(Vec(8, UInt(64.W)))
+  val trLoader0ReqSourceID = Reg(Vec(8, UInt(32.W)))
 
   // Queue operation helper functions
   def enqueuePendingResponse(
@@ -310,7 +310,7 @@ class MMUMonitorStateMachine(
     pendingResponses(tailPtr).dueTime := dueTime
     pendingResponses(tailPtr).size := size
     pendingResponses(tailPtr).beatCounter := beatCounter
-    pendingResponses(tailPtr).data := memResp.data  // T7: 使用对应通道的数据
+    pendingResponses(tailPtr).data := memResp.data  // T7: Use the data returned on this channel.
     pendingResponses(tailPtr).totalBeats := totalBeats
   }
 
@@ -396,7 +396,7 @@ class MMUMonitorStateMachine(
       }
 
       is(MMUState.sMonitoring) {
-        // T7: 每个 MMUSM 只负责一个特定的通道
+        // T7: Each MMUSM handles exactly one channel.
         tl.a.ready := (pendingCount < (pendingSize - 8).U)
         val last = edge.last(tl.a)
         val countInc = WireInit(0.U(4.W))
@@ -475,7 +475,7 @@ class MMUMonitorStateMachine(
         when(pendingCount > 0.U) {
           val resp = dequeuePendingResponse()
 
-          // T7: 调试 - 打印 pendingCount 和 resp.sourceID
+          // T7: Log pendingCount and resp.sourceID.
           printf(cf"[TestHarness $timer] Ch[$channel] pendingCount=$pendingCount, pendingHead=$pendingHead, resp{sourceID=${resp.sourceID}, message=${resp.message}, due=${resp.dueTime}}, matrix_data_ready ${matrixDataIn.ready}, tl_d_ready ${tl.d.ready}\n")
 
           def bindResponse(dest: DecoupledIO[TLBundleD]): Unit = {
@@ -626,7 +626,7 @@ class CuteTestHarness(implicit p: Parameters) extends Module {
   
   // Update all state machines
   configSM.update(cycle_cnt)
-  mmuSMs.foreach(_.update(cycle_cnt))  // T7: 更新所有 8 个 MMUSM
+  mmuSMs.foreach(_.update(cycle_cnt))  // T7: Update all eight MMUSMs.
   observeSM.update(cycle_cnt)
 
   // Main control state machine
