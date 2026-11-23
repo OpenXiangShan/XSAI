@@ -158,6 +158,17 @@ endif
 # LLC backend selection
 COMMON_EXTRA_ARGS += --llc $(LLC)
 
+# Native Zhujiang sockets; independent of OpenLLC's CHI async bridge.
+ZHUJIANG_ASYNC ?= 0
+ifeq ($(ZHUJIANG_ASYNC),1)
+ifneq ($(LLC),ZhuJiang)
+$(error ZHUJIANG_ASYNC=1 requires LLC=ZhuJiang)
+endif
+COMMON_EXTRA_ARGS += --zhujiang-async
+else ifneq ($(ZHUJIANG_ASYNC),0)
+$(error ZHUJIANG_ASYNC must be 0 or 1)
+endif
+
 # L2 cache size in KB
 ifneq ($(L2_CACHE_SIZE),)
 COMMON_EXTRA_ARGS += --l2-cache-size $(L2_CACHE_SIZE)
@@ -301,6 +312,22 @@ test-jar: $(call docker-deps,$(JAR))
 comp:
 	mill -i xiangshan.compile
 	mill -i xiangshan.test.compile
+
+# Generate focused native socket/bridge scoreboards without elaborating cores.
+# Run the emitted tb.sv with a timing-capable simulator on a monitored host.
+.PHONY: zhujiang-async-test-rtl
+zhujiang-async-test-rtl:
+	mill -i $(MILL_BUILD_ARGS) xiangshan.test.runMain top.ZhuJiangAsyncTestMain sync "$(abspath $(BUILD_DIR))/zhujiang-socket-test/sync"
+	mill -i $(MILL_BUILD_ARGS) xiangshan.test.runMain top.ZhuJiangAsyncTestMain async "$(abspath $(BUILD_DIR))/zhujiang-socket-test/async"
+
+.PHONY: zhujiang-axi-test-rtl
+zhujiang-axi-test-rtl:
+	mill -i $(MILL_BUILD_ARGS) xiangshan.test.runMain top.ZhuJiangAxiTestMain 32 "$(abspath $(BUILD_DIR))/zhujiang-axi-test/32"
+	mill -i $(MILL_BUILD_ARGS) xiangshan.test.runMain top.ZhuJiangAxiTestMain 8 "$(abspath $(BUILD_DIR))/zhujiang-axi-test/8"
+
+.PHONY: zhujiang-sideband-test-rtl
+zhujiang-sideband-test-rtl:
+	mill -i $(MILL_BUILD_ARGS) xiangshan.test.runMain top.ZhuJiangSidebandTestMain "$(abspath $(BUILD_DIR))/zhujiang-sideband-test"
 
 $(TOP_V): $(SCALA_FILE)
 	mkdir -p $(@D)

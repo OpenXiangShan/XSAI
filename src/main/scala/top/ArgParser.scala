@@ -38,6 +38,7 @@ object ArgParser {
       |--version                  print version info
       |--config <ConfigClassName>
       |--llc <OpenLLC|ZhuJiang|NoLLC>
+      |--zhujiang-async           use native asynchronous ZhuJiang CC sockets
       |--num-cores <Int>
       |--hartidbits <Int>
       |--with-dramsim3
@@ -88,6 +89,10 @@ object ArgParser {
           }), tail)
         case "--llc" :: llcString :: tail =>
           nextOption(config.alter(LLCConfig(llcString)), tail)
+        case "--zhujiang-async" :: tail =>
+          nextOption(config.alter((site, here, up) => {
+            case SoCParamsKey => up(SoCParamsKey).copy(EnableZhuJiangAsyncBridge = true)
+          }), tail)
         case "--num-cores" :: value :: tail =>
           nextOption(config.alter((site, here, up) => {
             case XSTileKey => (0 until value.toInt) map { i =>
