@@ -100,6 +100,8 @@ object MatrixDecoder extends DecodeConstants {
     MLA_WHOLE -> MLS(MldstOpType.mlaWhole),
     MLB_WHOLE -> MLS(MldstOpType.mlbWhole),
     MLC_WHOLE -> MLS(MldstOpType.mlcWhole),
+    MSA_WHOLE -> MLS(MldstOpType.msaWhole),
+    MSB_WHOLE -> MLS(MldstOpType.msbWhole),
     MSC_WHOLE -> MLS(MldstOpType.mscWhole),
   )
 

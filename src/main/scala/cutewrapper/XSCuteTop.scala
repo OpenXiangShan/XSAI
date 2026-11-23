@@ -18,12 +18,12 @@ import xscache.coupledL2.prefetch.MatrixPrefetchTagKey
  * facilitating their use for independent unit testing.
  */
 
-// Import CUTEImplParameters to access ABMatrixRegNBanks
+// Import CUTEImplParameters to access TrMatrixRegNBanks
 trait XSCuteParameters extends CUTEImplParameters
 
 class XSCuteTopImpl(wrapper: XSCuteTop) extends LazyModuleImp(wrapper) {
   val cute = Module(new CUTEV2Top)
-  val nBanks = wrapper.cuteParams.ABMatrixRegNBanks
+  val nBanks = wrapper.cuteParams.TrMatrixRegNBanks
   val io = IO(new CUTETopIO {
     val matrix_data_in = Vec(nBanks, Flipped(Decoupled(chiselTypeOf(wrapper.cute_tl.module.io.matrix_data_in(0).bits))))
   })
@@ -148,7 +148,7 @@ class XSCuteTop(implicit p: Parameters) extends LazyModule with XSCuteParameters
 
 class XSCuteIO(implicit p: Parameters) extends CuteBundle {
   val cute = new CUTETopIO
-  val matrix_data_in = Flipped(Vec(ABMatrixRegNBanks, Decoupled(new MatrixDataBundle())))
+  val matrix_data_in = Flipped(Vec(TrMatrixRegNBanks, Decoupled(new MatrixDataBundle())))
   val hartId = Input(UInt(8.W))
   val difftestClock = Option.when(EnableDifftest && DifftestAsyncClockName.nonEmpty)(Input(Clock()))
   val difftestReset = Option.when(EnableDifftest && DifftestAsyncClockName.nonEmpty)(Input(Bool()))
@@ -187,7 +187,7 @@ class XSCuteImp(wrapper: XSCute)(implicit p: Parameters) extends LazyModuleImp(w
     logm.io.m.bits.data := matrix_data_ch0.bits.data
 
     // Connect 8-channel matrix_data_in (currently only channel 0 is used in CUTE2TLImp)
-    for (i <- 0 until ABMatrixRegNBanks) {
+    for (i <- 0 until TrMatrixRegNBanks) {
       val matrix_data_in = wrapper.cute_tl.module.io.matrix_data_in(i)
       matrix_data_in.valid := io.matrix_data_in(i).valid
       matrix_data_in.bits.source := io.matrix_data_in(i).bits.sourceId
@@ -202,10 +202,12 @@ class XSCuteImp(wrapper: XSCute)(implicit p: Parameters) extends LazyModuleImp(w
       BigInt(wrapper.cuteParams.ReduceWidthByte)
     )
 
-    val matrixStoreDiffLaneCount = CStoreDiffTestLaneCount
+    // Requests and acknowledgements may use any physical L2 channel,
+    // independently of each loader's logical request quota.
+    val matrixStoreDiffLaneCount = TrMatrixRegNBanks
     require(
-      matrixStoreDiffLaneCount >= 1 && matrixStoreDiffLaneCount <= ABMatrixRegNBanks,
-      s"CUTE matrix-store DiffTest lane count ($matrixStoreDiffLaneCount) must be within [1, $ABMatrixRegNBanks]"
+      matrixStoreDiffLaneCount >= 1 && matrixStoreDiffLaneCount <= TrMatrixRegNBanks,
+      s"CUTE matrix-store DiffTest lane count ($matrixStoreDiffLaneCount) must be within [1, $TrMatrixRegNBanks]"
     )
 
     val mmu = wrapper.cute_tl.module.io.mmu
@@ -243,9 +245,9 @@ class XSCuteImp(wrapper: XSCute)(implicit p: Parameters) extends LazyModuleImp(w
 
 class XSCute(implicit p: Parameters) extends LazyModule with XSCuteParameters {
   val cute_tl = LazyModule(new Cute2TL)
-  val node = List.fill(ABMatrixRegNBanks)(TLAdapterNode())
+  val node = List.fill(TrMatrixRegNBanks)(TLAdapterNode())
 
-  for (i <- 0 until ABMatrixRegNBanks) {
+  for (i <- 0 until TrMatrixRegNBanks) {
     node(i) :=* TLWidthWidget(64) := CuteDebugAdapter(s"near_cute_channel$i") := cute_tl.node(i)
   }
 
