@@ -867,8 +867,8 @@ class StoreQueue(implicit p: Parameters) extends XSModule
     }
     is(s_resp) {
       when(io.uncache.resp.fire && !io.uncache.resp.bits.nc) {
+        noPending := true.B
         when (!mmioIsCboZero) {
-          noPending := true.B
           mmioState := s_wb
         }.otherwise {
           cboZeroOffset := cboZeroOffset + 1.U
@@ -1018,6 +1018,7 @@ class StoreQueue(implicit p: Parameters) extends XSModule
     io.uncache.req.valid := false.B
 
     when (io.cmoOpReq.fire) {
+      pending(deqPtr) := false.B
       noPending := false.B
       mmioState := s_resp
     }
@@ -1494,11 +1495,7 @@ class StoreQueue(implicit p: Parameters) extends XSModule
   // misprediction recovery / exception redirect
   // invalidate sq term using robIdx
   for (i <- 0 until StoreQueueSize) {
-    needCancel(i) := allocated(i) && !committed(i) && Mux(
-        vecExceptionFlag.valid,
-        isAfter(uop(i).robIdx, io.brqRedirect.bits.robIdx) && io.brqRedirect.valid,
-        uop(i).robIdx.needFlush(io.brqRedirect)
-      )
+    needCancel(i) := allocated(i) && !committed(i) && uop(i).robIdx.needFlush(io.brqRedirect)
     when (needCancel(i)) {
       allocated(i) := false.B
       completed(i) := false.B

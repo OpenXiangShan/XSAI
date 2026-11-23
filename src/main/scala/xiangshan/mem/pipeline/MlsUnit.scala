@@ -40,6 +40,7 @@ class MlsToMlsqReplayIO(implicit p: Parameters) extends XSBundle
   // tlb hint
   val tlb_id          = UInt(log2Up(loadfiltersize).W)
   val tlb_full        = Bool()
+  val tlb_wait_rob    = Bool()
 
   def tlb_miss = cause(MlsReplayCauses.C_TM)
   def need_rep      = cause.asUInt.orR
@@ -483,6 +484,7 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   s2_out.rep_info.debug           := s2_in.uop.debugInfo
   s2_out.rep_info.tlb_id          := io.tlb_hint.id
   s2_out.rep_info.tlb_full        := io.tlb_hint.full
+  s2_out.rep_info.tlb_wait_rob    := io.tlb_hint.tlbWaitRob
 
   // to be removed
   val s2_need_fb = !s2_in.isLoadReplay &&      // already feedbacked

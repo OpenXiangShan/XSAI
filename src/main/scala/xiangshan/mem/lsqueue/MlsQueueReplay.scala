@@ -9,6 +9,7 @@ import xiangshan._
 import xiangshan.backend.BackendParams
 import xiangshan.backend.Bundles.DynInst
 import xiangshan.backend.fu.FuConfig.MlsCfg
+import xiangshan.backend.rob.RobPtr
 import xiangshan.cache._
 import xiangshan.cache.mmu._
 import xiangshan.mem.Bundles.{MlsqWriteBundle, MlsPipelineBundle}
@@ -74,6 +75,7 @@ class MlsQueueReplay(implicit p: Parameters) extends XSModule
     val mlsqFull = Output(Bool())
     val mlsWbPtr = Input(new MlsqPtr)
     val tlb_hint = Flipped(new TlbHintIO)
+    val robDeqPtr = Input(new RobPtr)
     val tlbReplayDelayCycleCtrl = Vec(4, Input(UInt(ReSelectLen.W)))
   })
 
@@ -103,6 +105,7 @@ class MlsQueueReplay(implicit p: Parameters) extends XSModule
   val debug_vaddr = RegInit(VecInit(List.fill(MlsQueueReplaySize)(0.U(VAddrBits.W))))
   val cause = RegInit(VecInit(List.fill(MlsQueueReplaySize)(0.U(MlsReplayCauses.allCauses.W))))
   val blocking = RegInit(VecInit(List.fill(MlsQueueReplaySize)(false.B)))
+  val tlbWaitRob = RegInit(VecInit(List.fill(MlsQueueReplaySize)(false.B)))
   
   // freeliset: store valid entries index.
   // +---+---+--------------+-----+-----+
@@ -179,9 +182,12 @@ class MlsQueueReplay(implicit p: Parameters) extends XSModule
   (0 until MlsQueueReplaySize).map(i => {
     // case C_TM
     when (cause(i)(MlsReplayCauses.C_TM)) {
-      blocking(i) := Mux(io.tlb_hint.resp.valid &&
-                     (io.tlb_hint.resp.bits.replay_all ||
-                     io.tlb_hint.resp.bits.id === tlbHintId(i)), false.B, blocking(i))
+      val robNotBlock = !isAfter(uop(i).robIdx, io.robDeqPtr)
+      val hintWakeup = io.tlb_hint.resp.valid &&
+        (io.tlb_hint.resp.bits.replay_all || io.tlb_hint.resp.bits.id === tlbHintId(i))
+      when (Mux(tlbWaitRob(i), robNotBlock, hintWakeup)) {
+        blocking(i) := false.B
+      }
     }
   })
 
@@ -466,6 +472,7 @@ class MlsQueueReplay(implicit p: Parameters) extends XSModule
        */
       // set flags
       val replayInfo = enq.bits.rep_info
+      tlbWaitRob(enqIndex) := replayInfo.tlb_wait_rob
       val dataInLastBeat = replayInfo.last_beat
       cause(enqIndex) := replayInfo.cause.asUInt
 
@@ -475,7 +482,7 @@ class MlsQueueReplay(implicit p: Parameters) extends XSModule
 
       // special case: tlb miss
       when (replayInfo.cause(MlsReplayCauses.C_TM)) {
-        blocking(enqIndex) := !replayInfo.tlb_full &&
+        blocking(enqIndex) := replayInfo.tlb_wait_rob || !replayInfo.tlb_full &&
           !(io.tlb_hint.resp.valid && (io.tlb_hint.resp.bits.id === replayInfo.tlb_id || io.tlb_hint.resp.bits.replay_all))
         tlbHintId(enqIndex) := replayInfo.tlb_id
       }

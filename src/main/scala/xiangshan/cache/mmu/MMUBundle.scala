@@ -652,6 +652,7 @@ class TlbPtwIOwithMemIdx(Width: Int = 1)(implicit p: Parameters) extends TlbBund
 class TlbHintReq(implicit p: Parameters) extends TlbBundle {
   val id = Output(UInt(log2Up(loadfiltersize).W))
   val full = Output(Bool())
+  val tlbWaitRob = Output(Bool())
 }
 
 class TLBHintResp(implicit p: Parameters) extends TlbBundle {
@@ -705,6 +706,7 @@ class TlbIO(Width: Int, nRespDups: Int = 1, q: TLBParameters)(implicit p: Parame
   val pmp = Vec(Width, ValidIO(new PMPReqBundle(q.lgMaxSize)))
   val pmpMode = Vec(Width, Output(UInt(2.W)))
   val tlbreplay = Vec(Width, Output(Bool()))
+  val tlbreplayWaitRob = Vec(Width, Output(Bool()))
   val robPendingPtr = Input(new RobPtr)
 }
 
@@ -1377,7 +1379,7 @@ class PtwRespS2(implicit p: Parameters) extends PtwBundle {
   def hit(vpn: UInt, asid: UInt, vasid: UInt, vmid: UInt, allType: Boolean = false, ignoreAsid: Boolean = false): Bool = {
     val noS2_hit = s1.hit(vpn, asid, vmid, allType, ignoreAsid)
     val onlyS2_hit = s2.hit(vpn, vmid)
-    // allstage and onlys1 hit
+    // allstage hit
     val s1vpn = Cat(s1.entry.tag, s1.addr_low)
     val level = Mux(this.s2xlate === onlyStage1,
                   s1.entry.level.getOrElse(0.U),
@@ -1413,9 +1415,12 @@ class PtwRespS2(implicit p: Parameters) extends PtwBundle {
     val vpn_hit = level_match
     val vmid_hit = s1.entry.vmid.getOrElse(0.U) === vmid
     val vasid_hit = if (ignoreAsid) true.B else (s1.entry.asid === vasid || s1.entry.perm.get.g)
-    val all_onlyS1_hit = vpn_hit && vmid_hit && vasid_hit
+    val all_hit = vpn_hit && vmid_hit && vasid_hit
+    // Stage-1-only responses can cover multiple pages in a compressed sector.
+    val onlyS1_hit = s1.hit(vpn, vasid, vmid, allType, ignoreAsid) && vmid_hit
     Mux(this.s2xlate === noS2xlate, noS2_hit,
-      Mux(this.s2xlate === onlyStage2, onlyS2_hit, all_onlyS1_hit))
+      Mux(this.s2xlate === onlyStage1, onlyS1_hit,
+        Mux(this.s2xlate === onlyStage2, onlyS2_hit, all_hit)))
   }
 }
 
