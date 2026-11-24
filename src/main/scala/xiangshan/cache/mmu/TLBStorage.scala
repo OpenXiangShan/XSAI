@@ -166,7 +166,7 @@ class TLBFA(
     }
 
     access.sets := get_set_idx(vpn_reg(vpn_reg.getWidth - 1, sectortlbwidth), nSets) // no use
-    access.touch_ways.valid := resp.valid && Cat(hitVecReg).orR
+    access.touch_ways.valid := resp.valid && resp.bits.hit
     access.touch_ways.bits := OHToUInt(hitVecReg)
 
     resp.bits.hit.suggestName("hit")
