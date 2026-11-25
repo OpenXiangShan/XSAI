@@ -147,7 +147,7 @@ jobs:
         id: save
         run: |
           mkdir -p "${EMU_HOME}"
-          cp -L "${GITHUB_WORKSPACE}/build/emu" "${EMU_HOME}/emu"
+          cp -L "${GITHUB_WORKSPACE}/build/emu" "${GITHUB_WORKSPACE}/build/difftest-mma-worker" "${EMU_HOME}/"
           if [[ $(hostname) == *.bosccluster.com ]]; then
             echo "cluster=node" >> "$GITHUB_OUTPUT"
           else
@@ -226,7 +226,7 @@ jobs:
       - name: Get artifact
         run: |
           mkdir -p build
-          cp -L "${EMU_HOME}/emu" "${GITHUB_WORKSPACE}/build/emu"
+          cp -L "${EMU_HOME}/emu" "${EMU_HOME}/difftest-mma-worker" "${GITHUB_WORKSPACE}/build/"
       - name: Run Basic Test - ${{ matrix.name }}
         id: run
         shell: bash
