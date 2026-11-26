@@ -570,6 +570,68 @@ class DefaultMatrixConfig(n: Int = 1) extends Config(
   })
 )
 
+/** Opt-in 2TOPS compute array with the DefaultMatrix CPU, caches and matrix-register geometry. */
+class DefaultMatrix2TopsConfig(n: Int = 1) extends Config(
+  new DefaultMatrixConfig(n).alter((site, here, up) => {
+    case CuteParamsKey =>
+      up(CuteParamsKey).copy(Matrix_MN = CuteParams.CUTE_2Tops.Matrix_MN)
+  })
+)
+
+/** Short name for the existing DefaultMatrix 2TOPS configuration. */
+class DefaultMatrix2TConfig(n: Int = 1) extends DefaultMatrix2TopsConfig(n)
+
+/** Explicit experimental MX opt-in; reuse the existing 2T CPU/cache/array geometry. */
+class DefaultMatrix2TMxfpConfig(n: Int = 1) extends Config(
+  new DefaultMatrix2TopsConfig(n).alter((site, here, up) => {
+    case XSTileKey => up(XSTileKey).map { p =>
+      p.copy(MatrixExtension = p.MatrixExtension.copy(
+        enableMxfp4Fp32 = true,
+        enableMxfp8Fp32 = true,
+      ))
+    }
+  })
+)
+
+/** Experimental vector FP4 encoder; preserve the R14 MN128 CPU/cache/2T geometry. */
+class DefaultMatrix2TMxfpVectorEncodeConfig(n: Int = 1) extends Config(
+  new DefaultMatrix2TMxfpConfig(n).alter((site, here, up) => {
+    case XSTileKey => up(XSTileKey).map(_.copy(ExperimentalMxfp4VectorEncode = true))
+  })
+)
+
+/** 64-SCP MX baseline; keep the existing DefaultMatrix CPU/cache and 4x32x4 array. */
+class DefaultMatrix2T64MxfpConfig(n: Int = 1) extends Config(
+  new DefaultMatrix2TMxfpConfig(n).alter((site, here, up) => {
+    case XSTileKey => up(XSTileKey).map(_.copy(TLEN = 64 * 64 * 8))
+  })
+)
+
+/** Explicit experimental converting-load opt-in; ordinary MX configs stay off. */
+class DefaultMatrix2T64MxfpConvert8Config(n: Int = 1) extends Config(
+  new DefaultMatrix2T64MxfpConfig(n).alter((site, here, up) => {
+    case CuteParamsKey => up(CuteParamsKey).copy(
+      ExperimentalMxfpConvertLoad = true, MxfpConvertLanes = 8)
+  })
+)
+
+/** Same CPU/AMU ABI as the 8-lane experiment, with a 32-lane encoder. */
+class DefaultMatrix2T64MxfpConvert32Config(n: Int = 1) extends Config(
+  new DefaultMatrix2T64MxfpConfig(n).alter((site, here, up) => {
+    case CuteParamsKey => up(CuteParamsKey).copy(
+      ExperimentalMxfpConvertLoad = true, MxfpConvertLanes = 32)
+  })
+)
+
+/** Experimental generated-SF loads; preserve the R14 MN128 CPU/cache/2T geometry. */
+class DefaultMatrix2TMxfpDynamicQuantConfig(n: Int = 1) extends Config(
+  new DefaultMatrix2TMxfpConfig(n).alter((site, here, up) => {
+    case CuteParamsKey => up(CuteParamsKey).copy(
+      ExperimentalMxfpConvertLoad = true, ExperimentalMxfpDynamicQuant = true,
+      MxfpConvertLanes = 8, MxfpConvertOwners = 4)
+  })
+)
+
 class FpgaDiffDefaultMatrixConfig(n: Int = 1) extends Config(
   new DefaultMatrixConfig(n).alter((site, here, up) => {
     case DebugOptionsKey =>

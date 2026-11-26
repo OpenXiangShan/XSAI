@@ -7,7 +7,7 @@ import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.must.Matchers
 import org.chipsalliance.cde.config._
 import scala.util.Random
-import top.DefaultMatrixConfig
+import top.{ArgParser, DefaultMatrix2T64MxfpConfig, DefaultMatrix2TConfig, DefaultMatrix2TMxfpConfig, DefaultMatrix2TopsConfig, DefaultMatrixConfig, YamlParser}
 import utility.LogUtilsOptions
 import utility.LogUtilsOptionsKey
 import utility.PerfCounterOptions
@@ -16,6 +16,157 @@ import utility.XSPerfLevel
 import xiangshan.DebugOptionsKey
 import xiangshan.XSCoreParamsKey
 import xiangshan.XSTileKey
+import xiangshan.{MatAcc, MatAccKey}
+import system.SoCParamsKey
+
+/** Parameter-only regressions: no RTL generation or Verilator smoke test is needed. */
+class DefaultMatrixConfigParametersSpec extends AnyFreeSpec with Matchers {
+  "DefaultMatrix 2TOPS selection" - {
+    "keeps the short name identical to the long name for one and two cores with MX disabled" in {
+      for (n <- Seq(1, 2)) {
+        val selected = new DefaultMatrix2TConfig(n)
+        val longName = new DefaultMatrix2TopsConfig(n)
+        selected(XSTileKey) mustBe longName(XSTileKey)
+        selected(SoCParamsKey) mustBe longName(SoCParamsKey)
+        selected(DebugOptionsKey) mustBe longName(DebugOptionsKey)
+        selected(MatAccKey) mustBe longName(MatAccKey)
+        selected(CuteParamsKey) mustBe longName(CuteParamsKey)
+        selected(CuteParamsKey).MatrixExtension.enableMxfp8Fp32 mustBe false
+        selected(CuteParamsKey).MatrixExtension.enableMxfp4Fp32 mustBe false
+        selected(CuteParamsKey).MatrixExtension.enableNvfp4Fp32 mustBe false
+      }
+    }
+
+    "preserves the complete DefaultMatrix CPU and cache parameters for one and two cores" in {
+      for (n <- Seq(1, 2)) {
+        val baseline = new DefaultMatrixConfig(n)
+        val selected = new DefaultMatrix2TopsConfig(n)
+        selected(XSTileKey) mustBe baseline(XSTileKey)
+        selected(SoCParamsKey) mustBe baseline(SoCParamsKey)
+        selected(DebugOptionsKey) mustBe baseline(DebugOptionsKey)
+        selected(MatAccKey) mustBe MatAcc.CUTE
+        selected(CuteParamsKey) mustBe baseline(CuteParamsKey).copy(
+          Matrix_MN = CuteParams.CUTE_2Tops.Matrix_MN
+        )
+      }
+    }
+
+    "keeps the default array at eight and proves 1024 INT8 operations per cycle for the opt-in array" in {
+      val baseline = new DefaultMatrixConfig(1)
+      val selected = new DefaultMatrix2TopsConfig(1)
+      val core = selected(XSTileKey).head
+      val cp = selected(CuteParamsKey)
+      core.TLEN mustBe 128 * 64 * 8
+      core.TRLEN mustBe 64 * 8
+      core.MELEN mustBe 32
+      cp.Tensor_MN mustBe 128
+      cp.Tensor_K mustBe 64
+      cp.Matrix_MN mustBe 4
+      cp.ReduceWidthByte mustBe 32
+      cp.ReduceWidth mustBe 256
+      cp.outsideDataWidth mustBe 512
+      cp.L2NBanks mustBe core.L2NBanks
+      cp.MatrixExtension mustBe core.MatrixExtension
+      cp.MatrixExtension.enableInt8Int32 mustBe true
+      cp.MatrixExtension.enableMxfp8Fp32 mustBe false
+      cp.MatrixExtension.enableMxfp4Fp32 mustBe false
+      cp.MatrixExtension.enableNvfp4Fp32 mustBe false
+      // MatrixTE instantiates Matrix_MN squared PEs; each accepts ReduceWidth / 8 INT8 MACs.
+      // One MAC counts as one multiply plus one add. This is a peak roof, not measured throughput.
+      val int8OpsPerCycle = cp.Matrix_MN * cp.Matrix_MN * (cp.ReduceWidth / 8) * 2
+      int8OpsPerCycle mustBe 1024
+      baseline(CuteParamsKey).Matrix_MN mustBe 8
+      val base = baseline(CuteParamsKey)
+      base.Matrix_MN * base.Matrix_MN * (base.ReduceWidth / 8) * 2 mustBe 4096
+      println(s"[DefaultMatrix2TopsConfig] TLEN=${core.TLEN} TRLEN=${core.TRLEN} MELEN=${core.MELEN} " +
+        s"INT8_ops_per_cycle=$int8OpsPerCycle CuteParams=$cp")
+    }
+
+    "remains selectable through the existing one-Int config constructor and command-line parser" in {
+      for (name <- Seq(
+        "DefaultMatrix2TConfig", "top.DefaultMatrix2TConfig",
+        "DefaultMatrix2TopsConfig", "top.DefaultMatrix2TopsConfig"
+      )) {
+        val selected = ArgParser.getConfigByName(name)
+        selected(CuteParamsKey).Matrix_MN mustBe 4
+        selected(XSTileKey).size mustBe 1
+        for (n <- Seq(1, 2)) {
+          val (parsed, _, _) = ArgParser.parse(Array("--config", name, "--num-cores", n.toString))
+          val (longName, _, _) = ArgParser.parse(Array(
+            "--config", "DefaultMatrix2TopsConfig", "--num-cores", n.toString
+          ))
+          parsed(XSTileKey).map(_.HartId) mustBe (0 until n)
+          parsed(XSTileKey) mustBe longName(XSTileKey)
+          parsed(SoCParamsKey) mustBe longName(SoCParamsKey)
+          parsed(CuteParamsKey) mustBe longName(CuteParamsKey)
+        }
+      }
+    }
+
+    "retains late core-geometry, synchronization, cache-bank and difftest overrides" in {
+      val selected = new DefaultMatrix2TopsConfig(2).alter((site, here, up) => {
+        case XSTileKey => up(XSTileKey).map(_.copy(
+          TLEN = 64 * 64 * 8, TRLEN = 64 * 8, MsyncRegs = 16, L2NBanks = 4
+        ))
+        case DebugOptionsKey => up(DebugOptionsKey).copy(EnableDifftest = true)
+      })
+      val cp = selected(CuteParamsKey)
+      cp.Matrix_MN mustBe 4
+      cp.Tensor_MN mustBe 64
+      cp.Tensor_K mustBe 64
+      cp.MsyncRegs mustBe 16
+      cp.L2NBanks mustBe 4
+      cp.EnableDifftest mustBe true
+    }
+
+    "selects explicit 2T64 MX geometry without changing the historical 128-SCP preset" in {
+      for (n <- Seq(1, 2)) {
+        val baseline = new DefaultMatrix2TMxfpConfig(n)
+        val selected = new DefaultMatrix2T64MxfpConfig(n)
+        baseline(XSTileKey).foreach(_.TLEN mustBe 128 * 64 * 8)
+        selected(XSTileKey) mustBe baseline(XSTileKey).map(_.copy(TLEN = 64 * 64 * 8))
+        selected(SoCParamsKey) mustBe baseline(SoCParamsKey)
+        selected(DebugOptionsKey) mustBe baseline(DebugOptionsKey)
+        selected(MatAccKey) mustBe MatAcc.CUTE
+        selected(CuteParamsKey) mustBe baseline(CuteParamsKey).copy(Tensor_MN = 64)
+        val cp = selected(CuteParamsKey)
+        cp.Tensor_MN mustBe 64
+        cp.Tensor_K mustBe 64
+        cp.Matrix_MN mustBe 4
+        cp.ReduceWidthByte mustBe 32
+        cp.outsideDataWidth mustBe 512
+        cp.ABMatrixRegSize mustBe 4096
+        cp.CMatrixRegSize mustBe 16384
+        cp.MatrixExtension mustBe selected(XSTileKey).head.MatrixExtension
+        cp.MatrixExtension.enableMxfp4Fp32 mustBe true
+        cp.MatrixExtension.enableMxfp8Fp32 mustBe true
+        cp.MatrixExtension.enableNvfp4Fp32 mustBe false
+      }
+      for (name <- Seq("DefaultMatrix2T64MxfpConfig", "top.DefaultMatrix2T64MxfpConfig")) {
+        val selected = ArgParser.getConfigByName(name)
+        selected(CuteParamsKey).Tensor_MN mustBe 64
+        val (parsed, _, _) = ArgParser.parse(Array("--config", name, "--num-cores", "1"))
+        parsed(XSTileKey).size mustBe 1
+        parsed(XSTileKey).head.TRLEN mustBe 512
+        parsed(XSTileKey).head.MELEN mustBe 32
+        parsed(CuteParamsKey).Tensor_MN mustBe 64
+        parsed(CuteParamsKey).MatrixExtension.enableMxfp4Fp32 mustBe true
+      }
+      println("[DefaultMatrix2T64MxfpConfig] Tensor_MN=64 Tensor_K=64 Matrix_MN=4 " +
+        "ReduceWidthByte=32 TR_bytes=4096 accumulator_bytes=16384 MXFP4=enabled")
+    }
+
+    "preserves the existing YAML cache overlay without changing the selected compute array" in {
+      val yaml = new java.io.File(getClass.getResource("/config/Default.yml").toURI).getPath
+      val baseline = YamlParser.parseYaml(new DefaultMatrixConfig(1), yaml)
+      val selected = YamlParser.parseYaml(new DefaultMatrix2TopsConfig(1), yaml)
+      selected(XSTileKey) mustBe baseline(XSTileKey)
+      selected(SoCParamsKey) mustBe baseline(SoCParamsKey)
+      selected(CuteParamsKey) mustBe baseline(CuteParamsKey).copy(Matrix_MN = 4)
+      selected(CuteParamsKey).L2NBanks mustBe 4
+    }
+  }
+}
 
 /**
  * XSCuteTop smoke test with Matrix Data Memory Model integration.

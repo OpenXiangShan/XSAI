@@ -62,6 +62,7 @@ object RobBundles extends HasCircularQueuePtrHelper {
     val isRVC = Bool()
     val isVset = Bool()
     val isMsetcfg = OptionWrapper(HasMatrixExtension, Bool())
+    val isMinit = OptionWrapper(HasMatrixExtension, Bool())
     val mcfgReadView = OptionWrapper(HasMatrixExtension, new xiangshan.backend.decode.McfgReadView)
     val mcfgIllegalUnsupported = OptionWrapper(HasMatrixExtension, Bool())
     val isHls = Bool()
@@ -109,6 +110,7 @@ object RobBundles extends HasCircularQueuePtrHelper {
     val isRVC = Bool()
     val isVset = Bool()
     val isMsetcfg = OptionWrapper(HasMatrixExtension, Bool())
+    val isMinit = OptionWrapper(HasMatrixExtension, Bool())
     val mcfgReadView = OptionWrapper(HasMatrixExtension, new xiangshan.backend.decode.McfgReadView)
     val mcfgIllegalUnsupported = OptionWrapper(HasMatrixExtension, Bool())
     val needAmuCtrl = OptionWrapper(HasMatrixExtension, Bool())
@@ -147,6 +149,7 @@ object RobBundles extends HasCircularQueuePtrHelper {
     robEntry.isRVC := robEnq.preDecodeInfo.isRVC
     robEntry.isVset := robEnq.isVset
     robEntry.isMsetcfg.foreach(_ := robEnq.isMsetcfg)
+    robEntry.isMinit.foreach(_ := robEnq.fuType === FuType.csr.U && CSROpType.isMinit(robEnq.fuOpType))
     robEntry.mcfgReadView.foreach(_ := robEnq.mcfgReadView.get)
     robEntry.mcfgIllegalUnsupported.foreach(_ := false.B)
     robEntry.isHls := robEnq.isHls
@@ -184,6 +187,7 @@ object RobBundles extends HasCircularQueuePtrHelper {
     robCommitEntry.needAmuCtrl.foreach(_ := robEntry.needAmuCtrl.get)
     robCommitEntry.amuCtrl.foreach(_ := 0.U.asTypeOf(robEntry.amuCtrl.get))
     robCommitEntry.isMsetcfg.foreach(_ := robEntry.isMsetcfg.get)
+    robCommitEntry.isMinit.foreach(_ := robEntry.isMinit.get)
     robCommitEntry.mcfgReadView.foreach(_ := robEntry.mcfgReadView.get)
     robCommitEntry.mcfgIllegalUnsupported.foreach(_ := robEntry.mcfgIllegalUnsupported.get)
     robCommitEntry.isHls := robEntry.isHls

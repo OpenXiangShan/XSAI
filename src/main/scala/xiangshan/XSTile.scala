@@ -259,12 +259,16 @@ class XSTile()(implicit p: Parameters) extends LazyModule
     cuteOpt.foreach { case cute =>
       l2top.module.io.matrixDataOut512L2 := DontCare
       cute.module.io := DontCare
+      cute.module.io.cute.ctrl2top.minitClear := core.module.io.minitClear.get
+      core.module.io.minitResetReady.get := cute.module.io.cute.ctrl2top.resetReady
+      core.module.io.minitClearAck.get := cute.module.io.cute.ctrl2top.minitClearAck
       core.module.io.amuCtrl.foreach { amuCtrl =>
         cute.module.io.cute.ctrl2top.amuCtrl <> amuCtrl
       }
       core.module.io.amuRelease.foreach { amuRelease =>
         amuRelease.bits := cute.module.io.cute.ctrl2top.mrelease.bits
         amuRelease.valid := cute.module.io.cute.ctrl2top.mrelease.valid
+        cute.module.io.cute.ctrl2top.mrelease.ready := amuRelease.ready
       }
 
       val matrix_data_out = l2top.module.io.matrixDataOut512L2
@@ -313,6 +317,8 @@ class XSTile()(implicit p: Parameters) extends LazyModule
 
     if (HasMatrixExtension && cuteOpt.isEmpty) {
       core.module.io.cutePerf.foreach(_ := 0.U.asTypeOf(new CutePerfToCoreIO))
+      core.module.io.minitResetReady.foreach(_ := true.B)
+      core.module.io.minitClearAck.foreach(_ := RegNext(core.module.io.minitClear.get, false.B))
     }
 
     if (!HasMatrixExtension) {

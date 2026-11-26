@@ -82,6 +82,9 @@ case class XSCoreParameters
   GPAddrBitsSv48x4: Int = 50,
   HasFPU: Boolean = true,
   HasVPU: Boolean = true,
+  // Experimental custom3 supplied-scale FP4 vector encoding. Independent of
+  // matrix capabilities; every existing CPU configuration keeps it disabled.
+  ExperimentalMxfp4VectorEncode: Boolean = false,
   HasCustomCSRCacheOp: Boolean = true,
   FetchWidth: Int = 8,
   AsidLength: Int = 16,

@@ -26,6 +26,22 @@ abstract class VecDecode extends XSDecodeBase {
   }
 }
 
+// Experimental CPU vector extension, NOT a Zames or standard RVV allocation.
+// custom3/funct3=001 avoids the existing Rocket custom3 RoCC operand patterns.
+// e32 only: vs2 holds raw F32, vs1 holds a full u32 scale (0..251); each active
+// vd lane receives a zero-extended strict-lower FP4 code. No packed destination.
+object Mxfp4VectorDecode extends DecodeConstants {
+  val ENCODE = BitPat("b000001_?_?????_?????_001_?????_1111011")
+  val encodeOp = BitPat("b100000000")
+  def enabled(p: Parameters): Boolean =
+    p.lift(XSCoreParamsKey).exists(_.ExperimentalMxfp4VectorEncode)
+  override val decodeArray: Array[(BitPat, XSDecodeBase)] = Array(
+    ENCODE -> OPFVV(SrcType.vp, SrcType.vp, FuType.vfcvt, encodeOp,
+      F, T, F, UopSplitType.VEC_VVV))
+  def table(enable: Boolean): Array[(BitPat, List[BitPat])] =
+    if (enable) table else Array.empty
+}
+
 case class OPIVV(
   fu: FuType.OHType,
   fuOp: BitPat,

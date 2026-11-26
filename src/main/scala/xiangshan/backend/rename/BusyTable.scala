@@ -87,7 +87,12 @@ class BusyTable(numReadPorts: Int, numWritePorts: Int, numPhyPregs: Int, pregWB:
   }
   if (!needLoadCancel) println(s"[BusyTable]: WbConfig ${pregWB} busyTable don't need loadCancel")
   val loadCancel = if (needLoadCancel) io.ldCancel else 0.U.asTypeOf(io.ldCancel)
-  val allWakeUp = io.wakeUpInt ++ io.wakeUpFp ++ io.wakeUpVec ++ io.wakeUpMf.getOrElse(Nil) ++ io.wakeUpMem
+  // Opt-in VF early tokens are forwarded only inside the VF scheduler.
+  // They must not publish global RF readiness to non-routed consumers,
+  // such as vector stores. Keep their local IQ wakeup/forwarding intact;
+  // actual wbPregs still make the destination globally ready.
+  val allWakeUp = (io.wakeUpInt ++ io.wakeUpFp ++ io.wakeUpVec ++ io.wakeUpMf.getOrElse(Nil) ++ io.wakeUpMem)
+    .filterNot(x => p(XSCoreParamsKey).ExperimentalVfFastWakeup && x.bits.params.isVfExeUnit)
   val wakeUpIn = pregWB match {
     case IntWB(_, _) => allWakeUp.filter{x => x.bits.params.writeIntRf && (x.bits.params.hasLoadExu || x.bits.params.hasAluFu)}
     case FpWB(_, _) => allWakeUp.filter{x => x.bits.params.writeFpRf && !x.bits.params.hasLoadExu}

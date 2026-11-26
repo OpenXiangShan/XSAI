@@ -4,7 +4,8 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.rocket.Instructions._
 import freechips.rocketchip.util.uintToBitPat
-import cute.MatrixIsaParams
+import cute.{CuteParamsKey, MatrixIsaParams}
+import org.chipsalliance.cde.config.Parameters
 import xiangshan.backend.fu.FuType
 import xiangshan.{SrcType, MSetOpType, UopSplitType, SelImm, MldstOpType, MarithOpType, FenceOpType, CSROpType}
 import freechips.rocketchip.amba.ahb.AHBParameters.transBits
@@ -54,6 +55,23 @@ case class MARITH(fuOp: BitPat, hasSrc1: Boolean = true, hasSrc2: Boolean = true
 }
 
 object MatrixDecoder extends DecodeConstants {
+  // Proposal-12 kind=11 is reserved except these two non-transposed loads.
+  val MLASCALE = BitPat("b0011000??????????00100???0101011")
+  val MLBSCALE = BitPat("b1011000??????????00100???0101011")
+  // Explicit experimental encodings, not ordinary loads or mcfg reserved bits.
+  val MLACVT_F32_MX = BitPat("b0011010??????????00100???0101011")
+  val MLBCVT_F32_MX = BitPat("b1011010??????????00100???0101011")
+  // Experimental custom-1 candidates, NOT an official Zames allocation.
+  // funct7=0x1c/0x5c, funct3=1, rd=tr0..3; base/stride remain rs1/rs2.
+  val MLADYN_F32_MX = BitPat("b0011100??????????001000??0101011")
+  val MLBDYN_F32_MX = BitPat("b1011100??????????001000??0101011")
+
+  // Non-matrix CPU configurations and isolated harnesses need not define CUTE.
+  def convertF32Enabled(p: Parameters): Boolean =
+    p.lift(CuteParamsKey).exists(_.ExperimentalMxfpConvertLoad)
+  def dynamicQuantEnabled(p: Parameters): Boolean =
+    p.lift(CuteParamsKey).exists(c => c.ExperimentalMxfpConvertLoad && c.ExperimentalMxfpDynamicQuant)
+
   val mset: Array[(BitPat, XSDecodeBase)] = Array(
     // mcfg control
     MSETCFG    -> XSDecode(SrcType.xp, SrcType.X, SrcType.X,
@@ -78,6 +96,8 @@ object MatrixDecoder extends DecodeConstants {
     MLA -> MLS(MldstOpType.mla),
     // Load right matrix, B
     MLB -> MLS(MldstOpType.mlb),
+    MLASCALE -> MLS(MldstOpType.mlascale),
+    MLBSCALE -> MLS(MldstOpType.mlbscale),
     // Load transposed left matrix, A
     MLAT -> MLS(MldstOpType.mlat),
     // Load transposed right matrix, B
@@ -107,6 +127,16 @@ object MatrixDecoder extends DecodeConstants {
     MMACC -> MMUL(MmulOpType.placeholder)
   )
 
+  private val convertingLoads: Array[(BitPat, XSDecodeBase)] = Array(
+    MLACVT_F32_MX -> MLS(MldstOpType.mlacvtF32Mx),
+    MLBCVT_F32_MX -> MLS(MldstOpType.mlbcvtF32Mx)
+  )
+
+  private val dynamicLoads: Array[(BitPat, XSDecodeBase)] = Array(
+    MLADYN_F32_MX -> MLS(MldstOpType.mladynF32Mx),
+    MLBDYN_F32_MX -> MLS(MldstOpType.mlbdynF32Mx)
+  )
+
   val marith: Array[(BitPat, XSDecodeBase)] = Array(
     MZERO -> MARITH(MarithOpType.mzero1r, hasSrc1 = false, hasSrc2 = false),
   )
@@ -130,12 +160,17 @@ object MatrixDecoder extends DecodeConstants {
     )
   )
 
-  def table(matrixExtension: MatrixIsaParams): Array[(BitPat, List[BitPat])] = {
-    val decodeArrayWithConfig = mset ++ mls ++ mmul ++ marith ++ msync
+  def table(matrixExtension: MatrixIsaParams, experimentalMxfpConvertLoad: Boolean = false,
+            experimentalMxfpDynamicQuant: Boolean = false): Array[(BitPat, List[BitPat])] = {
+    val decodeArrayWithConfig = mset ++ mls ++
+      (if (experimentalMxfpConvertLoad) convertingLoads else Array.empty[(BitPat, XSDecodeBase)]) ++
+      (if (experimentalMxfpConvertLoad && experimentalMxfpDynamicQuant) dynamicLoads else Array.empty[(BitPat, XSDecodeBase)]) ++
+      mmul ++ marith ++ msync
     decodeArrayWithConfig.map(x => (x._1, x._2.generate()))
   }
 
   // Keep a full static superset for DecodeConstants compatibility.
-  // DecodeUnit uses table(matrixExtension) as the effective matrix decode path.
-  override val decodeArray: Array[(BitPat, XSDecodeBase)] = mset ++ mls ++ mmul ++ marith ++ msync
+  // DecodeUnit uses the explicitly gated table(...) as the effective path.
+  override val decodeArray: Array[(BitPat, XSDecodeBase)] =
+    mset ++ mls ++ convertingLoads ++ dynamicLoads ++ mmul ++ marith ++ msync
 }

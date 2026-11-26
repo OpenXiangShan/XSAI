@@ -9,6 +9,8 @@ import xiangshan.backend.fu.FuConfig
 import xiangshan.backend.fu.vector.{Mgu, VecPipedFuncUnit}
 import xiangshan.ExceptionNO
 import xiangshan.FuOpType
+import xiangshan.backend.decode.Mxfp4VectorDecode
+import cute.Mxfp4EncodeLane
 import yunsuan.{VfcvtType, VfpuType}
 import yunsuan.vector.VectorConvert.VectorCvt
 import yunsuan.util._
@@ -25,6 +27,9 @@ class VCVT(cfg: FuConfig)(implicit p: Parameters) extends VecPipedFuncUnit(cfg) 
   // io alias
   private val opcode = fuOpType(8, 0)
   private val sew = vsew
+  private val isMxfp4Encode = if (Mxfp4VectorDecode.enabled(p)) {
+    opcode === Mxfp4VectorDecode.encodeOp.value.U(9.W)
+  } else false.B
   private val isVfwCvtBf16 = opcode(7, 0) === VfcvtType.vfwcvtbf16_ffv
   private val isVfnCvtBf16 = opcode(7, 0) === VfcvtType.vfncvtbf16_ffw
 
@@ -38,7 +43,7 @@ class VCVT(cfg: FuConfig)(implicit p: Parameters) extends VecPipedFuncUnit(cfg) 
 
   private val lmul = vlmul // -3->3 => 1/8 ->8
 
-  val widen = opcode(4, 3) // 0->single 1->widen 2->norrow => width of result
+  val widen = Mux(isMxfp4Encode, 0.U(2.W), opcode(4, 3)) // 0->single 1->widen 2->narrow
   val isSingleCvt = !widen(1) & !widen(0)
   val isWidenCvt = (!widen(1) & widen(0)) || isVfwCvtBf16
   val isNarrowCvt = (widen(1) & !widen(0)) || isVfnCvtBf16
@@ -66,7 +71,8 @@ class VCVT(cfg: FuConfig)(implicit p: Parameters) extends VecPipedFuncUnit(cfg) 
       BitPat.N(4)
     )
   )
-  output1H := Mux(isVfnCvtBf16, "b0010".U, Mux(isVfwCvtBf16, "b0100".U, commonOutput1H))
+  output1H := Mux(isMxfp4Encode, "b0100".U,
+    Mux(isVfnCvtBf16, "b0010".U, Mux(isVfwCvtBf16, "b0100".U, commonOutput1H)))
   if(backendParams.debugEn) {
     dontTouch(output1H)
   }
@@ -79,7 +85,8 @@ class VCVT(cfg: FuConfig)(implicit p: Parameters) extends VecPipedFuncUnit(cfg) 
   val outIsMvInst = false.B
 
   val outEew = RegEnable(RegEnable(Mux1H(output1H, Seq(0,1,2,3).map(i => i.U)), fire), fireReg)
-  private val needNoMask = outVecCtrl.fpu.isFpToVecInst
+  private val outIsMxfp4Encode = RegEnable(RegEnable(isMxfp4Encode, fire), fireReg)
+  private val needNoMask = outVecCtrl.fpu.isFpToVecInst && !outIsMxfp4Encode
   val maskToMgu = Mux(needNoMask, allMaskTrue, outSrcMask)
 
   // modules
@@ -104,6 +111,37 @@ class VCVT(cfg: FuConfig)(implicit p: Parameters) extends VecPipedFuncUnit(cfg) 
   vfcvt.isFpToVecInst := vecCtrl.fpu.isFpToVecInst
   val vfcvtResult = vfcvt.io.result
   val vfcvtFflags = vfcvt.io.fflags
+
+  // Reuse CUTE's strict-lower lane search, not its K32 gather/queue/packer.
+  // Keep one e32 result per source lane so ordinary vector splitting, old-vd
+  // merge, masks and stores stay in their existing owners. Scale is a FULL
+  // u32 integer: 256 must not silently become e=0 by truncation.
+  val mxfp4Result = WireDefault(0.U(dataWidth.W))
+  val mxfp4Flags = WireDefault(0.U(5.W))
+  if (Mxfp4VectorDecode.enabled(p)) {
+    require(dataWidth % 32 == 0)
+    val lanes = dataWidth / 32
+    val inputs = vs2.asTypeOf(Vec(lanes, UInt(32.W)))
+    val scales = vs1.asTypeOf(Vec(lanes, UInt(32.W)))
+    val results = Wire(Vec(lanes, UInt(32.W)))
+    val invalids = Wire(Vec(lanes, Bool()))
+    val firstLane = vuopIdx * lanes.U
+    val laneMask = srcMask >> firstLane
+    for (lane <- 0 until lanes) {
+      val index = firstLane + lane.U
+      val active = isMxfp4Encode && sew === 2.U && !vill &&
+        vstart === 0.U && index < vl && laneMask(lane)
+      val e = scales(lane)(7, 0)
+      val (code, invalid, eligible) = Mxfp4EncodeLane(inputs(lane), active,
+        Mxfp4EncodeLane.boundaries(e), Mxfp4EncodeLane.maxMagnitude(e))
+      val rejected = invalid || !eligible || scales(lane) > 251.U
+      results(lane) := Mux(rejected, 0.U(32.W), code.pad(32))
+      invalids(lane) := active && rejected
+    }
+    mxfp4Result := RegEnable(RegEnable(results.asUInt, fire), fireReg)
+    mxfp4Flags := RegEnable(RegEnable(
+      Mux(invalids.asUInt.orR, "h10".U(5.W), 0.U(5.W)), fire), fireReg)
+  }
 
   /** fflags:
    */
@@ -139,14 +177,14 @@ class VCVT(cfg: FuConfig)(implicit p: Parameters) extends VecPipedFuncUnit(cfg) 
   val fflagsAll = Wire(Vec(8, UInt(5.W)))
   fflagsAll := vfcvtFflags.asTypeOf(fflagsAll)
   val fflags = fflagsEnCycle2.zip(fflagsAll).map{case(en, fflag) => Mux(en, fflag, 0.U(5.W))}.reduce(_ | _)
-  io.out.bits.res.fflags.get := Mux(outIsMvInst, 0.U, fflags)
+  io.out.bits.res.fflags.get := Mux(outIsMxfp4Encode, mxfp4Flags, Mux(outIsMvInst, 0.U, fflags))
 
 
   /**
    * [[mgu]]'s in connection
    */
   val resultDataUInt = Wire(UInt(dataWidth.W))
-  resultDataUInt := vfcvtResult
+  resultDataUInt := Mux(outIsMxfp4Encode, mxfp4Result, vfcvtResult)
 
   private val narrow = RegEnable(RegEnable(isNarrowCvt, fire), fireReg)
   private val narrowNeedCat = outVecCtrl.vuopIdx(0).asBool && narrow
@@ -159,10 +197,10 @@ class VCVT(cfg: FuConfig)(implicit p: Parameters) extends VecPipedFuncUnit(cfg) 
   mgu.io.in.mask := maskToMgu
   mgu.io.in.info.ta := outVecCtrl.vta
   mgu.io.in.info.ma := outVecCtrl.vma
-  mgu.io.in.info.vl := Mux(outVecCtrl.fpu.isFpToVecInst, 1.U, outVl)
+  mgu.io.in.info.vl := Mux(needNoMask, 1.U, outVl)
   mgu.io.in.info.vlmul := outVecCtrl.vlmul
   mgu.io.in.info.valid := io.out.valid
-  mgu.io.in.info.vstart := Mux(outVecCtrl.fpu.isFpToVecInst, 0.U, outVecCtrl.vstart)
+  mgu.io.in.info.vstart := Mux(needNoMask, 0.U, outVecCtrl.vstart)
   mgu.io.in.info.eew := outEew
   mgu.io.in.info.vsew := outVecCtrl.vsew
   mgu.io.in.info.vdIdx := outVecCtrl.vuopIdx
@@ -179,7 +217,8 @@ class VCVT(cfg: FuConfig)(implicit p: Parameters) extends VecPipedFuncUnit(cfg) 
     Fill(32, result(31)) ## result(31, 0),
     result
   )
-  io.out.bits.ctrl.exceptionVec.get(ExceptionNO.illegalInstr) := mgu.io.out.illegal
+  io.out.bits.ctrl.exceptionVec.get(ExceptionNO.illegalInstr) := mgu.io.out.illegal ||
+    (outIsMxfp4Encode && (outVecCtrl.vsew =/= 2.U || outVecCtrl.vstart =/= 0.U || outVecCtrl.vill))
 }
 
 class VectorCvtTopIO(vlen: Int, xlen: Int) extends Bundle{
@@ -254,4 +293,3 @@ class VectorCvtTop(vlen: Int, xlen: Int) extends Module{
     vectorCvt1.io.fflags(4,0) ## vectorCvt0.io.fflags(4,0)
   ))
 }
-

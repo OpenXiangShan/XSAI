@@ -119,6 +119,9 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
     val dft = Option.when(hasDFT)(Input(new SramBroadcastBundle))
     val dft_reset = Option.when(hasDFT)(Input(new DFTResetSignals()))
     val amuCtrl = Option.when(HasMatrixExtension)(Decoupled(new AmuCtrlIO))
+    val minitResetReady = Option.when(HasMatrixExtension)(Input(Bool()))
+    val minitClear = Option.when(HasMatrixExtension)(Output(Bool()))
+    val minitClearAck = Option.when(HasMatrixExtension)(Input(Bool()))
     val amuRelease = Option.when(HasMatrixExtension)(Flipped(Decoupled(new AmuReleaseIO2XS)))
     val cutePerf = Option.when(HasMatrixExtension)(Input(new CutePerfToCoreIO))
   })
@@ -224,6 +227,9 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
     val amuCtrlArbiter = Module(new Arbiter(new AmuCtrlIO, CommitWidth))
     amuCtrlArbiter.io.in <> backend.io.toAmu.get
     io.amuCtrl.get <> amuCtrlArbiter.io.out
+    backend.io.minitResetReady.get := io.minitResetReady.get
+    io.minitClear.get := backend.io.minitClear.get
+    backend.io.minitClearAck.get := io.minitClearAck.get
   }
 
   // top -> memBlock

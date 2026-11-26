@@ -7,7 +7,7 @@ import utility._
 import xiangshan._
 import xiangshan.backend.Bundles._
 import xiangshan.backend.ctrlblock.{DebugLsInfoBundle, LsTopdownInfo}
-import xiangshan.backend.decode.McfgHelpers
+import xiangshan.backend.decode.{MatrixDecoder, McfgHelpers}
 import xiangshan.backend.fu._
 import xiangshan.backend.fu.FuConfig._
 import xiangshan.backend.fu.matrix.Bundles.{AmuLsuIO, AmuCtrlIO}
@@ -151,7 +151,9 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   io.tlb.req.bits.hlvx               := false.B
   io.tlb.req.bits.isPrefetch         := false.B
   io.tlb.req.bits.pmp_addr           := DontCare
-  io.tlb.req.bits.size               := LSUOpType.size(s0_uop.fuOpType)
+  // The source access is FP32 even when the destination TR is packed MX4/8.
+  io.tlb.req.bits.size               := Mux(MldstOpType.isConvertF32(s0_uop.fuOpType),
+    2.U, LSUOpType.size(s0_uop.fuOpType))
   io.tlb.req.bits.kill               := s0_kill
   io.tlb.req.bits.memidx.is_ld       := s0_ld_flow
   io.tlb.req.bits.memidx.is_st       := !s0_ld_flow
@@ -215,8 +217,10 @@ class MlsUnit(implicit p: Parameters) extends XSModule
     fromNullSource()
   }
 
-  // TODO: address align check
-  val s0_addr_aligned = true.B
+  // Keep ordinary MLS alignment behaviour unchanged; new FP32 sources are
+  // naturally aligned. This remains a base-only precommit TLB/PMP check.
+  val s0_isConvertF32 = MldstOpType.isConvertF32(s0_uop.fuOpType)
+  val s0_addr_aligned = !s0_isConvertF32 || s0_vaddr(1, 0) === 0.U
 
   val illegal_regidx = Mux(s0_uop.imm(2),
     (MldstOpType.isMatrixA(s0_uop.fuOpType) || MldstOpType.isMatrixB(s0_uop.fuOpType)),
@@ -244,6 +248,31 @@ class MlsUnit(implicit p: Parameters) extends XSModule
     (s0_mcfgWidth === MSew.e32) -> (coreParams.TRLEN / 32).U,
   ))
   val s0_nonWholeMls = !MldstOpType.isWholeReg(s0_uop.fuOpType)
+  val s0_isScale = MldstOpType.isScale(s0_uop.fuOpType)
+  val s0_scaleBlocks = (s0_mtile1 +& 31.U) >> 5
+  val illegal_scale = !McfgHelpers.isMxSupported(s0_mcfgTypeCode, s0_mcfgEntry.tableSel, MatrixExtension) ||
+    s0_mtile0 > ROWNUM.U || s0_mtile1 === 0.U ||
+    s0_mtile1 > s0_trlenElems || s0_stride < s0_scaleBlocks
+  // Source byte geometry and destination packed capacity are deliberately
+  // separate. SF generation/shape is checked by TC, not a precise CPU trap;
+  // valid containing-line DRAM and correctly published SF remain prerequisites.
+  private val convertRowLimit = p.lift(cute.CuteParamsKey).map(_.Tensor_MN).getOrElse(0).min(64).min(ROWNUM)
+  val s0_convertRows = Mux(MldstOpType.isMatrixA(s0_uop.fuOpType), s0_mtile0, s0_mtile1)
+  val s0_convertK = Mux(MldstOpType.isMatrixA(s0_uop.fuOpType), s0_mtile1, s0_mtile0)
+  val s0_isDynamicMxfpQuant = MldstOpType.isDynamicMxfpQuant(s0_uop.fuOpType)
+  // Reuse the original precommit conversion checks below. Dynamic first
+  // supports only normal A/B 8xK64 MX4, never inferred from missing old SF.
+  val illegal_dynamic = s0_isDynamicMxfpQuant &&
+    (!MatrixDecoder.dynamicQuantEnabled(p).B ||
+      s0_mcfgTypeCode =/= McfgHelpers.Mxfp4.typeCode.U || s0_convertRows =/= 8.U)
+  val illegal_convert = !MatrixDecoder.convertF32Enabled(p).B ||
+    illegal_dynamic ||
+    !s0_ld_flow || s0_isScale || !s0_nonWholeMls ||
+    MldstOpType.isMatrixC(s0_uop.fuOpType) || MldstOpType.isTransposed(s0_uop.fuOpType) ||
+    !(MldstOpType.isMatrixA(s0_uop.fuOpType) ^ MldstOpType.isMatrixB(s0_uop.fuOpType)) ||
+    !McfgHelpers.isMxSupported(s0_mcfgTypeCode, s0_mcfgEntry.tableSel, MatrixExtension) ||
+    s0_convertK =/= 64.U || s0_convertRows === 0.U || s0_convertRows > convertRowLimit.U ||
+    s0_convertK > s0_trlenElems || s0_stride < (s0_convertK << 2) || s0_stride(1, 0) =/= 0.U
   val illegal_mtilen = Mux1H(Seq(
     MldstOpType.isMatrixA(s0_uop.fuOpType) -> false.B,
     MldstOpType.isMatrixB(s0_uop.fuOpType) -> (s0_mtile1 > ROWNUM.U),
@@ -267,7 +296,8 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   s0_out.mtile0        := s0_mtile0
   s0_out.mtile1        := s0_mtile1
   s0_out.uop.exceptionVec(illegalInstr)        := illegal_regidx ||
-    (s0_nonWholeMls && (illegal_mtilem || illegal_mtilen || illegal_mtilek))
+    Mux(s0_isConvertF32, illegal_convert,
+      Mux(s0_isScale, illegal_scale, s0_nonWholeMls && (illegal_mtilem || illegal_mtilen || illegal_mtilek)))
   s0_out.uop.exceptionVec(loadAddrMisaligned)  := !s0_addr_aligned && s0_ld_flow
   s0_out.uop.exceptionVec(storeAddrMisaligned) := !s0_addr_aligned && !s0_ld_flow
   s0_out.forward_tlDchannel := false.B
@@ -550,22 +580,34 @@ class MlsUnit(implicit p: Parameters) extends XSModule
   }
 
   val amuCtrl = Wire(new AmuLsuIO)
+  amuCtrl.reserved := 0.U
   val s3_mcfgEntry = s3_in.uop.mcfgReadView.get.entry
   val s3_mcfgTypeCode = s3_mcfgEntry.typeCode
   val s3_mcfgWidth = McfgHelpers.msew(s3_mcfgTypeCode)
+  val s3_isScale = MldstOpType.isScale(s3_in.uop.fuOpType)
+  val s3_isConvertF32 = MldstOpType.isConvertF32(s3_in.uop.fuOpType)
+  amuCtrl.isDynamicMxfpQuant := MldstOpType.isDynamicMxfpQuant(s3_in.uop.fuOpType)
+  amuCtrl.isConvertF32 := s3_isConvertF32
+  amuCtrl.isScale := s3_isScale
+  amuCtrl.computeType := Mux(s3_isScale || s3_isConvertF32,
+    McfgHelpers.mxComputeType(s3_mcfgTypeCode, s3_mcfgEntry.tableSel), 0.U)
   amuCtrl.ls := MldstOpType.isStore(s3_in.uop.fuOpType)
   amuCtrl.ms := s3_in.uop.imm(2, 0)
   val s3_wholeReg = MldstOpType.isWholeReg(s3_in.uop.fuOpType)
   val s3_wholeAcc = s3_wholeReg && MldstOpType.isMatrixC(s3_in.uop.fuOpType)
   val s3_wholeB = s3_wholeReg && MldstOpType.isMatrixB(s3_in.uop.fuOpType)
-  amuCtrl.widths    := Mux(s3_wholeReg, Mux(s3_wholeAcc, MSew.e32, MSew.e8), s3_mcfgWidth)
+  amuCtrl.widths    := Mux(s3_isConvertF32, MSew.e32, Mux(s3_isScale, MSew.e8,
+    Mux(s3_wholeReg, Mux(s3_wholeAcc, MSew.e32, MSew.e8), s3_mcfgWidth)))
   amuCtrl.baseAddr  := s3_in.paddr
   amuCtrl.stride    := s3_in.stride
   amuCtrl.transpose := MldstOpType.isTransposed(s3_in.uop.fuOpType)
   amuCtrl.isacc     := MldstOpType.isMatrixC(s3_in.uop.fuOpType)
   amuCtrl.isA       := MldstOpType.isMatrixA(s3_in.uop.fuOpType)
   amuCtrl.isB       := MldstOpType.isMatrixB(s3_in.uop.fuOpType)
-  when (s3_wholeReg) {
+  when (s3_isScale) {
+    amuCtrl.row := s3_in.mtile0
+    amuCtrl.column := (s3_in.mtile1 +& 31.U) >> 5
+  } .elsewhen (s3_wholeReg) {
     amuCtrl.row     := Mux(s3_wholeB, (TRLEN / 8).U, ROWNUM.U)
     when (s3_wholeAcc) { // for acc registers
       amuCtrl.column := (ARLEN / 32).U
@@ -592,6 +634,8 @@ class MlsUnit(implicit p: Parameters) extends XSModule
     // It will be filled in ROB.
     s3_out.bits.amuCtrl.get.pc.get := DontCare
     s3_out.bits.amuCtrl.get.coreid.get := DontCare
+    s3_out.bits.amuCtrl.get.retireId.get := 0.U
+    s3_out.bits.amuCtrl.get.epoch.get := 0.U
   }
   s3_out.bits.debug.isMMIO     := s3_in.mmio
   s3_out.bits.debug.isNCIO     := false.B

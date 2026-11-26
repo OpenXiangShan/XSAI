@@ -42,10 +42,13 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
 
   val flushPipe = Wire(Bool())
   val flush = io.flush.valid
+  // NewCSR consumes valid independently of ready. Gate both sides for MINIT,
+  // while preserving its existing legal/redirect handling and all other CSRs.
+  private val minitAdmitted = Wire(Bool())
 
   /** Alias of input signals */
   val (valid, src1, imm, func) = (
-    io.in.valid,
+    io.in.valid && minitAdmitted,
     io.in.bits.data.src(0),
     io.in.bits.data.imm(Imm_Z().len - 1, 0),
     io.in.bits.ctrl.fuOpType
@@ -68,6 +71,7 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
   private val isCSRAcc = CSROpType.isCsrAccess(func)
 
   val csrMod = Module(new NewCSR)
+  csrMod.io.xmfflags <> csrIn.mpu.xmfflags
   val trapInstMod = Module(new TrapInstMod)
   val trapTvalMod = Module(new TrapTvalMod)
 
@@ -107,6 +111,8 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
     thisRobIdx := robIdxReg
   }
   private val redirectFlush = thisRobIdx.needFlush(io.flush)
+  minitAdmitted := !CSROpType.isMinit(func) ||
+    (csrIn.minitAdmissionReady && !redirectFlush)
 
   csrMod.io.in match {
     case in =>
@@ -306,7 +312,7 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
   tlb.pmm := csrMod.io.tlb.pmm
 
   /** Since some CSR read instructions are allowed to be pipelined, ready/valid signals should be modified */
-  io.in.ready := csrMod.io.in.ready // Todo: Async read imsic may block CSR
+  io.in.ready := csrMod.io.in.ready && minitAdmitted // Todo: Async read imsic may block CSR
   io.out.valid := csrModOutValid
   io.out.bits.ctrl.exceptionVec.get := exceptionVec
   io.out.bits.ctrl.flushPipe.get := flushPipe

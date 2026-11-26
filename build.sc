@@ -244,6 +244,7 @@ object chiselIOPMP extends HasChisel {
 object CUTE extends $file.CUTE.common.CUTEModule with HasChisel {
 
   override def millSourcePath = pwd / "CUTE"
+  override def moduleDeps = super.moduleDeps ++ Seq(fudian)
 
   override def sources = T.sources {
     val cuteSourceRoot = millSourcePath / "src" / "main" / "scala"

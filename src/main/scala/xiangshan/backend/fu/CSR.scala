@@ -67,6 +67,7 @@ class MpuCsrIO(implicit p: Parameters) extends XSBundle {
   val mtilek = Output(UInt(XLEN.W))
 
   val dirty_ms = Output(Bool())
+  val xmfflags = Decoupled(UInt(5.W))
 }
 
 class PerfCounterIO(implicit p: Parameters) extends XSBundle {
@@ -99,6 +100,7 @@ class PerfCounterIO(implicit p: Parameters) extends XSBundle {
 
 class CSRFileIO(implicit p: Parameters) extends XSBundle with HasSoCParameter {
   val hartId = Input(UInt(hartIdLen.W))
+  val minitAdmissionReady = Input(Bool())
   // output (for func === CSROpType.jmp)
   val perf = Input(new PerfCounterIO)
   val criticalErrorState = Output(Bool())

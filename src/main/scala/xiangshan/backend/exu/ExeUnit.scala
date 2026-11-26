@@ -453,7 +453,7 @@ class Dispatcher[T <: Data](private val gen: T, n: Int, acceptCond: T => Seq[Boo
     out.bits := io.in.bits
   }
 
-  io.in.ready := Cat(io.out.map(_.ready)).andR
+  io.in.ready := Mux1H(acceptVec, io.out.map(_.ready))
 }
 
 class MemExeUnitIO (implicit p: Parameters) extends XSBundle {
