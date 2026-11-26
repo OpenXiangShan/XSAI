@@ -379,7 +379,7 @@ init:
 	git submodule update --init $(GIT_FORCE_FLAG)
 	cd rocket-chip && git submodule update --init $(GIT_FORCE_FLAG) cde hardfloat
 	cd XSAICache && git submodule update --init $(GIT_FORCE_FLAG) OpenNCB ZhuJiang
-	cd CUTE && git submodule update --init $(GIT_FORCE_FLAG) cute-fpe
+	cd CUTE && git submodule update --init $(GIT_FORCE_FLAG) cute-fpe XSAICache
 
 # Initialize necessary submodules (force)
 #   This ensure that all submodules files are checked out to the correct commit. Good for CI.
