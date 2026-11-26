@@ -952,6 +952,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
   deqPtrGenModule.io.deq_w := commit_wDeqGroup
   deqPtrGenModule.io.exception_state := exceptionDataRead
   deqPtrGenModule.io.intrBitSetReg := intrBitSetReg
+  deqPtrGenModule.io.deqHasFlushed := deqHasFlushed
   deqPtrGenModule.io.hasNoSpecExec := hasWaitForward
   deqPtrGenModule.io.allowOnlyOneCommit := allowOnlyOneCommit
   deqPtrGenModule.io.interrupt_safe := robDeqGroup(deqPtr.value(bankAddrWidth-1,0)).interrupt_safe

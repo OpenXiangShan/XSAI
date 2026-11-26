@@ -45,6 +45,7 @@ class NewRobDeqPtrWrapper(implicit p: Parameters) extends XSModule with HasCircu
     val exception_state = Flipped(ValidIO(new RobExceptionInfo))
     // for flush: when exception occurs, reset deqPtrs to range(0, CommitWidth)
     val intrBitSetReg = Input(Bool())
+    val deqHasFlushed = Input(Bool())
     val allowOnlyOneCommit = Input(Bool())
     val hasNoSpecExec = Input(Bool())
     val interrupt_safe = Input(Bool())
@@ -63,7 +64,7 @@ class NewRobDeqPtrWrapper(implicit p: Parameters) extends XSModule with HasCircu
 
   // for exceptions (flushPipe included) and interrupts:
   // only consider the first instruction
-  val intrEnable = io.intrBitSetReg && !io.hasNoSpecExec && io.interrupt_safe
+  val intrEnable = io.intrBitSetReg && !io.hasNoSpecExec && io.interrupt_safe && !io.deqHasFlushed
   val exceptionEnable = io.deq_w(deqPosition) && io.exception_state.valid && io.exception_state.bits.not_commit && io.exception_state.bits.robIdx === deqPtrVec(0)
   val redirectOutValid = io.state === 0.U && io.deq_v(deqPosition) && (intrEnable || exceptionEnable)
 
