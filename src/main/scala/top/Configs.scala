@@ -662,6 +662,13 @@ class DefaultMatrix2TMxfpConfig(n: Int = 1) extends Config(
   })
 )
 
+/** Experimental vector FP4 encoder; preserve the R14 MN128 CPU/cache/2T geometry. */
+class DefaultMatrix2TMxfpVectorEncodeConfig(n: Int = 1) extends Config(
+  new DefaultMatrix2TMxfpConfig(n).alter((site, here, up) => {
+    case XSTileKey => up(XSTileKey).map(_.copy(ExperimentalMxfp4VectorEncode = true))
+  })
+)
+
 /** 64-SCP MX baseline; keep the existing DefaultMatrix CPU/cache and 4x32x4 array. */
 class DefaultMatrix2T64MxfpConfig(n: Int = 1) extends Config(
   new DefaultMatrix2TMxfpConfig(n).alter((site, here, up) => {

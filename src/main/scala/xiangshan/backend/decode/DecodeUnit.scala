@@ -873,6 +873,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     SvinvalDecode.table ++
     HypervisorDecode.table ++
     VecDecoder.table(HasVfexp2) ++
+    Mxfp4VectorDecode.table(Mxfp4VectorDecode.enabled(p)) ++
     OptionWrapper(HasMatrixExtension,
       MatrixDecoder.table(MatrixExtension, MatrixDecoder.convertF32Enabled(p),
         MatrixDecoder.dynamicQuantEnabled(p))).getOrElse(Array()) ++
@@ -917,6 +918,9 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   private val isFMA = inst.OPCODE === BitPat("b100??11")
   private val isVppu = FuType.isVppu(decodedInst.fuType)
   private val isVecOPF = FuType.isVecOPF(decodedInst.fuType)
+  private val isMxfp4Vector = if (Mxfp4VectorDecode.enabled(p)) {
+    Mxfp4VectorDecode.ENCODE === inst.ALL
+  } else false.B
 
   // read src1~3 location
   decodedInst.lsrc(0) := inst.RS1
@@ -973,7 +977,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
       FuType.FuTypeOrR(decodedInst.fuType, FuType.fpOP ++ Seq(FuType.f2v)) ||
       (FuType.FuTypeOrR(decodedInst.fuType, FuType.ldu) && (decodedInst.fuOpType === LSUOpType.lh || decodedInst.fuOpType === LSUOpType.lw || decodedInst.fuOpType === LSUOpType.ld) ||
       FuType.FuTypeOrR(decodedInst.fuType, FuType.stu) && (decodedInst.fuOpType === LSUOpType.sh || decodedInst.fuOpType === LSUOpType.sw || decodedInst.fuOpType === LSUOpType.sd)) && decodedInst.instr(2) ||
-      inst.isOPFVF || inst.isOPFVV
+      inst.isOPFVF || inst.isOPFVV || isMxfp4Vector
     ) ||
     io.fromCSR.illegalInst.vsIsOff    && (FuType.FuTypeOrR(decodedInst.fuType, FuType.vecAll) || isCsrrVl || isCsrrVlenb) ||
     // io.fromCSR.illegalInst.msIsOff    && (FuType.FuTypeOrR(decodedInst.fuType, FuType.matrixAll) || isMfence) ||
@@ -981,6 +985,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     io.fromCSR.illegalInst.wrs_nto    && FuType.FuTypeOrR(decodedInst.fuType, FuType.csr)   && CSROpType.isWrsNto(decodedInst.fuOpType) ||
     (decodedInst.needFrm.scalaNeedFrm || FuType.isScalaNeedFrm(decodedInst.fuType)) && (((decodedInst.fpu.rm === 5.U) || (decodedInst.fpu.rm === 6.U)) || ((decodedInst.fpu.rm === 7.U) && io.fromCSR.illegalInst.frm)) ||
     (decodedInst.needFrm.vectorNeedFrm || FuType.isVectorNeedFrm(decodedInst.fuType)) && io.fromCSR.illegalInst.frm ||
+    isMxfp4Vector && io.enq.vtype.vsew =/= 2.U ||
     (io.fromCSR.illegalInst.cboZ  || !HasCMO.B) && isCboZero ||
     (io.fromCSR.illegalInst.cboCF || !HasCMO.B) && (isCboClean || isCboFlush) ||
     (io.fromCSR.illegalInst.cboI  || !HasCMO.B) && isCboInval ||
@@ -1110,7 +1115,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     VFSLIDE1UP_VF, VFSLIDE1DOWN_VF,
   )
 
-  decodedInst.wfflags := wfflagsInsts.map(_ === inst.ALL).reduce(_ || _)
+  decodedInst.wfflags := wfflagsInsts.map(_ === inst.ALL).reduce(_ || _) || isMxfp4Vector
   decodedInst.needFrm.scalaNeedFrm := scalaNeedFrmInsts.map(_ === inst.ALL).reduce(_ || _)
   decodedInst.needFrm.vectorNeedFrm := vectorNeedFrmInsts.map(_ === inst.ALL).reduce(_ || _)
   decodedInst.vpu := 0.U.asTypeOf(decodedInst.vpu) // Todo: Connect vpu decoder
@@ -1155,7 +1160,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   decodedInst.srcType(4) := SrcType.vp // vconfig
 
   val uopInfoGen = Module(new UopInfoGen)
-  uopInfoGen.io.in.preInfo.isVecArith := inst.isVecArith
+  uopInfoGen.io.in.preInfo.isVecArith := inst.isVecArith || isMxfp4Vector
   uopInfoGen.io.in.preInfo.isVecMem := inst.isVecStore || inst.isVecLoad
   uopInfoGen.io.in.preInfo.isAmoCAS := inst.isAMOCAS
   
