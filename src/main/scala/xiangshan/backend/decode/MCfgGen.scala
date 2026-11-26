@@ -144,10 +144,9 @@ object McfgHelpers {
     val supportsFp16Fp32 = matrixExtension.enableFp16Fp32 && aType == Fp16 && bType == Fp16 && cType == Fp32
     val supportsBf16Fp32 = matrixExtension.enableBf16Fp32 && aType == Bf16 && bType == Bf16 && cType == Fp32
     val supportsTf32Fp32 = matrixExtension.enableTf32Fp32 && aType == Tf32 && bType == Tf32 && cType == Fp32
-    val supportsFp32Fp32 = matrixExtension.enableFp32Fp32 && aType == Fp32 && bType == Fp32 && cType == Fp32
 
     supportsInt8 || supportsInt4 || supportsFp8Fp16 || supportsFp8Bf16 || supportsFp8Fp32 ||
-      supportsFp16Fp16 || supportsFp16Fp32 || supportsBf16Fp32 || supportsTf32Fp32 || supportsFp32Fp32
+      supportsFp16Fp16 || supportsFp16Fp32 || supportsBf16Fp32 || supportsTf32Fp32
   }
 
   def isMmaTripleSupportedRaw(aRaw: BigInt, bRaw: BigInt, cRaw: BigInt, matrixExtension: MatrixIsaParams): Boolean = {
@@ -174,7 +173,6 @@ object McfgHelpers {
       Option.when(matrixExtension.enableFp16Fp32)(aTypeCode === Fp16.typeCode.U && bTypeCode === Fp16.typeCode.U && cTypeCode === Fp32.typeCode.U),
       Option.when(matrixExtension.enableBf16Fp32)(aTypeCode === Bf16.typeCode.U && bTypeCode === Bf16.typeCode.U && cTypeCode === Fp32.typeCode.U),
       Option.when(matrixExtension.enableTf32Fp32)(aTypeCode === Tf32.typeCode.U && bTypeCode === Tf32.typeCode.U && cTypeCode === Fp32.typeCode.U),
-      Option.when(matrixExtension.enableFp32Fp32)(aTypeCode === Fp32.typeCode.U && bTypeCode === Fp32.typeCode.U && cTypeCode === Fp32.typeCode.U)
     ).flatten
 
     if (supported.nonEmpty) supported.reduce(_ || _) else false.B

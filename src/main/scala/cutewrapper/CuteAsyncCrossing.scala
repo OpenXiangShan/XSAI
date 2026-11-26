@@ -16,8 +16,12 @@ private class CutePerfDelta(implicit p: Parameters) extends CuteBundle {
   )
 }
 
+case class CutePerfAsyncParams(sync: Int = 3, safe: Boolean = true, narrow: Boolean = false) {
+  val queueParams: AsyncQueueParams = AsyncQueueParams(depth = 1, sync = sync, safe = safe, narrow = narrow)
+}
+
 /** Transfers CUTE performance-event deltas without assuming a fixed clock ratio. */
-class CutePerfAsyncCrossing(params: AsyncQueueParams)(implicit p: Parameters) extends RawModule {
+class CutePerfAsyncCrossing(params: CutePerfAsyncParams)(implicit p: Parameters) extends RawModule {
   val io = IO(new Bundle {
     val sourceClock = Input(Clock())
     val sourceReset = Input(Bool())
@@ -29,9 +33,8 @@ class CutePerfAsyncCrossing(params: AsyncQueueParams)(implicit p: Parameters) ex
 
   private val eventCount = CutePerfEventCounts.Backend + CutePerfEventCounts.Mem
   private val deltaWidth = CutePerfDeltaParams.Width
-  require(params.depth == 1, "CUTE performance delta crossing expects a depth-1 AsyncQueue")
 
-  private val crossing = Module(new AsyncQueue(new CutePerfDelta, params))
+  private val crossing = Module(new AsyncQueue(new CutePerfDelta, params.queueParams))
   crossing.io.enq_clock := io.sourceClock
   crossing.io.enq_reset := io.sourceReset
   crossing.io.deq_clock := io.sinkClock
