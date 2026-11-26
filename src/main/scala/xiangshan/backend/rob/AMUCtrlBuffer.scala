@@ -45,7 +45,7 @@ class AmuCtrlBufferIO()(implicit val p: Parameters, val params: BackendParams) e
   val redirect = Input(new RedirectBundle)
 
   // To Amu
-  val toAMU = Vec(CommitWidth, DecoupledIO(new AmuCtrlIO))
+  val toAMU = DecoupledIO(new AmuCtrlIO)
 
   // If we enable difftest, there will be hartid
   val hartId = Option.when(env.EnableDifftest && HasMatrixExtension)(Input(UInt(hartIdLen.W)))
@@ -229,6 +229,31 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
   // To AMU
   val deqPtr = RegInit(0.U.asTypeOf(new RobPtr))
   val deqEntries = (0 until CommitWidth).map(i => amuCtrlEntries((deqPtr + i.U).value))
+  val requestsValid = VecInit(deqEntries.map(_.amuReqValid)).asUInt
+  val selectedLane = PriorityEncoderOH(requestsValid)
+
+  // A CommitWidth-entry window covers one entry in each bank. Banks before
+  // the head bank read the next row, including when the window wraps.
+  val rowCount = RobSize / CommitWidth
+  val headBank = deqPtr.value % CommitWidth.U
+  val headRow = UIntToOH(deqPtr.value / CommitWidth.U, rowCount)
+  val nextRow = headRow.rotateLeft(1)
+  val selectedBank = selectedLane.rotateLeft(headBank)
+  val bankPayloads = (0 until CommitWidth).map { bank =>
+    val rowSelect = Mux(bank.U < headBank, nextRow, headRow)
+    val payloads = (bank until RobSize by CommitWidth).map(i => amuCtrlEntries(i).amuCtrl)
+    Mux1H(rowSelect.asBools, payloads)
+  }
+
+  val amuCtrl = io.toAMU
+  amuCtrl.valid := requestsValid.orR
+  amuCtrl.bits := Mux1H(selectedBank.asBools, bankPayloads)
+  for ((entry, i) <- deqEntries.zipWithIndex) {
+    entry.checkSanity(s"AMUCtrlBuffer: deqEntry[$i]")
+    when (amuCtrl.fire && selectedLane(i)) {
+      entry.canDeq := true.B
+    }
+  }
 
   class AmuCtrlTableEntry extends Bundle {
     val op = UInt(2.W)
@@ -239,61 +264,31 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
   }
   val amuCtrl_table = ChiselDB.createTable(s"AMUCtrl_table", new AmuCtrlTableEntry, basicDB = true)
 
-  io.toAMU.zipWithIndex.foreach { case (amuCtrl, i) =>
-    val deqEntry = deqEntries(i)
-    val olderAmuReqValid = if (i == 0) false.B else deqEntries.take(i).map(_.amuReqValid).reduce(_ || _)
-    deqEntry.checkSanity(s"AMUCtrlBuffer: deqEntry[$i]")
-    amuCtrl.valid := deqEntry.amuReqValid
-    amuCtrl.bits := Mux(deqEntry.amuReqValid, deqEntry.amuCtrl, 0.U.asTypeOf(new AmuCtrlIO))
-    when (amuCtrl.fire) {
-      // XSCore serializes these lanes through a fixed-priority arbiter.
-      assert(!olderAmuReqValid, s"AMUCtrlBuffer: toAMU[$i] fired before an older AMU request")
-      assert(!deqEntry.canDeq, s"AMUCtrlBuffer: deqEntry[$i] is already set to canDeq")
-      deqEntry.canDeq := true.B
-    }
-    val mmaio = amuCtrl.bits.data.asTypeOf(new AmuMmaIO)
-    val mlsio = amuCtrl.bits.data.asTypeOf(new AmuLsuIO)
-    val mreleaseio = amuCtrl.bits.data.asTypeOf(new AmuReleaseIO2CUTE)
-    val arithio = amuCtrl.bits.data.asTypeOf(new AmuArithIO)
-    val amuCtrl_table_entry = Wire(new AmuCtrlTableEntry)
-    amuCtrl_table_entry.op := amuCtrl.bits.op
-    when(amuCtrl.bits.isMma()) {
-      amuCtrl_table_entry.mma := mmaio
-    }.otherwise {
-      amuCtrl_table_entry.mma := 0.U.asTypeOf(new AmuMmaIO)
-    }
-    when(amuCtrl.bits.isMls()) {
-      amuCtrl_table_entry.mls := mlsio
-    }.otherwise {
-      amuCtrl_table_entry.mls := 0.U.asTypeOf(new AmuLsuIO)
-    }
-    when(amuCtrl.bits.isRelease()) {
-      amuCtrl_table_entry.mrelease := mreleaseio
-    }.otherwise {
-      amuCtrl_table_entry.mrelease := 0.U.asTypeOf(new AmuReleaseIO2CUTE)
-    }
-    when(amuCtrl.bits.isArith()) {
-      amuCtrl_table_entry.arith := arithio
-    }.otherwise {
-      amuCtrl_table_entry.arith := 0.U.asTypeOf(new AmuArithIO)
-    }
-    amuCtrl_table.log(
-      data = amuCtrl_table_entry,
-      en = amuCtrl.fire,
-      site = s"AMUCtrl_table",
-      clock = clock,
-      reset = reset
-    )
-  }
+  val mmaio = amuCtrl.bits.data.asTypeOf(new AmuMmaIO)
+  val mlsio = amuCtrl.bits.data.asTypeOf(new AmuLsuIO)
+  val mreleaseio = amuCtrl.bits.data.asTypeOf(new AmuReleaseIO2CUTE)
+  val arithio = amuCtrl.bits.data.asTypeOf(new AmuArithIO)
+  val amuCtrl_table_entry = Wire(new AmuCtrlTableEntry)
+  amuCtrl_table_entry.op := amuCtrl.bits.op
+  amuCtrl_table_entry.mma := Mux(amuCtrl.bits.isMma(), mmaio, 0.U.asTypeOf(new AmuMmaIO))
+  amuCtrl_table_entry.mls := Mux(amuCtrl.bits.isMls(), mlsio, 0.U.asTypeOf(new AmuLsuIO))
+  amuCtrl_table_entry.mrelease := Mux(amuCtrl.bits.isRelease(), mreleaseio, 0.U.asTypeOf(new AmuReleaseIO2CUTE))
+  amuCtrl_table_entry.arith := Mux(amuCtrl.bits.isArith(), arithio, 0.U.asTypeOf(new AmuArithIO))
+  amuCtrl_table.log(
+    data = amuCtrl_table_entry,
+    en = amuCtrl.fire,
+    site = s"AMUCtrl_table",
+    clock = clock,
+    reset = reset
+  )
 
   val deqCondSeq = deqEntries.map(x => ~x.canDeq)
   val deqCount = PriorityEncoder(deqCondSeq :+ true.B)
   // Update deqPtr and invalidate entries
   deqPtr := deqPtr + deqCount
   for (i <- 0 until CommitWidth) {
-    val curr_deq_ptr = deqPtr + i.U
-    when(amuCtrlEntries(curr_deq_ptr.value).canDeq && i.U < deqCount) {
-      amuCtrlEntries(curr_deq_ptr.value) := AmuCtrlEntry.zero
+    when(deqEntries(i).canDeq && i.U < deqCount) {
+      deqEntries(i) := AmuCtrlEntry.zero
     }
   }
 

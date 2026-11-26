@@ -877,7 +877,7 @@ class CtrlBlockIO()(implicit p: Parameters, params: BackendParams) extends XSBun
     val cpuHalt = Output(Bool())
   }
 
-  val toAmu = OptionWrapper(HasMatrixExtension, Vec(CommitWidth, Decoupled(new AmuCtrlIO)))
+  val toAmu = OptionWrapper(HasMatrixExtension, Decoupled(new AmuCtrlIO))
 
   val frontend = Flipped(new FrontendToCtrlIO())
   val fromCSR = new Bundle{

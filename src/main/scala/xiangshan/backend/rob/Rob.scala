@@ -140,7 +140,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
     })
 
     // to AMU
-    val amuCtrl = OptionWrapper(HasMatrixExtension, Vec(CommitWidth, DecoupledIO(new AmuCtrlIO)))
+    val amuCtrl = OptionWrapper(HasMatrixExtension, DecoupledIO(new AmuCtrlIO))
   })
 
   val exuWBs: Seq[ValidIO[ExuOutput]] = io.exuWriteback.filter(!_.bits.params.hasStdFu).toSeq
