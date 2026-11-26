@@ -33,7 +33,7 @@ import xscache.chi.{CHIAddrWidthKey, CHIDataCheckKey, CHIIssue, CHIPoisonKey, De
 import xiangshan.backend.trace.TraceCoreInterface
 import xiangshan.backend.fu.matrix._
 import xiangshan.backend.fu.matrix.Bundles._
-import cute.{CutePerfAsyncCrossing, CutePerfToCoreIO, XSCute}
+import cute.{CutePerfAsyncCrossing, CutePerfAsyncParams, CutePerfToCoreIO, XSCute}
 
 object MatAcc extends Enumeration {
   type MatAcc = Value
@@ -48,7 +48,7 @@ case class ExternalAcceleratorCDCParams(
   completion: AsyncQueueParams = AsyncQueueParams(depth = 4, sync = 3, safe = true),
   matrixData: AsyncQueueParams = AsyncQueueParams(depth = 2, sync = 3, safe = true),
   tileLink: AsyncQueueParams = AsyncQueueParams(depth = 8, sync = 3, safe = true),
-  perfSnapshot: AsyncQueueParams = AsyncQueueParams.singleton(sync = 3, safe = true)
+  perfSnapshot: CutePerfAsyncParams = CutePerfAsyncParams()
 )
 
 case object ExternalAcceleratorCDCKey

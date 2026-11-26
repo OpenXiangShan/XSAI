@@ -36,7 +36,7 @@ import device.EnableJtag
 import xscache.coupledL2._
 import xscache.coupledL2.prefetch._
 import xscache.common.DirtyField
-import cute.{CuteParamsKey, CuteParams, CuteDebugParams, Cutev3extParams, MatrixIsaParams}
+import cute.{CuteParamsKey, CuteParams, MatrixIsaParams}
 import zhujiang.ZJParameters
 
 object LLCType extends Enumeration {
@@ -248,24 +248,25 @@ class MinimalConfig(n: Int = 1) extends Config(
   })
 )
 
-/** Derive CUTE `Tensor_MN` / `Tensor_K` from XiangShan `XSCoreParameters` matrix geometry (`TLEN`, `TRLEN`, `MELEN`).
-  *
-  *  - `Tensor_MN = TLEN / TRLEN` (matches core `ROWNUM` and CSR-visible extent along M/N).
-  *  - `Tensor_K = TRLEN / 8` (K in 8-bit elements; `TRLEN` is in bits).
-  *
-  * `MELEN` is part of the same matrix model in `Parameters.scala`; override it via YAML/Config together with
-  * `TLEN`/`TRLEN` so CSR, execution units, and CUTE stay consistent.
-  *
-  * Further validation (power-of-two `Tensor_MN`/`Tensor_K`, `ReduceGroupSize == 2`, `outsideDataWidthByte <= Tensor_K`, …)
-  * is left to `cute.CuteParams` constructor `require`s — not duplicated here.
-  */
-private[top] object MatrixCuteTensorDims {
-  def fromXcore(xp: XSCoreParameters): (Int, Int) = {
-    require(xp.TLEN % xp.TRLEN == 0, s"TLEN must be divisible by TRLEN, got TLEN=${xp.TLEN} TRLEN=${xp.TRLEN}")
-    require(xp.TRLEN % 8 == 0, s"TRLEN (bits) must be divisible by 8, got TRLEN=${xp.TRLEN}")
-    val tensorMn = xp.TLEN / xp.TRLEN
-    val tensorK = xp.TRLEN / 8
-    (tensorMn, tensorK)
+/** Bind CUTE's standalone parameters to the matrix geometry and interfaces of this core. */
+private[top] object MatrixCuteConfig {
+  def apply(p: View, matrixMN: Int, reduceWidthByte: Int): CuteParams = {
+    val xp = p(XSTileKey).head
+    val enableDifftest = p(DebugOptionsKey).EnableDifftest
+    require(xp.TRLEN > 0 && xp.TLEN % xp.TRLEN == 0, s"invalid TLEN=${xp.TLEN} TRLEN=${xp.TRLEN}")
+    require(xp.TRLEN % 8 == 0, s"TRLEN (bits) must be divisible by 8, got ${xp.TRLEN}")
+    CuteParams(
+      Matrix_MN = matrixMN,
+      ReduceWidthByte = reduceWidthByte,
+      Tensor_MN = xp.TLEN / xp.TRLEN,
+      Tensor_K = xp.TRLEN / 8,
+      MatrixExtension = xp.MatrixExtension,
+      MsyncRegs = xp.MsyncRegs,
+      L2NBanks = xp.L2NBanks,
+      EnableMatrixPrefetch = xp.enableMatrixPrefetch,
+      EnableDifftest = enableDifftest,
+      DifftestAsyncClockName = Option.when(enableDifftest && p(ExternalAcceleratorCDCKey).enable)(s"cute_hart_${xp.HartId}")
+    )
   }
 }
 
@@ -275,7 +276,6 @@ class MinimalMatrixConfig(n: Int) extends Config(
       p.copy(
         TLEN = 64 * 64 * 8,
         TRLEN = 64 * 8,
-        MELEN = 32,
         MatrixExtension = MatrixIsaParams(
           enableInt8Int32 = true,
           enableFp8Fp32 = true,
@@ -294,24 +294,7 @@ class MinimalMatrixConfig(n: Int) extends Config(
     }
     case MatAccKey => MatAcc.CUTE
     case CuteParamsKey =>
-      val xp = site(XSTileKey).head
-      val cuteBase = CuteParams.CUTE_2Tops
-      val (tensorMn, tensorK) = MatrixCuteTensorDims.fromXcore(xp)
-      cuteBase.copy(
-        MsyncRegs = xp.MsyncRegs,
-        Tensor_MN = tensorMn,
-        Tensor_K = tensorK,
-        Debug = CuteDebugParams.NoDebug,
-        EnableDifftest = site(DebugOptionsKey).EnableDifftest,
-        DifftestAsyncClockName = Option.when(
-          site(DebugOptionsKey).EnableDifftest && site(ExternalAcceleratorCDCKey).enable
-        )(s"cute_hart_${xp.HartId}"),
-        v3config = Cutev3extParams(
-          TaskCtrl_AutoClear = true,
-        ),
-        MatrixExtension = xp.MatrixExtension,
-        L2NBanks = xp.L2NBanks,
-      )
+      MatrixCuteConfig(site, matrixMN = 4, reduceWidthByte = 32)
   })
 )
 
@@ -554,7 +537,6 @@ class DefaultMatrixConfig(n: Int = 1) extends Config(
       p.copy(
         TLEN = 128 * 64 * 8,
         TRLEN = 64 * 8,
-        MELEN = 32,
         MatrixExtension = MatrixIsaParams(
           enableInt8Int32 = true,
           enableFp8Fp32 = true,
@@ -572,24 +554,7 @@ class DefaultMatrixConfig(n: Int = 1) extends Config(
     }
     case MatAccKey => MatAcc.CUTE
     case CuteParamsKey =>
-      val xp = site(XSTileKey).head
-      val cuteBase = CuteParams.CUTE_8Tops_128SCP
-      val (tensorMn, tensorK) = MatrixCuteTensorDims.fromXcore(xp)
-      cuteBase.copy(
-        MsyncRegs = xp.MsyncRegs,
-        Tensor_MN = tensorMn,
-        Tensor_K = tensorK,
-        Debug = CuteDebugParams.NoDebug,
-        EnableDifftest = site(DebugOptionsKey).EnableDifftest,
-        DifftestAsyncClockName = Option.when(
-          site(DebugOptionsKey).EnableDifftest && site(ExternalAcceleratorCDCKey).enable
-        )(s"cute_hart_${xp.HartId}"),
-        v3config = Cutev3extParams(
-          TaskCtrl_AutoClear = true,
-        ),
-        MatrixExtension = xp.MatrixExtension,
-        L2NBanks = xp.L2NBanks,
-      )
+      MatrixCuteConfig(site, matrixMN = 8, reduceWidthByte = 32)
   })
 )
 
@@ -611,7 +576,6 @@ class DefaultMatrixMediumBandWidthConfig(n: Int = 1) extends Config(
 // DefaultMatrixConfig remains the reproducible prefetch-off baseline.
 class DefaultMatrixPrefetchConfig(n: Int = 1) extends Config(
   new DefaultMatrixConfig(n).alter((site, here, up) => {
-    case CuteParamsKey => up(CuteParamsKey).copy(EnableMatrixPrefetch = true)
     case XSTileKey => up(XSTileKey).map { core =>
       core.copy(
         L2CacheParamsOpt = core.L2CacheParamsOpt.map { l2 =>
@@ -627,7 +591,6 @@ class DefaultMatrixPrefetchConfig(n: Int = 1) extends Config(
 // receiver sources while retaining the Matrix-guided prefetch datapath.
 class DefaultMatrixOnlyPrefetchConfig(n: Int = 1) extends Config(
   new DefaultMatrixConfig(n).alter((site, here, up) => {
-    case CuteParamsKey => up(CuteParamsKey).copy(EnableMatrixPrefetch = true)
     case XSTileKey => up(XSTileKey).map { core =>
       core.copy(
         prefetcher = None,

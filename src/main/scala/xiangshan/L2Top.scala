@@ -19,7 +19,7 @@ package xiangshan
 import chisel3._
 import chisel3.util._
 import xscache.coupledL2.MatrixDataBundle
-import xscache.coupledL2.prefetch.{MatrixPrefetchControl, MatrixPrefetchParameters}
+import xscache.coupledL2.prefetch.MatrixPrefetchControl
 import org.chipsalliance.cde.config._
 import chisel3.util.{Valid, ValidIO}
 import freechips.rocketchip.devices.debug.DebugModuleKey
@@ -75,9 +75,7 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
     (buffers, node)
   }
   val enableL2 = coreParams.L2CacheParamsOpt.isDefined
-  val enableMatrixPrefetch = coreParams.L2CacheParamsOpt.exists(
-    _.prefetch.exists(_.isInstanceOf[MatrixPrefetchParameters])
-  )
+  val enableMatrixPrefetch = coreParams.enableMatrixPrefetch
   // =========== Components ============
   val l1_xbar = TLXbar()
   val mmio_xbar = TLXbar()

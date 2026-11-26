@@ -64,8 +64,6 @@ case class XSCoreParameters
   HasBitmapCheckDefault: Boolean = false,
   TLEN: Int = 128 * 64 * 8,   // Expect TMMAX 128 TNMAX 128 TKMAX 64 with e8
   TRLEN: Int = 64 * 8,         // 64 * e8
-  MELEN: Int = 32,
-  MTILEXLEN: Int = 9,         // 9 bits is sufficient
   HasMExtension: Boolean = true,
   HasCExtension: Boolean = true,
   HasHExtension: Boolean = true,
@@ -168,13 +166,9 @@ case class XSCoreParameters
   VecLogicRegs: Int = 32 + 15, // 15: tmp
   V0LogicRegs: Int = 1, // V0
   VlLogicRegs: Int = 1, // Vl
-  MxLogicRegs: Int = 3, // Mtilem, Mtilen, Mtilek
   MsyncRegs: Int = 32,  // 8 / 16 / 32
   V0_IDX: Int = 0,
   Vl_IDX: Int = 0,
-  Mtilem_IDX: Int = 0,
-  Mtilen_IDX: Int = 1,
-  Mtilek_IDX: Int = 2,
   NRPhyRegs: Int = 192,
   VirtualLoadQueueSize: Int = 72,
   LoadQueueRARSize: Int = 72,
@@ -396,7 +390,11 @@ case class XSCoreParameters
 
   def vlWidth = log2Up(VLEN) + 1
 
-  def mlWidth = MTILEXLEN
+  def mlWidth: Int = cute.Bundles.Mtilex.width
+  def MELEN: Int = cute.CuteFpeFormat.ResultWidth
+  def enableMatrixPrefetch: Boolean = L2CacheParamsOpt.exists(
+    _.prefetch.exists(_.isInstanceOf[xscache.coupledL2.prefetch.MatrixPrefetchParameters])
+  )
 
   /**
    * the minimum element length of vector elements
@@ -826,15 +824,15 @@ trait HasXSParameter {
   def VecLogicRegs = coreParams.VecLogicRegs
   def V0LogicRegs = coreParams.V0LogicRegs
   def VlLogicRegs = coreParams.VlLogicRegs
-  def MxLogicRegs = coreParams.MxLogicRegs
+  def MxLogicRegs: Int = Mtilek_IDX + 1
   def MaxLogicRegs = Set(IntLogicRegs, FpLogicRegs, VecLogicRegs, V0LogicRegs, VlLogicRegs).max
   def MsyncRegs = coreParams.MsyncRegs
   def LogicRegsWidth = log2Ceil(MaxLogicRegs)
   def V0_IDX = coreParams.V0_IDX
   def Vl_IDX = coreParams.Vl_IDX
-  def Mtilem_IDX = coreParams.Mtilem_IDX
-  def Mtilen_IDX = coreParams.Mtilen_IDX
-  def Mtilek_IDX = coreParams.Mtilek_IDX
+  def Mtilem_IDX: Int = 0
+  def Mtilen_IDX: Int = 1
+  def Mtilek_IDX: Int = 2
   def IntPhyRegs = coreParams.intPreg.numEntries
   def FpPhyRegs = coreParams.fpPreg.numEntries
   def VfPhyRegs = coreParams.vfPreg.numEntries
