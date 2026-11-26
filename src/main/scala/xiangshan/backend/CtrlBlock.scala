@@ -781,6 +781,9 @@ class CtrlBlockImp(
 
   io.toTop.cpuHalt := DelayN(rob.io.cpu_halt, 5)
   io.toAmu.foreach(_ <> rob.io.amuCtrl.get)
+  io.olderAmuPending.foreach(_ := rob.io.olderAmuPending.get)
+  io.minitClear.foreach(_ := rob.io.minitClear.get)
+  rob.io.minitClearAck.foreach(_ := io.minitClearAck.get)
 
   io.robio.csr.perfinfo.retiredInstr <> RegNext(rob.io.csr.perfinfo.retiredInstr)
   io.robio.exception := rob.io.exception
@@ -878,6 +881,9 @@ class CtrlBlockIO()(implicit p: Parameters, params: BackendParams) extends XSBun
   }
 
   val toAmu = OptionWrapper(HasMatrixExtension, Vec(CommitWidth, Decoupled(new AmuCtrlIO)))
+  val olderAmuPending = OptionWrapper(HasMatrixExtension, Output(Bool()))
+  val minitClear = OptionWrapper(HasMatrixExtension, Output(Bool()))
+  val minitClearAck = OptionWrapper(HasMatrixExtension, Input(Bool()))
 
   val frontend = Flipped(new FrontendToCtrlIO())
   val fromCSR = new Bundle{

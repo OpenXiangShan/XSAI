@@ -2,7 +2,7 @@ package xiangshan.backend.decode
 
 import chisel3._
 import chisel3.util._
-import cute.MatrixIsaParams
+import cute.{CuteParamsKey, MatrixIsaParams, MteComputeType}
 import difftest.{DifftestModule, DiffMcfgState}
 import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.tile.XLen
@@ -89,7 +89,9 @@ object McfgHelpers {
   private def fpPayload(isAlt: Boolean, widthCode: Int): Int = (if (isAlt) 4 else 0) | widthCode
 
   def decode(typeCode: Int, tableSel: Int): McfgDecoded = {
-    McfgDecoded(typeCode, tableSel, Option.when(tableSel == 0)(semanticTypesByCode.get(typeCode)).flatten)
+    val mxTypes = Set(Mxfp4.typeCode, Fp8E5M2.typeCode, Fp8E4M3.typeCode)
+    val definedTable = tableSel == 0 || (tableSel == 1 && mxTypes.contains(typeCode))
+    McfgDecoded(typeCode, tableSel, Option.when(definedTable)(semanticTypesByCode.get(typeCode)).flatten)
   }
 
   def decodeRaw(raw: BigInt): McfgDecoded = decode((raw & 0xf).toInt, ((raw >> 4) & 0xf).toInt)
@@ -102,7 +104,44 @@ object McfgHelpers {
 
   def isPdfDefined(typeCode: UInt, tableSel: UInt): Bool = tableSel === 0.U && isDefinedTypeCode(typeCode)
 
-  def isSupported(typeCode: UInt, tableSel: UInt): Bool = tableSel === 0.U && isDefinedTypeCode(typeCode)
+  def isMxType(typeCode: UInt, tableSel: UInt): Bool =
+    tableSel === 1.U && (typeCode === Mxfp4.typeCode.U ||
+      typeCode === Fp8E5M2.typeCode.U || typeCode === Fp8E4M3.typeCode.U)
+
+  def isSupported(typeCode: UInt, tableSel: UInt, matrixExtension: MatrixIsaParams): Bool =
+    (tableSel === 0.U && isDefinedTypeCode(typeCode)) ||
+      isMxSupported(typeCode, tableSel, matrixExtension)
+
+  // Type/table well-formedness only. This view is used by isolated unit
+  // harnesses that do not define CuteParamsKey; actual msetcfg legality is
+  // capability-gated by the overload above, and MMA execution by the
+  // entry-aware triple predicate.
+  def isSupported(typeCode: UInt, tableSel: UInt): Bool =
+    Mux(tableSel === 0.U && isDefinedTypeCode(typeCode), true.B, isMxType(typeCode, tableSel))
+
+  def mxComputeType(typeCode: UInt, tableSel: UInt): UInt =
+    Mux(isMxType(typeCode, tableSel), MuxLookup(typeCode, 0.U(4.W))(Seq(
+      Mxfp4.typeCode.U -> MteComputeType.Mxfp4F32,
+      Fp8E5M2.typeCode.U -> MteComputeType.Mxfp8e5m2F32,
+      Fp8E4M3.typeCode.U -> MteComputeType.Mxfp8e4m3F32
+    )), 0.U(4.W))
+
+  def isMxSupported(typeCode: UInt, tableSel: UInt, matrixExtension: MatrixIsaParams): Bool =
+    isMxType(typeCode, tableSel) && Mux(typeCode === Mxfp4.typeCode.U,
+      matrixExtension.enableMxfp4Fp32.B, matrixExtension.enableMxfp8Fp32.B)
+
+  def isMmaEntriesSupported(a: McfgEntry, b: McfgEntry, c: McfgEntry, matrixExtension: MatrixIsaParams): Bool = {
+    val unscaled = a.tableSel === 0.U && b.tableSel === 0.U && c.tableSel === 0.U &&
+      isMmaTripleSupported(a.typeCode, b.typeCode, c.typeCode, matrixExtension)
+    val scaled = isMxSupported(a.typeCode, a.tableSel, matrixExtension) &&
+      isMxSupported(b.typeCode, b.tableSel, matrixExtension) && a.typeCode === b.typeCode &&
+      c.tableSel === 0.U && c.typeCode === Fp32.typeCode.U
+    unscaled || scaled
+  }
+
+  def mmaComputeType(a: McfgEntry, b: McfgEntry, c: McfgEntry, matrixExtension: MatrixIsaParams): UInt =
+    Mux(isMmaEntriesSupported(a, b, c, matrixExtension) && a.tableSel === 1.U,
+      mxComputeType(a.typeCode, a.tableSel), 0.U(4.W))
 
   def isFloatType(typeCode: UInt): Bool = {
     MuxLookup(typeCode, false.B)(semanticTypes.map(t => t.typeCode.U -> (t.family == McfgFloat).B))
@@ -145,15 +184,27 @@ object McfgHelpers {
     val supportsBf16Fp32 = matrixExtension.enableBf16Fp32 && aType == Bf16 && bType == Bf16 && cType == Fp32
     val supportsTf32Fp32 = matrixExtension.enableTf32Fp32 && aType == Tf32 && bType == Tf32 && cType == Fp32
     val supportsFp32Fp32 = matrixExtension.enableFp32Fp32 && aType == Fp32 && bType == Fp32 && cType == Fp32
+    val supportsNvfp4Fp32 = matrixExtension.enableNvfp4Fp32 && aType == Nvfp4 && bType == Nvfp4 && cType == Fp32
+    val supportsMxfp4Fp32 = matrixExtension.enableMxfp4Fp32 && aType == Mxfp4 && bType == Mxfp4 && cType == Fp32
 
     supportsInt8 || supportsInt4 || supportsFp8Fp16 || supportsFp8Bf16 || supportsFp8Fp32 ||
-      supportsFp16Fp16 || supportsFp16Fp32 || supportsBf16Fp32 || supportsTf32Fp32 || supportsFp32Fp32
+      supportsFp16Fp16 || supportsFp16Fp32 || supportsBf16Fp32 || supportsTf32Fp32 || supportsFp32Fp32 ||
+      supportsNvfp4Fp32 || supportsMxfp4Fp32
   }
 
   def isMmaTripleSupportedRaw(aRaw: BigInt, bRaw: BigInt, cRaw: BigInt, matrixExtension: MatrixIsaParams): Boolean = {
-    val decoded = Seq(decodeRaw(aRaw), decodeRaw(bRaw), decodeRaw(cRaw)).map(_.semanticType)
-    decoded match {
-      case Seq(Some(aType), Some(bType), Some(cType)) => isMmaTripleSupported(aType, bType, cType, matrixExtension)
+    val decoded = Seq(decodeRaw(aRaw), decodeRaw(bRaw), decodeRaw(cRaw))
+    val Seq(a, b, c) = decoded
+    if (a.tableSel == 1 || b.tableSel == 1) {
+      a.legal && b.legal && a.tableSel == 1 && b.tableSel == 1 && a.typeCode == b.typeCode &&
+        c.tableSel == 0 && c.typeCode == Fp32.typeCode &&
+        (if (a.typeCode == Mxfp4.typeCode) matrixExtension.enableMxfp4Fp32
+         else matrixExtension.enableMxfp8Fp32)
+    } else if (c.tableSel == 1) {
+      false
+    } else decoded.map(_.semanticType) match {
+      case Seq(Some(aType), Some(bType), Some(cType)) =>
+        c.tableSel == 0 && isMmaTripleSupported(aType, bType, cType, matrixExtension)
       case _ => false
     }
   }
@@ -174,7 +225,9 @@ object McfgHelpers {
       Option.when(matrixExtension.enableFp16Fp32)(aTypeCode === Fp16.typeCode.U && bTypeCode === Fp16.typeCode.U && cTypeCode === Fp32.typeCode.U),
       Option.when(matrixExtension.enableBf16Fp32)(aTypeCode === Bf16.typeCode.U && bTypeCode === Bf16.typeCode.U && cTypeCode === Fp32.typeCode.U),
       Option.when(matrixExtension.enableTf32Fp32)(aTypeCode === Tf32.typeCode.U && bTypeCode === Tf32.typeCode.U && cTypeCode === Fp32.typeCode.U),
-      Option.when(matrixExtension.enableFp32Fp32)(aTypeCode === Fp32.typeCode.U && bTypeCode === Fp32.typeCode.U && cTypeCode === Fp32.typeCode.U)
+      Option.when(matrixExtension.enableFp32Fp32)(aTypeCode === Fp32.typeCode.U && bTypeCode === Fp32.typeCode.U && cTypeCode === Fp32.typeCode.U),
+      Option.when(matrixExtension.enableNvfp4Fp32)(aTypeCode === Nvfp4.typeCode.U && bTypeCode === Nvfp4.typeCode.U && cTypeCode === Fp32.typeCode.U),
+      Option.when(matrixExtension.enableMxfp4Fp32)(aTypeCode === Mxfp4.typeCode.U && bTypeCode === Mxfp4.typeCode.U && cTypeCode === Fp32.typeCode.U)
     ).flatten
 
     if (supported.nonEmpty) supported.reduce(_ || _) else false.B

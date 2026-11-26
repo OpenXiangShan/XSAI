@@ -129,6 +129,9 @@ class NewCSR(implicit val p: Parameters) extends Module
       val criticalErrorState = Input(Bool())
     })
     val in = Flipped(DecoupledIO(new NewCSRInput))
+    // Postcommit matrix flags: no fromRob RegNext staging. fire is the actual
+    // same-edge mcsr.MFFLAGS merge, not merely receipt at an upstream register.
+    val xmfflags = Flipped(DecoupledIO(UInt(5.W)))
     val trapInst = Input(ValidIO(UInt(InstWidth.W)))
     val fromMem = Input(new Bundle {
       val excpVA  = UInt(XLEN.W)
@@ -254,6 +257,9 @@ class NewCSR(implicit val p: Parameters) extends Module
 
     val distributedWenLegal = Output(Bool())
   })
+  // Unprivileged is constructed before this class-body IO exists; connect
+  // its endpoint here, never from that trait's initialization body.
+  mcsr.xmfflags <> io.xmfflags
 
   val toAIA   = IO(Output(new CSRToAIABundle))
   val fromAIA = IO(Flipped(Output(new AIAToCSRBundle)))

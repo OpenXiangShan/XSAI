@@ -43,8 +43,12 @@ class Mma(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUnit(cfg) {
     ))
 
   private val legalMcfgEntries = aMcfgEntry.supported && bMcfgEntry.supported && cMcfgEntry.supported
-  private val legalMmaTypes = McfgHelpers.isMmaTripleSupported(aTypeCode, bTypeCode, cTypeCode, MatrixExtension)
+  private val legalMmaTypes = McfgHelpers.isMmaEntriesSupported(aMcfgEntry, bMcfgEntry, cMcfgEntry, MatrixExtension)
   private val illegal_mcfg = !legalMcfgEntries || !legalMmaTypes
+  private val isScaledMma = legalMmaTypes && aMcfgEntry.tableSel === 1.U && bMcfgEntry.tableSel === 1.U
+  // First-stage MX implements only RNE. Trap before issuing AMU metadata rather
+  // than silently executing a different rounding mode in the matrix pipeline.
+  private val illegal_mx_rounding = isScaledMma && io.mfrm.get =/= 0.U
 
   val illegal_regidx = !in.data.imm(2) || in.data.imm(5) || in.data.imm(8)
   val illegal_mtilem = mtilem > ROWNUM.U
@@ -53,6 +57,8 @@ class Mma(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUnit(cfg) {
 
   val output = Wire(new AmuMmaIO)
   dontTouch(output)
+  output.reserved := 0.U
+  output.computeType := McfgHelpers.mmaComputeType(aMcfgEntry, bMcfgEntry, cMcfgEntry, MatrixExtension)
   output.ms1    := in.data.imm(5, 3)
   output.ms2    := in.data.imm(8, 6)
   output.md     := in.data.imm(2, 0)
@@ -72,10 +78,13 @@ class Mma(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUnit(cfg) {
   out.ctrl.amuCtrl.get.data := output.asUInt
   out.ctrl.exceptionVec.get := 0.U.asTypeOf(out.ctrl.exceptionVec.get)
   out.ctrl.exceptionVec.get(ExceptionNO.illegalInstr) :=
-    illegal_regidx || illegal_mcfg || illegal_mtilem || illegal_mtilen || illegal_mtilek
+    illegal_regidx || illegal_mcfg || illegal_mtilem || illegal_mtilen || illegal_mtilek ||
+      illegal_mx_rounding
   if (env.EnableDifftest) {
     // It will be filled in ROB.
     out.ctrl.amuCtrl.get.pc.get := DontCare
     out.ctrl.amuCtrl.get.coreid.get := DontCare
+    out.ctrl.amuCtrl.get.retireId.get := 0.U
+    out.ctrl.amuCtrl.get.epoch.get := 0.U
   }
 }

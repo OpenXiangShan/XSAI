@@ -120,6 +120,10 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
     val dft = Option.when(hasDFT)(Input(new SramBroadcastBundle))
     val dft_reset = Option.when(hasDFT)(Input(new DFTResetSignals()))
     val amuCtrl = Option.when(HasMatrixExtension)(Decoupled(new AmuCtrlIO))
+    val minitResetCheck = Option.when(HasMatrixExtension)(Output(Bool()))
+    val minitResetReady = Option.when(HasMatrixExtension)(Input(Bool()))
+    val minitClear = Option.when(HasMatrixExtension)(Output(Bool()))
+    val minitClearAck = Option.when(HasMatrixExtension)(Input(Bool()))
     val amuRelease = Option.when(HasMatrixExtension)(Flipped(Decoupled(new AmuReleaseIO2XS)))
     val cutePerf = Option.when(HasMatrixExtension)(Input(new CutePerfToCoreIO))
   })
@@ -227,6 +231,10 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
     val amuCtrlArbiter = Module(new Arbiter(new AmuCtrlIO, CommitWidth))
     amuCtrlArbiter.io.in <> backend.io.toAmu.get
     io.amuCtrl.get <> amuCtrlArbiter.io.out
+    io.minitResetCheck.get := backend.io.minitResetCheck.get
+    backend.io.minitResetReady.get := io.minitResetReady.get
+    io.minitClear.get := backend.io.minitClear.get
+    backend.io.minitClearAck.get := io.minitClearAck.get
 
     // Emit one DiffTest control event per serialized AMU command.
     if (env.EnableDifftest) {
@@ -241,7 +249,17 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
       difftestAmuCtrl.pc     := amuCtrl.bits.pc.get
       difftestAmuCtrl.coreid := amuCtrl.bits.coreid.get
       difftestAmuCtrl.index  := 0.U
+      difftestAmuCtrl.computeType := 0.U
+      difftestAmuCtrl.isScale := false.B
+      difftestAmuCtrl.isConvertF32 := false.B
+      difftestAmuCtrl.isDynamicMxfpQuant := false.B
+      difftestAmuCtrl.retireId := amuCtrl.bits.retireId.get
+      difftestAmuCtrl.epoch := amuCtrl.bits.epoch.get
+      when (amuCtrl.fire) {
+        assert(amuCtrl.bits.retireId.get =/= 0.U, "AMU delivered without a retirement ID")
+      }
       when (amuCtrl.bits.isMma()) {
+        difftestAmuCtrl.computeType := mmaio.computeType
         difftestAmuCtrl.rm       := mmaio.rm
         difftestAmuCtrl.md       := mmaio.md
         difftestAmuCtrl.sat      := mmaio.sat
@@ -256,6 +274,10 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
         difftestAmuCtrl.isfp     := mmaio.isfp
       }
       when (amuCtrl.bits.isMls()) {
+        difftestAmuCtrl.computeType := mlsio.computeType
+        difftestAmuCtrl.isScale := mlsio.isScale
+        difftestAmuCtrl.isConvertF32 := mlsio.isConvertF32
+        difftestAmuCtrl.isDynamicMxfpQuant := mlsio.isDynamicMxfpQuant
         difftestAmuCtrl.ms        := mlsio.ms
         difftestAmuCtrl.ls        := mlsio.ls
         difftestAmuCtrl.transpose := mlsio.transpose

@@ -64,6 +64,8 @@ object Bundles {
   }
 
   class AmuMmaIO(implicit p: Parameters) extends XSBundle {
+    val reserved = UInt(93.W) // 149 : 57, always zero
+    val computeType = UInt(4.W) // 56 : 53, canonical MteComputeType (zero for unscaled)
     // rounding mode (mfrm/mxrm)
     val rm       = UInt(3.W) // 52 : 50
     // dest matrix register index
@@ -102,6 +104,11 @@ object Bundles {
   }
 
   class AmuLsuIO(implicit p: Parameters) extends XSBundle {
+    val reserved  = UInt(17.W)        // 149 : 133, always zero
+    val isDynamicMxfpQuant = Bool()   // 132, explicit experimental generated SF
+    val isConvertF32 = Bool()         // 131, explicit experimental converting load
+    val computeType = UInt(4.W)       // 130 : 127, canonical MteComputeType
+    val isScale   = Bool()            // 126
     // src/dest matrix register
     val ms        = UInt(4.W)         // 125 : 122
     // load(0)/store(1)
@@ -164,11 +171,28 @@ object Bundles {
 
   class AmuReleaseIO2XS(implicit p: Parameters) extends XSBundle {
     val msyncRd = Vec(p(XSCoreParamsKey).MsyncRegs, Bool())
+    val flagsValid = Bool()
+    val flags = UInt(5.W)
   }
 
   object AmuReleaseIO2XS {
     def apply()(implicit p: Parameters) : AmuReleaseIO2XS = {
       new AmuReleaseIO2XS()
+    }
+
+    // One canonical return token, atomically consumed by Fence and (when
+    // present) the actual mcsr sticky-write endpoint. No redirect may drop it.
+    def connectReturn(source: DecoupledIO[AmuReleaseIO2XS],
+                      fence: DecoupledIO[AmuReleaseIO2XS],
+                      flags: DecoupledIO[UInt]): Unit = {
+      source.ready := fence.ready && (!source.bits.flagsValid || flags.ready)
+      fence.bits := source.bits
+      fence.valid := source.valid && (!source.bits.flagsValid || flags.ready)
+      flags.bits := source.bits.flags
+      flags.valid := source.valid && source.bits.flagsValid && fence.ready
+      assert(fence.fire === source.fire, "matrix return: Fence consumed a different token")
+      assert(flags.fire === (source.fire && source.bits.flagsValid),
+        "matrix return: flags and return must be consumed atomically")
     }
   }
 
@@ -189,6 +213,8 @@ object Bundles {
 
     val pc = Option.when(env.EnableDifftest) (UInt(64.W))
     val coreid = Option.when(env.EnableDifftest) (UInt(hartIdLen.W))
+    val retireId = Option.when(env.EnableDifftest) (UInt(64.W))
+    val epoch = Option.when(env.EnableDifftest) (UInt(64.W))
   }
 
   object AmuCtrlIO {

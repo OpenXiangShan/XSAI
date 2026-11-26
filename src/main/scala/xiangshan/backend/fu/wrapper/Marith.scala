@@ -26,5 +26,7 @@ class Marith(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUnit(cfg) {
     // It will be filled in ROB.
     out.ctrl.amuCtrl.get.pc.get := DontCare
     out.ctrl.amuCtrl.get.coreid.get := DontCare
+    out.ctrl.amuCtrl.get.retireId.get := 0.U
+    out.ctrl.amuCtrl.get.epoch.get := 0.U
   }
 }

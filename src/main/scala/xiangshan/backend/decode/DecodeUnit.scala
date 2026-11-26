@@ -873,7 +873,9 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     SvinvalDecode.table ++
     HypervisorDecode.table ++
     VecDecoder.table(HasVfexp2) ++
-    OptionWrapper(HasMatrixExtension, MatrixDecoder.table(MatrixExtension)).getOrElse(Array()) ++
+    OptionWrapper(HasMatrixExtension,
+      MatrixDecoder.table(MatrixExtension, MatrixDecoder.convertF32Enabled(p),
+        MatrixDecoder.dynamicQuantEnabled(p))).getOrElse(Array()) ++
     ZicondDecode.table ++
     ZimopDecode.table ++
     ZfaDecode.table ++
@@ -1276,6 +1278,8 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     decodedInst.lsrc(3) := Mtilen_IDX.U
     decodedInst.lsrc(4) := Mtilek_IDX.U
   }.elsewhen (isMls) {
+    // Converting A/B loads retain normal M,K / K,N metadata. Only scale loads
+    // below use M/N rows with K as their second dimension.
     decodedInst.srcType(0) := SrcType.xp
     when (MldstOpType.isWholeReg(decodedInst.fuOpType)) {
       decodedInst.srcType(1) := SrcType.no
@@ -1295,6 +1299,11 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
       decodedInst.fuOpType(6, 3),
       Seq(Mtilek_IDX.U, Mtilen_IDX.U, Mtilen_IDX.U, 0.U)
     )
+    when (MldstOpType.isScale(decodedInst.fuOpType)) {
+      // Both scale arrays are row-major: M/N rows, ceil(K/32) byte columns.
+      decodedInst.lsrc(2) := Mux(MldstOpType.isMatrixB(decodedInst.fuOpType), Mtilen_IDX.U, Mtilem_IDX.U)
+      decodedInst.lsrc(3) := Mtilek_IDX.U
+    }
     decodedInst.mcfgReadView.foreach { view =>
       val mlsMcfgSel = inst.RD(2, 0)
       view.sel := mlsMcfgSel

@@ -179,6 +179,7 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
     val mfflags = IO(Output(Mfflags()))
     val mfrm = IO(Output(Mfrm()))
     val msaten = IO(Output(Msaten()))
+    val xmfflags = IO(Flipped(Decoupled(UInt(5.W))))
 
     for (wAlias <- Seq(wAliasMxrm, wAliasMsat, wAliasMflags, wAliasMfrm, wAliasMsaten)) {
       for ((name, field) <- wAlias.wdataFields.elements) {
@@ -191,6 +192,14 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
 
     // write connection
     reconnectReg()
+
+    // These are the real R+1 software-write ports. Keep them mutually
+    // exclusive with the sticky merge, including the mfflags alias; do not
+    // add a second hot input to CSRModule's Mux1H or override a software clear.
+    xmfflags.ready := !w.wen && !wAliasMflags.wen
+    when(xmfflags.fire) {
+      reg.MFFLAGS := (reg.MFFLAGS.asUInt | xmfflags.bits).asTypeOf(reg.MFFLAGS)
+    }
 
     // when(amu.xmsat.valid) {
     //   reg.XMSAT := reg.XMSAT.asBool || robCommit.xmsat.bits.asBool

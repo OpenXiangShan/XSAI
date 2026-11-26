@@ -500,7 +500,7 @@ package object xiangshan {
   object MldstOpType {
     def placeholder = "b0_00000_0_00".U
 
-    // bit encoding: ldst (1b) | async (1b) | matrix type (4b) | transposed (1b) | reserved-zero (2b)
+    // bit encoding: ldst (1b) | scale (1b) | matrix type (4b) | transposed (1b) | convertF32 (1b) | dynamicMx (1b)
     // matrix type [3:0]
     // 0 0 0 1 : output matrix, C
     // 0 0 1 0 : left matrix, A
@@ -509,13 +509,13 @@ package object xiangshan {
     def isLoad  (func: UInt) = func(8) === "b0".U
     def isStore (func: UInt) = func(8) === "b1".U
     
-    // def isSync  (func: UInt) = func(7) === "b0".U
-    // def isAsync (func: UInt) = func(7) === "b1".U
-    
     def isMatrixA  (func: UInt) = func(3) === "b1".U
     def isMatrixB  (func: UInt) = func(4) === "b1".U
     def isMatrixC  (func: UInt) = func(5) === "b1".U
     def isWholeReg (func: UInt) = func(6) === "b1".U
+    def isScale    (func: UInt) = func(7)
+    def isConvertF32(func: UInt) = func(1)
+    def isDynamicMxfpQuant(func: UInt) = isConvertF32(func) && func(0)
 
     def isUntransposed (func: UInt) = func(2) === "b0".U
     def isTransposed   (func: UInt) = func(2) === "b1".U
@@ -530,6 +530,12 @@ package object xiangshan {
     def mlaWhole = "b0_0_1001_0_00".U
     def mlbWhole = "b0_0_1010_0_00".U
     def mlcWhole = "b0_0_1100_0_00".U
+    def mlascale = "b0_1_0001_0_00".U
+    def mlbscale = "b0_1_0010_0_00".U
+    def mlacvtF32Mx = "b0_0_0001_0_10".U
+    def mlbcvtF32Mx = "b0_0_0010_0_10".U
+    def mladynF32Mx = "b0_0_0001_0_11".U
+    def mlbdynF32Mx = "b0_0_0010_0_11".U
 
     def msa   = "b1_0_0001_0_00".U
     def msat  = "b1_0_0001_1_00".U

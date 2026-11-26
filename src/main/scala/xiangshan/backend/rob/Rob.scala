@@ -141,6 +141,9 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
 
     // to AMU
     val amuCtrl = OptionWrapper(HasMatrixExtension, Vec(CommitWidth, DecoupledIO(new AmuCtrlIO)))
+    val olderAmuPending = OptionWrapper(HasMatrixExtension, Output(Bool()))
+    val minitClear = OptionWrapper(HasMatrixExtension, Output(Bool()))
+    val minitClearAck = OptionWrapper(HasMatrixExtension, Input(Bool()))
   })
 
   val exuWBs: Seq[ValidIO[ExuOutput]] = io.exuWriteback.filter(!_.bits.params.hasStdFu).toSeq
@@ -172,6 +175,12 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
 
   val rab = Module(new RenameBuffer(RabSize))
   val vtypeBuffer = Module(new VTypeBuffer(VTypeBufferSize))
+  // Wires are declared before connectROB; their values use the canonical
+  // retirement counter below, after commit validity and fusion are resolved.
+  val commitTraceIds = Option.when(env.EnableDifftest && HasMatrixExtension)(
+    Wire(Vec(CommitWidth, UInt(64.W))))
+  val commitTraceEpoch = Option.when(env.EnableDifftest && HasMatrixExtension)(
+    RegInit(0.U(64.W)))
   val amuBuffer = OptionWrapper(HasMatrixExtension, Module(new AmuCtrlBuffer()))
   val mcfgBuffer = OptionWrapper(HasMatrixExtension, Module(new MCfgBuffer()))
   val bankNum = 8
@@ -196,6 +205,14 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
    */
   // special cases
   val hasBlockBackward = RegInit(false.B)
+  val minitAwaitAck = RegInit(false.B)
+  // Ack is a registered receipt of the previous clear, never a commit condition.
+  // With the normal one-cycle ack, young enqueue resumes on the next cycle.
+  val effectiveBlockBackward = hasBlockBackward ||
+    (minitAwaitAck && !io.minitClearAck.getOrElse(true.B))
+  when(io.minitClearAck.getOrElse(false.B)) {
+    minitAwaitAck := false.B
+  }
   val hasWaitForward = RegInit(false.B)
   val enqPtr = enqPtrVec(0)
   val deqPtr = deqPtrVec(0)
@@ -203,21 +220,21 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
   val allocatePtrVec = VecInit((0 until RenameWidth).map(i => enqPtrVec(PopCount(io.enq.req.take(i).map(req => req.valid && req.bits.firstUop)))))
   if (HasMatrixExtension) {
     io.enq.canAccept := (
-        allowEnqueue && !hasBlockBackward && rab.io.canEnq && vtypeBuffer.io.canEnq
+        allowEnqueue && !effectiveBlockBackward && rab.io.canEnq && vtypeBuffer.io.canEnq
       && !io.fromVecExcpMod.busy && amuBuffer.get.io.canEnqueue
     )
     io.enq.canAcceptForDispatch := (
-        allowEnqueueForDispatch && !hasBlockBackward && rab.io.canEnqForDispatch
+        allowEnqueueForDispatch && !effectiveBlockBackward && rab.io.canEnqForDispatch
       && vtypeBuffer.io.canEnqForDispatch && !io.fromVecExcpMod.busy
       && amuBuffer.get.io.canEnqueueForDispatch
     )
   } else {
     io.enq.canAccept := (
-        allowEnqueue && !hasBlockBackward && rab.io.canEnq && vtypeBuffer.io.canEnq
+        allowEnqueue && !effectiveBlockBackward && rab.io.canEnq && vtypeBuffer.io.canEnq
       && !io.fromVecExcpMod.busy
     )
     io.enq.canAcceptForDispatch := (
-        allowEnqueueForDispatch && !hasBlockBackward && rab.io.canEnqForDispatch
+        allowEnqueueForDispatch && !effectiveBlockBackward && rab.io.canEnqForDispatch
       && vtypeBuffer.io.canEnqForDispatch && !io.fromVecExcpMod.busy
     )
   }
@@ -854,6 +871,24 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
   io.commits.isWalk := state === s_walk
   io.commits.isCommit := state === s_idle && !blockCommit
 
+  if (HasMatrixExtension) {
+    // Existing commitValid/isCommit already filter exceptions, walks and redirects.
+    val minitCommit = io.commits.isCommit && VecInit((0 until CommitWidth).map(i =>
+      io.commits.commitValid(i) && io.commits.info(i).isMinit.get
+    )).asUInt.orR
+    io.minitClear.get := minitCommit
+    when(minitCommit) {
+      hasBlockBackward := false.B
+      minitAwaitAck := true.B
+      assert(!io.olderAmuPending.get, "MINIT committed before old AMU delivery drained")
+      assert(!io.redirect.valid && !io.commits.isWalk, "cancelled MINIT must not clear")
+      commitTraceEpoch.foreach { epoch =>
+        assert(!epoch.andR, "MINIT trace epoch overflow")
+        epoch := epoch + 1.U
+      }
+    }
+  }
+
   val walk_v = VecInit(walkingPtrVec.map(ptr => robEntries(ptr.value).valid))
   val commit_vDeqGroup = VecInit(robDeqGroup.map(_.commit_v))
   val commit_wDeqGroup = VecInit(robDeqGroup.map(_.commit_w))
@@ -975,7 +1010,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
       && !io.fromVecExcpMod.busy
     )
   }
-  enqPtrGenModule.io.hasBlockBackward := hasBlockBackward
+  enqPtrGenModule.io.hasBlockBackward := effectiveBlockBackward
   enqPtrGenModule.io.enq := VecInit(io.enq.req.map(req => req.valid && req.bits.firstUop))
   enqPtrVec := enqPtrGenModule.io.out
 
@@ -1364,6 +1399,23 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
   when(isCommitReg){
     instrCntReg := instrCnt
   }
+  commitTraceIds.foreach { ids =>
+    when(isCommitReg) {
+      assert(!(instrCntReg +& retireCounter)(64), "ROB retirement trace counter overflow")
+    }
+    for (i <- 0 until CommitWidth) {
+      val semanticPrefix = (0 to i).map { lane =>
+        Mux(io.commits.commitValid(lane),
+          io.commits.info(lane).instrSize +& CommitType.isFused(io.commits.info(lane).commitType).asUInt,
+          0.U)
+      }.reduce(_ +& _)
+      val nextId = instrCnt +& semanticPrefix
+      ids(i) := nextId(63, 0)
+      when(io.commits.isCommit && io.commits.commitValid(i)) {
+        assert(!nextId(64) && ids(i) =/= 0.U, "ROB retirement trace ID overflow")
+      }
+    }
+  }
   io.csr.perfinfo.retiredInstr := retireCounter
   io.robFull := !allowEnqueue
   io.headNotReady := commit_vDeqGroup(deqPtr.value(bankNumWidth-1, 0)) && !commit_wDeqGroup(deqPtr.value(bankNumWidth-1, 0))
@@ -1706,6 +1758,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
         Seq(splitDest, splitDest + 1.U)
       }
       difftest.nFused := CommitType.isFused(commitInfo.commitType).asUInt + commitInfo.instrSize - 1.U
+      difftest.retireId := commitTraceIds.map(_(i)).getOrElse(0.U)
       when(difftest.valid) {
         assert(CommitType.isFused(commitInfo.commitType).asUInt + commitInfo.instrSize >= 1.U)
       }

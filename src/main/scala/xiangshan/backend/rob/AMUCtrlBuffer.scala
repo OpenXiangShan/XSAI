@@ -24,6 +24,9 @@ class AmuCtrlBufferIO()(implicit val p: Parameters, val params: BackendParams) e
   val enq = Input(Vec(RenameWidth, new EnqBundle))
   val canEnqueue = Output(Bool())
   val canEnqueueForDispatch = Output(Bool())
+  // Delivery is postcommit. Keep MINIT waiting even on the cycle of toAMU.fire;
+  // CUTE's separate resetReady accounts for execution after delivery.
+  val olderPending = Output(Bool())
 
   // rob wb
   val wb = Flipped(params.genWrite2CtrlBundles)
@@ -32,6 +35,8 @@ class AmuCtrlBufferIO()(implicit val p: Parameters, val params: BackendParams) e
   class DeqCommitBundle extends Bundle {
     val ptr = new RobPtr
     val valid = Bool()
+    val retireId = Option.when(env.EnableDifftest && HasMatrixExtension)(UInt(64.W))
+    val epoch = Option.when(env.EnableDifftest && HasMatrixExtension)(UInt(64.W))
   }
   val deqCommit = Input(Vec(CommitWidth, new DeqCommitBundle))
 
@@ -115,21 +120,28 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
       }
     }
     io.wb := robImp.io.writeback
-    io.deqCommit.zip(robImp.deqPtrVec).zip(robImp.io.commits.commitValid) foreach { case ((deq, ptr), valid) =>
+    io.deqCommit.zip(robImp.deqPtrVec).zip(robImp.io.commits.commitValid).zipWithIndex foreach { case (((deq, ptr), valid), lane) =>
       deq.ptr := ptr
       deq.valid := valid && robImp.io.commits.isCommit
+      if (env.EnableDifftest && HasMatrixExtension) {
+        deq.retireId.get := robImp.commitTraceIds.get(lane)
+        deq.epoch.get := robImp.commitTraceEpoch.get
+      }
     }
     io.redirect.valid := robImp.redirectValidReg
     io.redirect.all := robImp.redirectAll
     io.redirect.begin := robImp.redirectBegin
     io.redirect.end := robImp.redirectEnd
     robImp.io.amuCtrl.get <> io.toAMU
+    robImp.io.olderAmuPending.get := io.olderPending
     if (env.EnableDifftest && HasMatrixExtension) {
       io.hartId.get := robImp.io.hartId
     }
   }
 
   val amuCtrlEntries = RegInit(VecInit.fill(RobSize)(AmuCtrlEntry.zero))
+  io.olderPending := amuCtrlEntries.map(e => e.valid && e.needAMU).reduce(_ || _) ||
+    io.enq.map(e => e.valid && e.needAMU).reduce(_ || _)
 
   // Difftest
   val dt_pc = Option.when(env.EnableDifftest && HasMatrixExtension)(DebugMem(RobSize, UInt(VAddrBits.W)))
@@ -196,6 +208,9 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
       if (env.EnableDifftest && HasMatrixExtension) {
         entry.amuCtrl.pc.get := Mux(dt_pcTransType.get(i).shouldBeSext, SignExt(dt_pc.get(i), XLEN), dt_pc.get(i))
         entry.amuCtrl.coreid.get := io.hartId.get
+        // Execution/writeback is not retirement. These are filled only below.
+        entry.amuCtrl.retireId.get := 0.U
+        entry.amuCtrl.epoch.get := 0.U
       }
     }
   }
@@ -207,6 +222,14 @@ class AmuCtrlBuffer()(implicit override val p: Parameters, val params: BackendPa
     when (commitCond) {
       assert(amuCtrlEntries(i).valid, s"AMUCtrlBuffer: amuCtrlEntries[$i] is invalid but will commit")
       amuCtrlEntries(i).committed := true.B
+      if (env.EnableDifftest && HasMatrixExtension) {
+        val matches = io.deqCommit.zip(deqValid)
+        amuCtrlEntries(i).amuCtrl.retireId.get :=
+          Mux1H(matches.map { case (deq, valid) => valid -> deq.retireId.get })
+        amuCtrlEntries(i).amuCtrl.epoch.get :=
+          Mux1H(matches.map { case (deq, valid) => valid -> deq.epoch.get })
+        assert(PopCount(deqValid) === 1.U, "AMU entry committed by multiple ROB lanes")
+      }
       when (!amuCtrlEntries(i).needAMU) {
         amuCtrlEntries(i).canDeq := true.B
       }

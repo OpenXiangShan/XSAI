@@ -18,7 +18,7 @@ package xiangshan
 
 import org.chipsalliance.cde.config.{Config, Field, Parameters}
 import chisel3._
-import chisel3.util.{Valid, ValidIO, log2Up, Arbiter, Decoupled}
+import chisel3.util.{Valid, ValidIO, log2Up, Arbiter, Decoupled, MuxLookup}
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.interrupts._
 import freechips.rocketchip.tile.{BusErrorUnit, BusErrorUnitParams, BusErrors}
@@ -304,47 +304,111 @@ class XSTile()(implicit p: Parameters) extends LazyModule
         sink.module.reset := reset
       }
 
-      core.module.io.amuCtrl.foreach { amuCtrl =>
+      val cuteCtrl = cute.module.io.cute.ctrl2top
+      for (amuCtrl <- core.module.io.amuCtrl; amuRelease <- core.module.io.amuRelease) {
+        val minitCheck = core.module.io.minitResetCheck.get
+        val minitClear = core.module.io.minitClear.get
+        val minitReady = core.module.io.minitResetReady.get
+        val minitAck = core.module.io.minitClearAck.get
         if (useAcceleratorCDC) {
-          val commandCrossing = Module(new AsyncQueue(new AmuCtrlIO, acceleratorCDC.command))
+          val normal = 0.U(2.W)
+          val probe = 1.U(2.W)
+          val clear = 2.U(2.W)
+          val commandCrossing = Module(new AsyncQueue(new Bundle {
+            val kind = UInt(2.W)
+            val command = new AmuCtrlIO
+          }, acceleratorCDC.command))
           commandCrossing.io.enq_clock := clock
           commandCrossing.io.enq_reset := reset.asBool
           commandCrossing.io.deq_clock := acceleratorClock
           commandCrossing.io.deq_reset := acceleratorReset.asBool
-          commandCrossing.io.enq <> amuCtrl
-          val coreCommand = commandCrossing.io.deq.bits
-          val cuteCommand = cute.module.io.cute.ctrl2top.amuCtrl.bits
+
+          val clearPending = RegInit(false.B)
+          val probePending = RegInit(false.B)
+          val probeDirty = RegInit(false.B)
+          val probeReady = RegInit(false.B)
+          val sendingClear = minitClear || clearPending
+          val sendingProbe = minitCheck && !amuCtrl.valid && !probePending && !probeReady && !sendingClear
+          val commandIn = commandCrossing.io.enq
+          commandIn.valid := sendingClear || amuCtrl.valid || sendingProbe
+          commandIn.bits.kind := Mux(sendingClear, clear, Mux(sendingProbe, probe, normal))
+          commandIn.bits.command := amuCtrl.bits
+          amuCtrl.ready := commandIn.ready && !sendingClear
+          clearPending := sendingClear && !commandIn.fire
+          when(commandIn.fire && sendingProbe) {
+            probePending := true.B
+            probeDirty := false.B
+          }
+          when(amuCtrl.fire && probePending) { probeDirty := true.B }
+          minitReady := minitCheck && probeReady && !amuCtrl.valid && !sendingClear
+
+          val commandOut = commandCrossing.io.deq
+          val coreCommand = commandOut.bits.command
+          val cuteCommand = cuteCtrl.amuCtrl.bits
           require(coreCommand.op.getWidth == cuteCommand.op.getWidth)
           require(coreCommand.data.getWidth == cuteCommand.data.getWidth)
           require(coreCommand.pc.isDefined == cuteCommand.pc.isDefined)
           require(coreCommand.coreid.isDefined == cuteCommand.coreid.isDefined)
-          cute.module.io.cute.ctrl2top.amuCtrl.valid := commandCrossing.io.deq.valid
+          require(coreCommand.retireId.isDefined == cuteCommand.retireId.isDefined)
+          require(coreCommand.epoch.isDefined == cuteCommand.epoch.isDefined)
+          cuteCtrl.amuCtrl.valid := commandOut.valid && commandOut.bits.kind === normal
           cuteCommand.op := coreCommand.op
           cuteCommand.data := coreCommand.data
           cuteCommand.pc.zip(coreCommand.pc).foreach { case (sink, source) => sink := source }
           cuteCommand.coreid.zip(coreCommand.coreid).foreach { case (sink, source) => sink := source }
-          commandCrossing.io.deq.ready := cute.module.io.cute.ctrl2top.amuCtrl.ready
-        } else {
-          cute.module.io.cute.ctrl2top.amuCtrl <> amuCtrl
-        }
-      }
-      core.module.io.amuRelease.foreach { amuRelease =>
-        if (useAcceleratorCDC) {
-          val completionCrossing = Module(new AsyncQueue(new AmuReleaseIO2XS, acceleratorCDC.completion))
+          cuteCommand.retireId.zip(coreCommand.retireId).foreach { case (sink, source) => sink := source }
+          cuteCommand.epoch.zip(coreCommand.epoch).foreach { case (sink, source) => sink := source }
+
+          val completionCrossing = Module(new AsyncQueue(new Bundle {
+            val kind = UInt(2.W)
+            val result = new AmuReleaseIO2XS
+          }, acceleratorCDC.completion))
           completionCrossing.io.enq_clock := acceleratorClock
           completionCrossing.io.enq_reset := acceleratorReset.asBool
           completionCrossing.io.deq_clock := clock
           completionCrossing.io.deq_reset := reset.asBool
-          completionCrossing.io.enq.valid := cute.module.io.cute.ctrl2top.mrelease.valid
-          completionCrossing.io.enq.bits := cute.module.io.cute.ctrl2top.mrelease.bits.asTypeOf(
-            completionCrossing.io.enq.bits
-          )
-          cute.module.io.cute.ctrl2top.mrelease.ready := completionCrossing.io.enq.ready
-          amuRelease <> completionCrossing.io.deq
+
+          val completionIn = completionCrossing.io.enq
+          val completionOut = completionCrossing.io.deq
+          val clearResponsePending = withClockAndReset(acceleratorClock, acceleratorReset) {
+            RegInit(false.B)
+          }
+          val clearResponse = cuteCtrl.minitClearAck || clearResponsePending
+          val probeResponse = commandOut.valid && commandOut.bits.kind === probe && cuteCtrl.resetReady
+          completionIn.valid := cuteCtrl.mrelease.valid || clearResponse || probeResponse
+          completionIn.bits.kind := Mux(cuteCtrl.mrelease.valid, normal, Mux(clearResponse, clear, probe))
+          completionIn.bits.result := cuteCtrl.mrelease.bits.asTypeOf(completionIn.bits.result)
+          cuteCtrl.mrelease.ready := completionIn.ready
+          val probeAccepted = completionIn.fire && completionIn.bits.kind === probe
+          val clearAccepted = completionIn.fire && completionIn.bits.kind === clear
+          withClockAndReset(acceleratorClock, acceleratorReset) {
+            clearResponsePending := clearResponse && !clearAccepted
+          }
+          commandOut.ready := MuxLookup(commandOut.bits.kind, false.B)(Seq(
+            normal -> cuteCtrl.amuCtrl.ready,
+            probe -> probeAccepted,
+            clear -> (cuteCtrl.resetReady && !clearResponse)
+          ))
+          cuteCtrl.minitClear := commandOut.fire && commandOut.bits.kind === clear
+
+          amuRelease.valid := completionOut.valid && completionOut.bits.kind === normal
+          amuRelease.bits := completionOut.bits.result
+          completionOut.ready := completionOut.bits.kind =/= normal || amuRelease.ready
+          val probeDone = completionOut.fire && completionOut.bits.kind === probe
+          when(probeDone) {
+            probePending := false.B
+            probeReady := minitCheck && !probeDirty && !amuCtrl.fire
+          }
+          when(!minitCheck || amuCtrl.fire || sendingClear) { probeReady := false.B }
+          minitAck := completionOut.fire && completionOut.bits.kind === clear
         } else {
-          amuRelease.bits := cute.module.io.cute.ctrl2top.mrelease.bits.asTypeOf(amuRelease.bits)
-          amuRelease.valid := cute.module.io.cute.ctrl2top.mrelease.valid
-          cute.module.io.cute.ctrl2top.mrelease.ready := amuRelease.ready
+          cuteCtrl.amuCtrl <> amuCtrl
+          amuRelease.bits := cuteCtrl.mrelease.bits.asTypeOf(amuRelease.bits)
+          amuRelease.valid := cuteCtrl.mrelease.valid
+          cuteCtrl.mrelease.ready := amuRelease.ready
+          cuteCtrl.minitClear := minitClear
+          minitReady := cuteCtrl.resetReady
+          minitAck := cuteCtrl.minitClearAck
         }
       }
       for {
@@ -427,6 +491,8 @@ class XSTile()(implicit p: Parameters) extends LazyModule
 
     if (HasMatrixExtension && cuteOpt.isEmpty) {
       core.module.io.cutePerf.foreach(_ := 0.U.asTypeOf(new CutePerfToCoreIO))
+      core.module.io.minitResetReady.foreach(_ := true.B)
+      core.module.io.minitClearAck.foreach(_ := RegNext(core.module.io.minitClear.get, false.B))
     }
 
     if (!HasMatrixExtension) {

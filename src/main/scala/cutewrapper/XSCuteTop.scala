@@ -28,6 +28,10 @@ class XSCuteTopImpl(wrapper: XSCuteTop) extends LazyModuleImp(wrapper) {
     val matrix_data_in = Vec(nBanks, Flipped(Decoupled(chiselTypeOf(wrapper.cute_tl.module.io.matrix_data_in(0).bits))))
   })
   io.ctrl2top <> cute.io.ctrl2top
+  io.ctrl2top.resetReady := cute.io.ctrl2top.resetReady && wrapper.cute_tl.module.io.idle
+  when(io.ctrl2top.minitClear) {
+    assert(io.ctrl2top.resetReady, "MINIT clear with external CUTE transport in flight")
+  }
   io.perf <> cute.io.perf
   io.matrixPrefetch.zip(cute.io.matrixPrefetch).foreach { case (to, from) => to := from }
   wrapper.cute_tl.module.io.matrix_data_in <> io.matrix_data_in
@@ -174,6 +178,10 @@ class XSCuteImp(wrapper: XSCute)(implicit p: Parameters) extends LazyModuleImp(w
     }
     val cute = Module(new CUTEV2Top)
     io.cute <> cute.io
+    io.cute.ctrl2top.resetReady := cute.io.ctrl2top.resetReady && wrapper.cute_tl.module.io.idle
+    when(io.cute.ctrl2top.minitClear) {
+      assert(io.cute.ctrl2top.resetReady, "MINIT clear with external CUTE transport in flight")
+    }
     io.cute.mmu2llc := DontCare
     wrapper.cute_tl.module.io.mmu <> cute.io.mmu2llc
 

@@ -681,6 +681,9 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
   csrin.criticalErrorState := backendCriticalError
 
   private val csrio = intExuBlock.io.csrio.get
+  private val olderAmuDrained = !ctrlBlock.io.olderAmuPending.getOrElse(false.B)
+  io.minitResetCheck.foreach(_ := csrio.minitAdmissionCheck && olderAmuDrained)
+  csrio.minitAdmissionReady := olderAmuDrained && io.minitResetReady.getOrElse(true.B)
   csrio.hartId := io.fromTop.hartId
   csrio.fpu.fflags := ctrlBlock.io.robio.csr.fflags
   csrio.fpu.isIllegal := false.B // Todo: remove it
@@ -746,6 +749,12 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
   csrio.perf.ctrlInfo <> ctrlBlock.io.perfInfo.ctrlInfo
   private val fenceio = intExuBlock.io.fenceio.get
   io.fenceio <> fenceio
+  csrio.mpu.xmfflags.valid := false.B
+  csrio.mpu.xmfflags.bits := 0.U
+  io.fenceio.amuRelease.zip(fenceio.amuRelease).foreach { case (source, sink) =>
+    xiangshan.backend.fu.matrix.Bundles.AmuReleaseIO2XS.connectReturn(
+      source, sink, csrio.mpu.xmfflags)
+  }
 
   // to fpExuBlock
   fpExuBlock.io.flush := ctrlBlock.io.toExuBlock.flush
@@ -1013,6 +1022,8 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
 
   io.toTop.cpuHalted := ctrlBlock.io.toTop.cpuHalt
   io.toAmu.foreach(_ <> ctrlBlock.io.toAmu.get)
+  io.minitClear.foreach(_ := ctrlBlock.io.minitClear.get)
+  ctrlBlock.io.minitClearAck.foreach(_ := io.minitClearAck.get)
 
   io.traceCoreInterface <> ctrlBlock.io.traceCoreInterface
 
@@ -1274,6 +1285,10 @@ class BackendIO(implicit p: Parameters, params: BackendParams) extends XSBundle 
 
   val toTop = new BackendToTopBundle
   val toAmu = OptionWrapper(HasMatrixExtension, Vec(CommitWidth, DecoupledIO(new AmuCtrlIO)))
+  val minitResetCheck = OptionWrapper(HasMatrixExtension, Output(Bool()))
+  val minitResetReady = OptionWrapper(HasMatrixExtension, Input(Bool()))
+  val minitClear = OptionWrapper(HasMatrixExtension, Output(Bool()))
+  val minitClearAck = OptionWrapper(HasMatrixExtension, Input(Bool()))
 
   val traceCoreInterface = new TraceCoreInterface(hasOffset = true)
   val fenceio = new FenceIO
