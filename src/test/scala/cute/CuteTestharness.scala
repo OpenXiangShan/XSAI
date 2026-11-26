@@ -30,6 +30,8 @@ object StateMachineDefaults {
     // ConfigStateMachine default assignments
     top.reset := false.B
     top.io.ctrl2top.amuCtrl.valid := false.B
+    top.io.ctrl2top.minitClear := false.B
+    top.io.ctrl2top.mrelease.ready := true.B
     top.io.ctrl2top.amuCtrl.bits.data := 0.U
     top.io.ctrl2top.amuCtrl.bits.op := 0.U
     
@@ -556,7 +558,8 @@ class ObserveStateMachine(top: XSCuteTopImpl)(implicit p: Parameters) {
         }
         
         observe_cycles := observe_cycles + 1.U
-        when(top.io.ctrl2top.mrelease.valid) { // TODO: set the condition for finishing observation
+        when(top.io.ctrl2top.mrelease.fire && top.io.ctrl2top.mrelease.bits.msyncRd.asUInt.orR) {
+          // Flags-only compute returns are not a Release/observation finish.
           state := ObserveState.sDone
           val token_bits = top.io.ctrl2top.mrelease.bits.msyncRd.asUInt
           val token_id = OHToUInt(token_bits)
