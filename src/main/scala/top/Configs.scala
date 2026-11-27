@@ -82,10 +82,11 @@ class BaseConfig(n: Int) extends Config((site, here, up) => {
 // Synthesizable minimal XiangShan
 // * It is still an out-of-order, super-scalaer arch
 // * L1 cache included
-// * L2 cache NOT included
+// * L2 cache included
 // * L3 cache included
 class MinimalConfig(n: Int = 1) extends Config(
-  ZhuJiangConfig("4MB", ways = 16)
+  OpenLLCConfig("4MB", ways = 8, banks = 4)
+    ++ ZhuJiangConfig("4MB", ways = 16)
     ++ new BaseConfig(n).alter((site, here, up) => {
     case XSTileKey => up(XSTileKey).map(
       p => p.copy(
@@ -233,18 +234,6 @@ class MinimalConfig(n: Int = 1) extends Config(
         prefetcher = None // if L2 pf_recv_node does not exist, disable SMS prefetcher
       )
     )
-    case SoCParamsKey =>
-      up(SoCParamsKey).copy(
-        OpenLLCParamsOpt = Some(OpenLLCParam(
-          name = "LLC",
-          ways = 8,
-          sets = 2048,
-          banks = 4,
-          fullAddressBits = 48,
-          clientCaches = Seq(L2Param())
-        )),
-        L3NBanks = 1
-      )
   })
 )
 
@@ -414,12 +403,25 @@ case class L2CacheConfig
 
 case class OpenLLCConfig(size: String, ways: Int = 8, banks: Int = 1) extends Config((site, here, up) => {
   case SoCParamsKey =>
+    require(isPow2(banks), "OpenLLC bank count must be a positive power of two")
     val sizeInBytes = CacheSizeParser.toBytes(size)
     val sets = sizeInBytes / banks / ways / 64
+    // Read the final tile configuration, including matrix-specific L2 overrides.
     val tiles = site(XSTileKey)
-    val clientDirBytes = tiles.map{ t =>
-      t.L2NBanks * t.L2CacheParamsOpt.map(_.toCacheParams.capacity).getOrElse(0)
+    require(tiles.nonEmpty && tiles.forall(_.L2CacheParamsOpt.nonEmpty), "OpenLLC requires an L2 for every core")
+    val l2params = tiles.map(_.L2CacheParamsOpt.get)
+    require(l2params.forall(_.blockBytes == 64), "OpenLLC requires 64-byte L2 cache lines")
+    val clientDirBytes = tiles.zip(l2params).map { case (core, l2) =>
+      BigInt(core.L2NBanks) * l2.toCacheParams.capacity
     }.sum
+    require(clientDirBytes > 0, "OpenLLC requires nonzero L2 capacity")
+    val sfWays = l2params.map(_.ways).max + 2
+    // Cover at least twice the aggregate L2 capacity, distributed over LLC banks.
+    // L2 banking must not change the total snoop-filter coverage.
+    val sfBytesPerSet = BigInt(banks) * sfWays * 64
+    val minSfSets = (2 * clientDirBytes + sfBytesPerSet - 1) / sfBytesPerSet
+    val sfSets = BigInt(1) << log2Ceil(minSfSets)
+    require(sfSets.isValidInt, "OpenLLC snoop-filter set count exceeds Int range")
     up(SoCParamsKey).copy(
       L3NBanks = banks,
       OpenLLCParamsOpt = Some(OpenLLCParam(
@@ -428,10 +430,7 @@ case class OpenLLCConfig(size: String, ways: Int = 8, banks: Int = 1) extends Co
         sets = sets,
         banks = banks,
         fullAddressBits = 48,
-        clientCaches = tiles.map { core =>
-          val l2params = core.L2CacheParamsOpt.get
-          l2params.copy(sets = 2 * clientDirBytes / core.L2NBanks / l2params.ways / 64, ways = l2params.ways + 2)
-        },
+        clientCaches = l2params.map(_.copy(sets = sfSets.toInt, ways = sfWays)),
         enablePerf = !site(DebugOptionsKey).FPGAPlatform && site(DebugOptionsKey).EnablePerfDebug,
         elaboratedTopDown = !site(DebugOptionsKey).FPGAPlatform
       ))
@@ -461,11 +460,16 @@ case class LLCConfig(llc: String) extends Config((site, here, up) => {
 case class ZhuJiangConfig(size: String, ways: Int = 16) extends Config((site, here, up) => {
   case SoCParamsKey =>
     val soc = up(SoCParamsKey)
-    val core = site(XSTileKey).head
+    val tiles = site(XSTileKey)
+    require(tiles.nonEmpty && tiles.forall(_.L2CacheParamsOpt.nonEmpty), "ZhuJiang requires an L2 for every core")
+    val l2Sizes = tiles.map(core => core.L2NBanks * core.L2CacheParamsOpt.get.toCacheParams.capacity)
+    // The topology maps each core to one CC; ZhuJiang multiplies this by the CC
+    // count and two when deriving the total snoop-filter coverage.
+    require(l2Sizes.distinct.size == 1, "ZhuJiang requires equal L2 capacities for all cores")
     soc.copy(ZhuJiangParams = soc.ZhuJiangParams.copy(
       cacheSizeInB = CacheSizeParser.toBytes(size),
       cacheWays = ways,
-      clusterCacheSizeInB = core.L2NBanks * core.L2CacheParamsOpt.get.toCacheParams.capacity
+      clusterCacheSizeInB = l2Sizes.head
     ))
 })
 
