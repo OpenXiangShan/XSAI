@@ -144,6 +144,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
   })
 
   val exuWBs: Seq[ValidIO[ExuOutput]] = io.exuWriteback.filter(!_.bits.params.hasStdFu).toSeq
+  val mcfgWBs = exuWBs.filter(_.bits.params.fuConfigs.exists(_.fuType == FuType.mcfg))
   val stdWBs: Seq[ValidIO[ExuOutput]] = io.exuWriteback.filter(_.bits.params.hasStdFu).toSeq
   val vldWBs: Seq[ValidIO[ExuOutput]] = io.exuWriteback.filter(_.bits.params.hasVLoadFu).toSeq
   val fflagsWBs = io.exuWriteback.filter(x => x.bits.fflags.nonEmpty).toSeq
@@ -593,16 +594,6 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
       debug_microOp(wbIdx).debugInfo.issueTime := wb.bits.debugInfo.issueTime
       debug_microOp(wbIdx).debugInfo.writebackTime := wb.bits.debugInfo.writebackTime
 
-      if (HasMatrixExtension) {
-        when(robEntries(wbIdx).isMsetcfg.get) {
-          val mcfgRaw = wb.bits.data(0)
-          robEntries(wbIdx).mcfgReadView.get.entry.raw := mcfgRaw
-          robEntries(wbIdx).mcfgIllegalUnsupported.get := wb.bits.exceptionVec
-            .map(_(ExceptionNO.illegalInstr))
-            .getOrElse(false.B)
-        }
-      }
-
       // debug for lqidx and sqidx
       debug_microOp(wbIdx).lqIdx := wb.bits.lqIdx.getOrElse(0.U.asTypeOf(new LqPtr))
       debug_microOp(wbIdx).sqIdx := wb.bits.sqIdx.getOrElse(0.U.asTypeOf(new SqPtr))
@@ -613,6 +604,16 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
         p"data 0x${Hexadecimal(wb.bits.data(0))} ldst ${debug_Uop.ldest} pdst ${debug_Uop.pdest} " +
         p"skip ${wb.bits.debug.isSkipDiff} robIdx: ${wb.bits.robIdx}\n"
     )
+  }
+
+  for (wb <- mcfgWBs) {
+    val wbIdx = wb.bits.robIdx.value
+    when(wb.valid && robEntries(wbIdx).isMsetcfg.get) {
+      robEntries(wbIdx).mcfgReadView.get.entry.raw := wb.bits.data(0)
+      robEntries(wbIdx).mcfgIllegalUnsupported.get := wb.bits.exceptionVec
+        .map(_(ExceptionNO.illegalInstr))
+        .getOrElse(false.B)
+    }
   }
 
   val writebackNum = PopCount(exuWBs.map(_.valid))
@@ -1223,13 +1224,13 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
     needUpdate(i).vxsat := Mux(!robBanksRdata(i).valid && instCanEnqFlag, 0.U, robBanksRdata(i).vxsat | vxsatRes)
 
     if (HasMatrixExtension) {
-      val mcfgCanWbSeq = exuWBs.map(writeback => writeback.valid && writeback.bits.robIdx.value === needUpdateRobIdx(i))
-      val mcfgRaw = PriorityMux(mcfgCanWbSeq, exuWBs.map(_.bits.data(0)))
+      val mcfgCanWbSeq = mcfgWBs.map(writeback => writeback.valid && writeback.bits.robIdx.value === needUpdateRobIdx(i))
+      val mcfgRaw = PriorityMux(mcfgCanWbSeq, mcfgWBs.map(_.bits.data(0)))
       when(VecInit(mcfgCanWbSeq).asUInt.orR && needUpdate(i).isMsetcfg.get) {
         needUpdate(i).mcfgReadView.get.entry.raw := mcfgRaw
         needUpdate(i).mcfgIllegalUnsupported.get := PriorityMux(
           mcfgCanWbSeq,
-          exuWBs.map(_.bits.exceptionVec.map(_(ExceptionNO.illegalInstr)).getOrElse(false.B))
+          mcfgWBs.map(_.bits.exceptionVec.map(_(ExceptionNO.illegalInstr)).getOrElse(false.B))
         )
       }
     }
