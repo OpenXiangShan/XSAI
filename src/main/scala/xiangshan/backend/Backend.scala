@@ -1273,7 +1273,7 @@ class BackendIO(implicit p: Parameters, params: BackendParams) extends XSBundle 
   val fromTop = Flipped(new TopToBackendBundle)
 
   val toTop = new BackendToTopBundle
-  val toAmu = OptionWrapper(HasMatrixExtension, Vec(CommitWidth, DecoupledIO(new AmuCtrlIO)))
+  val toAmu = OptionWrapper(HasMatrixExtension, DecoupledIO(new AmuCtrlIO))
 
   val traceCoreInterface = new TraceCoreInterface(hasOffset = true)
   val fenceio = new FenceIO

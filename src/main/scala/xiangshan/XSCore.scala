@@ -224,13 +224,11 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
   backend.io.mem.storeDebugInfo <> memBlock.io.mem_to_ooo.storeDebugInfo
   
   if (HasMatrixExtension) {
-    val amuCtrlArbiter = Module(new Arbiter(new AmuCtrlIO, CommitWidth))
-    amuCtrlArbiter.io.in <> backend.io.toAmu.get
-    io.amuCtrl.get <> amuCtrlArbiter.io.out
+    val amuCtrl = backend.io.toAmu.get
+    io.amuCtrl.get <> amuCtrl
 
     // Emit one DiffTest control event per serialized AMU command.
     if (env.EnableDifftest) {
-      val amuCtrl = amuCtrlArbiter.io.out
       val mmaio = amuCtrl.bits.data.asTypeOf(new AmuMmaIO)
       val mlsio = amuCtrl.bits.data.asTypeOf(new AmuLsuIO)
       val mreleaseio = amuCtrl.bits.data.asTypeOf(new AmuReleaseIO2CUTE)
