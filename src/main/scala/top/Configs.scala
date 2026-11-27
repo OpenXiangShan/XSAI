@@ -85,7 +85,8 @@ class BaseConfig(n: Int) extends Config((site, here, up) => {
 // * L2 cache NOT included
 // * L3 cache included
 class MinimalConfig(n: Int = 1) extends Config(
-  ZhuJiangConfig("4MB", ways = 16)
+  OpenLLCConfig("4MB", ways = 8, banks = 4)
+    ++ ZhuJiangConfig("4MB", ways = 16)
     ++ new BaseConfig(n).alter((site, here, up) => {
     case XSTileKey => up(XSTileKey).map(
       p => p.copy(
