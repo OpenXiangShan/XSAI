@@ -263,6 +263,7 @@ object Bundles {
     val data_valid = Bool()
     // nc: is NC access
     val is_nc = Bool()
+    val isFrmMisAlignBuf = Bool()
   }
 
   class LoadNukeQueryRespBundle(implicit p: Parameters) extends XSBundle {
@@ -305,6 +306,7 @@ object Bundles {
     val toStoreMisalignBuffer = Input(new XSBundle {
       val sqPtr = new SqPtr
       val doDeq = Bool()
+      val cmtPtr = new SqPtr
 
       val uop = new DynInst()
     })
